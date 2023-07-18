@@ -13,6 +13,8 @@ const (
 	defaultRes = "pigdns.io. 1800 IN SOA pigdns.io. pigdns.io. 1502165581 14400 3600 604800 14400"
 )
 
+// the first handler that write back to the client calling
+// w.WriteMsg(m) win. No other handler can write back anymore
 func buildChain() dns.Handler {
 	var chain dns.Handler
 
@@ -20,7 +22,6 @@ func buildChain() dns.Handler {
 	chain = dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
-		m.Compress = false
 
 		rr, _ := dns.NewRR(defaultRes)
 		m.Answer = append(m.Answer, rr)

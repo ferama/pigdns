@@ -10,10 +10,6 @@ import (
 	"github.com/miekg/dns"
 )
 
-// const (
-// 	defaultRes = "pigdns.io. 1800 IN SOA pigdns.io. pigdns.io. 1502165581 14400 3600 604800 14400"
-// )
-
 var (
 	// 192.168.10.1.pigdns.io
 	// aa.192.168.10.1.pigdns.io
@@ -67,6 +63,7 @@ func (h *Handler) getAAAA(name string) (net.IP, error) {
 	return ipv16address, nil
 }
 
+// returns a *dns.Msg if has an answer. nil otherwise
 func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 	for _, q := range m.Question {
 		log.Printf("query for %s\n", q.Name)
@@ -85,8 +82,6 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 			typeSring = "AAAA"
 		default:
 			return nil
-			// 	rr, _ := dns.NewRR(defaultRes)
-			// 	m.Answer = append(m.Answer, rr)
 		}
 
 		if ip != nil && err == nil {
@@ -99,8 +94,6 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 		if err != nil {
 			log.Println("ERROR", err)
 			return nil
-			// rr, _ := dns.NewRR(defaultRes)
-			// m.Answer = append(m.Answer, rr)
 		}
 
 	}
@@ -111,8 +104,6 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Compress = false
-
 	r.Authoritative = true
 
 	switch r.Opcode {
