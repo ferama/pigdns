@@ -15,10 +15,11 @@ const (
 
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
+// Chain rings are called in reverse order
 func buildChain() dns.Handler {
 	var chain dns.Handler
 
-	// root handler
+	// leaf handler (is the latest one)
 	chain = dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -29,6 +30,7 @@ func buildChain() dns.Handler {
 	})
 
 	chain = &regexip.Handler{Next: chain}
+
 	return chain
 }
 
