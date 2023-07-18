@@ -1,0 +1,55 @@
+package main
+
+import (
+	"flag"
+	"log"
+	"strconv"
+
+	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/miekg/dns"
+)
+
+const (
+	defaultRes = "pigdns.io. 1800 IN SOA pigdns.io. pigdns.io. 1502165581 14400 3600 604800 14400"
+)
+
+func buildChain() dns.Handler {
+	var chain dns.Handler
+
+	// root handler
+	chain = dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Compress = false
+
+		rr, _ := dns.NewRR(defaultRes)
+		m.Answer = append(m.Answer, rr)
+		w.WriteMsg(m)
+	})
+
+	chain = &regexip.Handler{Next: chain}
+	return chain
+}
+
+func main() {
+	domain := flag.String("domain", "", "a domain comprensive of the final dot")
+	port := flag.Int("port", 53, "listen udp port")
+	flag.Parse()
+
+	if *domain == "" {
+		log.Fatal("you must set the domain flag, including the final dot. Ex: pigns -domain pigdns.io.")
+	}
+
+	// attach request handler func
+	dns.Handle(*domain, buildChain())
+
+	// start server
+	server := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
+	log.Printf("starting at %d\n", *port)
+
+	err := server.ListenAndServe()
+	defer server.Shutdown()
+	if err != nil {
+		log.Fatalf("failed to start server: %s\n ", err.Error())
+	}
+}
