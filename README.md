@@ -20,7 +20,7 @@ Delegate `pigdns.yourdomain.io.` On your domain nameserver:
 
 | domain | record type | destination |
 | ------ | ------------ | ----------- |  
-| pigdns.yourdomain.io | A | 159.12.16.4 (put your serve ip address here)
+| pigdns.yourdomain.io | A | 159.12.16.4 (put your server ip address here)
 | pigdns.yourdomain.io | NS | pigdns.yourdomain.io
 
 
