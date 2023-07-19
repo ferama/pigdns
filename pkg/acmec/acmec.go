@@ -26,12 +26,13 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 				continue
 			}
 		}
-
 		if token.Get() == "" {
 			continue
 		}
 
 		rr, err := dns.NewRR(fmt.Sprintf("%s TXT %s", q.Name, token.Get()))
+		rr.Header().Ttl = 180 // seconds
+
 		if err == nil {
 			m.Answer = append(m.Answer, rr)
 			haveAnswer = true

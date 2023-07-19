@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"strconv"
 
 	"github.com/ferama/pigdns/pkg/acmec"
+	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/miekg/dns"
 )
@@ -31,23 +33,25 @@ func buildChain() dns.Handler {
 	})
 
 	chain = &regexip.Handler{Next: chain}
-
 	chain = &acmec.Handler{Next: chain}
 
 	return chain
 }
 
 func main() {
-	domain := flag.String("domain", "", "a domain comprensive of the final dot")
+	domain := flag.String("domain", "", "a domain")
 	port := flag.Int("port", 53, "listen udp port")
 	flag.Parse()
 
 	if *domain == "" {
-		log.Fatal("you must set the domain flag, including the final dot. Ex: pigns -domain pigdns.io.")
+		log.Fatal("you must set the domain flag")
 	}
 
+	cm := certman.New(*domain)
+	go cm.Run()
+
 	// attach request handler func
-	dns.Handle(*domain, buildChain())
+	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain())
 
 	// start server
 	server := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
