@@ -65,8 +65,9 @@ func (h *Handler) getAAAA(name string) (net.IP, error) {
 
 // returns a *dns.Msg if has an answer. nil otherwise
 func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
+	haveAnswer := false
 	for _, q := range m.Question {
-		log.Printf("query for %s\n", q.Name)
+		log.Printf("[regexip] query for %s\n", q.Name)
 
 		var ip net.IP
 		var err error
@@ -80,22 +81,23 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 		case dns.TypeAAAA:
 			ip, err = h.getAAAA(q.Name)
 			typeSring = "AAAA"
-		default:
-			return nil
 		}
 
 		if ip != nil && err == nil {
 			rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, typeSring, ip))
 			if err == nil {
 				m.Answer = append(m.Answer, rr)
+				haveAnswer = true
 			}
 		}
 
 		if err != nil {
 			log.Println("ERROR", err)
-			return nil
 		}
 
+	}
+	if !haveAnswer {
+		return nil
 	}
 
 	return m

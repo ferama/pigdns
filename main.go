@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/miekg/dns"
 )
@@ -30,6 +31,8 @@ func buildChain() dns.Handler {
 	})
 
 	chain = &regexip.Handler{Next: chain}
+
+	chain = &acmec.Handler{Next: chain}
 
 	return chain
 }
