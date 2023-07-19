@@ -113,6 +113,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	if m != nil {
 		w.WriteMsg(m)
+		return
 	}
 
 	h.Next.ServeDNS(w, r)
