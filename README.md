@@ -15,12 +15,12 @@
 
 Delegate `pigdns.yourdomain.io.` On your domain nameserver:
 
-* add an A record pointing to the IP address on which pigdns is listening 
-* add an NS record pointing to the pigdns server
+* add an A record that points to the IP address on which pigdns is listening 
+* add an NS record that points to the pigdns server
 
 | domain | record type | destination |
 | ------ | ------------ | ----------- |  
-| pigdns.yourdomain.io | A | 159.12.16.4
+| pigdns.yourdomain.io | A | 159.12.16.4 (put your serve ip address here)
 | pigdns.yourdomain.io | NS | pigdns.yourdomain.io
 
 
