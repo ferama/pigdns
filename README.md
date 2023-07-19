@@ -1,6 +1,6 @@
 # pigdns
 
-🐷 PigDNS is DNS server that mimic the behaviour of services like:
+🐷 PigDNS is a DNS server that mimic the behaviour of services like:
 
 * nip.io
 * sslip.io
@@ -29,7 +29,7 @@ Run
 $ pigdns -domain pigdns.yourdomain.io.
 ```
 
-## Examples resolve
+## Query Examples
 
 * 192.168.10.1.pigdns.yourdomain.io -> 192.168.10.1
 * abc-192.168.10.1.pigdns.yourdomain.io -> 192.168.10.1
