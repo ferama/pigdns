@@ -6,15 +6,20 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/mholt/acmez/acme"
 )
 
-const directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
+const (
+	directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	mail      = "you@test.com"
+)
 
 type Certman struct {
 	domain string
@@ -28,6 +33,20 @@ func New(d string) *Certman {
 	return c
 }
 
+func (c *Certman) writeFile(path string, content []byte) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write(content)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *Certman) Run() error {
 	// a context allows us to cancel long-running ops
 	ctx := context.Background()
@@ -35,6 +54,10 @@ func (c *Certman) Run() error {
 	if err != nil {
 		return fmt.Errorf("generating certificate key: %v", err)
 	}
+
+	x509Encoded, _ := x509.MarshalECPrivateKey(certPrivateKey)
+	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
+	c.writeFile("cert.key", pemEncoded)
 
 	domains := []string{c.domain}
 	// then you need a certificate request; here's a simple one - we need
@@ -57,7 +80,7 @@ func (c *Certman) Run() error {
 		return fmt.Errorf("generating account key: %v", err)
 	}
 	account := acme.Account{
-		Contact:              []string{"mailto:you@test.com"},
+		Contact:              []string{"mailto:" + mail},
 		TermsOfServiceAgreed: true,
 		PrivateKey:           accountPrivateKey,
 	}
@@ -124,20 +147,17 @@ func (c *Certman) Run() error {
 		// simple, so we will just do one at a time; we wait for the ACME
 		// server to tell us the challenge has been solved by polling the
 		// authorization status
-		maxRetries := 100
+		maxRetries := 10
 
-		acmec.Token().Set(challenge.Token)
+		// acmec.Token().Set(challenge.Token)
+		acmec.Token().Set(challenge.DNS01KeyAuthorization())
 
 		for {
-			// log.Println("=======", challenge.DNS01TXTRecordName())
-			// log.Println("=======", challenge.KeyAuthorization)
-			// log.Println("=======", challenge.Token)
-
 			authz, err = client.PollAuthorization(ctx, account, authz)
 			if err == nil {
 				break
 			}
-			log.Printf("[certman] expecting token: %s", challenge.Token)
+			log.Printf("[certman] expecting record: %s TXT %s", challenge.DNS01TXTRecordName(), challenge.DNS01KeyAuthorization())
 			log.Printf("[certman] %s\n", err)
 			maxRetries--
 			if maxRetries == 0 {
@@ -169,8 +189,10 @@ func (c *Certman) Run() error {
 	}
 
 	// all done! store it somewhere safe, along with its key
-	for _, cert := range certChains {
+	for i, cert := range certChains {
 		fmt.Printf("Certificate %q:\n%s\n\n", cert.URL, cert.ChainPEM)
+
+		c.writeFile(fmt.Sprintf("fullchain%d.crt", i), cert.ChainPEM)
 	}
 
 	return nil

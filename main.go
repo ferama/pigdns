@@ -19,7 +19,7 @@ const (
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
 // Chain rings are called in reverse order
-func buildChain() dns.Handler {
+func buildChain(domain string) dns.Handler {
 	var chain dns.Handler
 
 	// leaf handler (is the latest one)
@@ -27,8 +27,27 @@ func buildChain() dns.Handler {
 		m := new(dns.Msg)
 		m.SetReply(r)
 
+		// switch r.Opcode {
+		// case dns.OpcodeQuery:
+		// 	m.Authoritative = true
+		// 	m.Rcode = dns.RcodeSuccess
+		// 	for _, q := range m.Question {
+		// 		log.Println("[root]", q.Name)
+		// 		if q.Name == domain+"." {
+		// 			switch q.Qtype {
+		// 			case dns.TypeA:
+		// 				ip := "xxx.xxx.xxx.xx" // <- put dns public ip here
+		// 				rr, _ := dns.NewRR(fmt.Sprintf("%s A %s", q.Name, ip))
+		// 				m.Answer = append(m.Answer, rr)
+		// 			}
+		// 		}
+
+		// 	}
+		// }
+
 		rr, _ := dns.NewRR(defaultRes)
 		m.Answer = append(m.Answer, rr)
+
 		w.WriteMsg(m)
 	})
 
@@ -51,7 +70,7 @@ func main() {
 	go cm.Run()
 
 	// attach request handler func
-	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain())
+	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain(*domain))
 
 	// start server
 	server := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}

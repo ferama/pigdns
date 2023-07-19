@@ -3,9 +3,13 @@ package acmec
 import (
 	"fmt"
 	"log"
-	"strings"
+	"regexp"
 
 	"github.com/miekg/dns"
+)
+
+var (
+	dns01ChallengeRE = regexp.MustCompile(`(?i)_acme-challenge\.`)
 )
 
 type Handler struct {
@@ -22,17 +26,19 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 
 		switch q.Qtype {
 		case dns.TypeTXT:
-			if !strings.HasPrefix(q.Name, "_acme-challenge") {
+			if !dns01ChallengeRE.MatchString(q.Name) {
 				continue
 			}
+		default:
+			continue
 		}
 		if token.Get() == "" {
 			continue
 		}
 
 		rr, err := dns.NewRR(fmt.Sprintf("%s TXT %s", q.Name, token.Get()))
-		rr.Header().Ttl = 180 // seconds
-
+		// rr.Header().Ttl = 180 // seconds
+		rr.Header().Ttl = 120 // seconds
 		if err == nil {
 			m.Answer = append(m.Answer, rr)
 			haveAnswer = true
@@ -51,7 +57,8 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
-	r.Authoritative = true
+	m.Authoritative = true
+	m.Rcode = dns.RcodeSuccess
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
@@ -59,6 +66,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if m != nil {
+
 		w.WriteMsg(m)
 		return
 	}

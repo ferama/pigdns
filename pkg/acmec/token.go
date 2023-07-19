@@ -26,7 +26,7 @@ type token struct {
 
 func newToken() *token {
 	t := &token{
-		value: "test",
+		value: "",
 	}
 	return t
 }

@@ -81,9 +81,11 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 		case dns.TypeAAAA:
 			ip, err = h.getAAAA(q.Name)
 			typeSring = "AAAA"
+		default:
+			continue
 		}
 
-		if ip != nil && err == nil {
+		if err == nil {
 			rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, typeSring, ip))
 			if err == nil {
 				m.Answer = append(m.Answer, rr)
@@ -106,7 +108,8 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
-	r.Authoritative = true
+	m.Authoritative = true
+	m.Rcode = dns.RcodeSuccess
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
