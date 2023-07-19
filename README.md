@@ -8,11 +8,12 @@
 
 ## Setup
 
-Delegate a subdomain to pigdns
+* Delegate a subdomain to pigdns.
+* Run `pigdns -domain <your domain>`
 
-Example:
+### Example:
 
-Delegate pigdns.yourdomain.io. On your domain nameserver:
+Delegate `pigdns.yourdomain.io.` On your domain nameserver:
 
 * add an A record pointing to the IP address on which pigdns is listening 
 * add an NS record pointing to the pigdns server
@@ -23,8 +24,13 @@ Delegate pigdns.yourdomain.io. On your domain nameserver:
 | pigdns.yourdomain.io | NS | pigdns.yourdomain.io
 
 
+Run
+```sh
+$ pigdns -domain pigdns.yourdomain.io.
+```
+
 ## Examples resolve
 
-* 192.168.10.1.yourdomain.io -> 192.168.10.1
-* abc-192.168.10.1.yourdomain.io -> 192.168.10.1
-* abc-192-168-1-10-def.yourdomain.io -> 192.168.10.1
+* 192.168.10.1.pigdns.yourdomain.io -> 192.168.10.1
+* abc-192.168.10.1.pigdns.yourdomain.io -> 192.168.10.1
+* abc-192-168-1-10-def.pigdns.yourdomain.io -> 192.168.10.1
