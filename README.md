@@ -13,7 +13,7 @@
 
 ### Example:
 
-Delegate `pigdns.yourdomain.io.` On your domain nameserver:
+Delegate `pig.yourdomain.io.` On your domain nameserver:
 
 * add an A record that points to the IP address on which pigdns is listening 
 * add an NS record that points to the pigdns server
