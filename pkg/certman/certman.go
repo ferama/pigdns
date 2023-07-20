@@ -55,9 +55,9 @@ func (c *Certman) Run() error {
 		return fmt.Errorf("generating certificate key: %v", err)
 	}
 
-	x509Encoded, _ := x509.MarshalECPrivateKey(certPrivateKey)
+	x509Encoded, _ := x509.MarshalPKCS8PrivateKey(certPrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
-	c.writeFile("cert.key", pemEncoded)
+	c.writeFile("privkey.pem", pemEncoded)
 
 	domains := []string{c.domain}
 	// then you need a certificate request; here's a simple one - we need
@@ -189,11 +189,9 @@ func (c *Certman) Run() error {
 	}
 
 	// all done! store it somewhere safe, along with its key
-	for i, cert := range certChains {
-		fmt.Printf("Certificate %q:\n%s\n\n", cert.URL, cert.ChainPEM)
-
-		c.writeFile(fmt.Sprintf("fullchain%d.crt", i), cert.ChainPEM)
-	}
+	cert := certChains[0]
+	log.Printf("Certificate %q\n", cert.URL)
+	c.writeFile("fullchain.pem", cert.ChainPEM)
 
 	return nil
 }
