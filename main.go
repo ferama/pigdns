@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"strconv"
@@ -10,11 +9,21 @@ import (
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/miekg/dns"
+	"github.com/spf13/cobra"
 )
 
 const (
 	defaultRes = "pigdns.io. 1800 IN SOA pigdns.io. pigdns.io. 1502165581 14400 3600 604800 14400"
 )
+
+func init() {
+	rootCmd.Flags().StringP("domain", "d", "", "the pigdns domain")
+	rootCmd.MarkFlagRequired("domain")
+
+	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
+	rootCmd.Flags().StringP("datadir", "a", ".", "data dir where pigdns data will be stored")
+	rootCmd.Flags().IntP("port", "p", 53, "udp listen port")
+}
 
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
@@ -39,29 +48,33 @@ func buildChain() dns.Handler {
 	return chain
 }
 
+var rootCmd = &cobra.Command{
+	Use:  "pigdns",
+	Long: "The tool to create relieable ssh tunnels.",
+	Run: func(cmd *cobra.Command, args []string) {
+		domain, _ := cmd.Flags().GetString("domain")
+		email, _ := cmd.Flags().GetString("email")
+		datadir, _ := cmd.Flags().GetString("datadir")
+		port, _ := cmd.Flags().GetInt("port")
+
+		cm := certman.New(domain, datadir, email)
+		go cm.Run()
+
+		// attach request handler func
+		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+
+		// start server
+		server := &dns.Server{Addr: ":" + strconv.Itoa(port), Net: "udp"}
+		log.Printf("starting at %d\n", port)
+
+		err := server.ListenAndServe()
+		defer server.Shutdown()
+		if err != nil {
+			log.Fatalf("failed to start server: %s\n ", err.Error())
+		}
+	},
+}
+
 func main() {
-	domain := flag.String("domain", "", "a domain")
-	port := flag.Int("port", 53, "listen udp port")
-	datadir := flag.String("datadir", ".", "data dir where pigdns data will be stored")
-	flag.Parse()
-
-	if *domain == "" {
-		log.Fatal("you must set the domain flag")
-	}
-
-	cm := certman.New(*domain, *datadir)
-	go cm.Run()
-
-	// attach request handler func
-	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain())
-
-	// start server
-	server := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
-	log.Printf("starting at %d\n", *port)
-
-	err := server.ListenAndServe()
-	defer server.Shutdown()
-	if err != nil {
-		log.Fatalf("failed to start server: %s\n ", err.Error())
-	}
+	rootCmd.Execute()
 }

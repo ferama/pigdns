@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,6 +22,10 @@ const (
 	directory         = "https://acme-staging-v02.api.letsencrypt.org/directory"
 	privKeyFilename   = "privkey.pem"
 	fullChainFilename = "fullchain.pem"
+
+	// if days left is less than this value,
+	// a new certificate will be requested
+	renewDaysBeforeExpires = 35
 )
 
 func writeFile(datadir string, name string, content []byte) error {
@@ -46,12 +51,13 @@ type Certman struct {
 	accountMan *accountMan
 }
 
-func New(domain string, datadir string) *Certman {
+func New(domain string, datadir string, email string) *Certman {
 	c := &Certman{
 		domain:  domain,
 		datadir: datadir,
 		accountMan: &accountMan{
 			datadir: datadir,
+			email:   email,
 		},
 	}
 
@@ -78,22 +84,34 @@ func (c *Certman) needsRenew() bool {
 		block, _ := pem.Decode(pemEncoded)
 		crt, _ := x509.ParseCertificate(block.Bytes)
 		diff := time.Until(crt.NotAfter)
-		log.Println(diff)
+		expiresInDays := int(math.Round(diff.Hours() / 24))
 		log.Printf(
-			"DNS: %s, Issuer: %s, NotBefore: %s, NotAfter: %s",
-			crt.DNSNames,
-			crt.Issuer,
+			"[certman]: cert -> NotBefore: %s, NotAfter: %s, Expires in: %d days",
 			crt.NotBefore,
 			crt.NotAfter,
+			expiresInDays,
 		)
+		if expiresInDays > renewDaysBeforeExpires {
+			return false
+		}
 	}
 
 	return true
 }
 
-func (c *Certman) Run() error {
-	c.needsRenew()
+func (c *Certman) Run() {
+	for {
+		if c.needsRenew() {
+			err := c.renew()
+			if err != nil {
+				log.Println(err)
+			}
+		}
+		time.Sleep(12 * time.Hour)
+	}
+}
 
+func (c *Certman) renew() error {
 	// a context allows us to cancel long-running ops
 	ctx := context.Background()
 	certPrivateKey, err := c.getPrivateKey()

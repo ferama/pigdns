@@ -9,7 +9,7 @@
 ## Setup
 
 * Delegate a subdomain to pigdns.
-* Run `pigdns -domain <your domain>`
+* Run `pigdns --domain <your domain>`
 
 ### Example:
 
@@ -26,7 +26,7 @@ Delegate `pigdns.yourdomain.io.` On your domain nameserver:
 
 Run
 ```sh
-$ pigdns -domain pig.yourdomain.io
+$ pigdns --domain pig.yourdomain.io
 ```
 
 ## Query Examples

@@ -15,16 +15,13 @@ import (
 	"github.com/mholt/acmez/acme"
 )
 
-const (
-	mail                   = "you@test.com"
-	accountPrivKeyFilename = "account-privkey.pem"
-)
-
 type accountMan struct {
+	email   string
 	datadir string
 }
 
 func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
+	accountPrivKeyFilename := fmt.Sprintf("%s.pem", a.email)
 	path := filepath.Join(a.datadir, accountPrivKeyFilename)
 	if _, err := os.Stat(path); err == nil {
 		pemEncoded, _ := os.ReadFile(path)
@@ -40,7 +37,7 @@ func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
 		}
 
 		account := acme.Account{
-			Contact:              []string{"mailto:" + mail},
+			Contact:              []string{"mailto:" + a.email},
 			TermsOfServiceAgreed: true,
 			PrivateKey:           accountPrivateKey.(crypto.Signer),
 		}
@@ -70,10 +67,11 @@ func (a *accountMan) create(ctx context.Context) (*acme.Account, error) {
 
 	x509Encoded, _ := x509.MarshalPKCS8PrivateKey(accountPrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
+	accountPrivKeyFilename := fmt.Sprintf("%s.pem", a.email)
 	writeFile(a.datadir, accountPrivKeyFilename, pemEncoded)
 
 	account := acme.Account{
-		Contact:              []string{"mailto:" + mail},
+		Contact:              []string{"mailto:" + a.email},
 		TermsOfServiceAgreed: true,
 		PrivateKey:           accountPrivateKey,
 	}
@@ -87,7 +85,7 @@ func (a *accountMan) create(ctx context.Context) (*acme.Account, error) {
 	// you can reuse it later!
 	account, err = client.NewAccount(ctx, account)
 	if err != nil {
-		return nil, fmt.Errorf("new account: %v", err)
+		return nil, fmt.Errorf("%v", err)
 	}
 
 	return &account, nil
