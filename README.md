@@ -31,6 +31,5 @@ $ pigdns --domain pig.yourdomain.io
 
 ## Query Examples
 
-* 192.168.10.1.pig.yourdomain.io -> 192.168.10.1
-* abc-192.168.10.1.pig.yourdomain.io -> 192.168.10.1
+* 192-168-1-10.pig.yourdomain.io -> 192.168.10.1
 * abc-192-168-1-10-def.pig.yourdomain.io -> 192.168.10.1

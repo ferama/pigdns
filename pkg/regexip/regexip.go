@@ -13,7 +13,6 @@ import (
 var (
 	// 192.168.10.1.pigdns.io
 	// aa.192.168.10.1.pigdns.io
-	ipv4REDots   = regexp.MustCompile(`(^|[.-])(((25[0-5]|(2[0-4]|1?\d)?\d)\.){3}(25[0-5]|(2[0-4]|1?\d)?\d))($|[.-])`)
 	ipv4REDashes = regexp.MustCompile(`(^|[.-])(((25[0-5]|(2[0-4]|1?\d)?\d)-){3}(25[0-5]|(2[0-4]|1?\d)?\d))($|[.-])`)
 
 	// 2a01-4f8-c17-b8f--2.pigdns.io
@@ -29,17 +28,15 @@ func (h *Handler) getA(name string) (net.IP, error) {
 	fqdn := []byte(name)
 
 	var ipv4address net.IP
-	for _, ipv4RE := range []*regexp.Regexp{ipv4REDashes, ipv4REDots} {
-		if ipv4RE.Match(fqdn) {
-			match := string(ipv4RE.FindSubmatch(fqdn)[2])
-			match = strings.Replace(match, "-", ".", -1)
-			ipv4address = net.ParseIP(match).To4()
-			if ipv4address == nil {
-				return ipv4address, fmt.Errorf("should be valid A but isn't: %s", fqdn)
-			}
-			return ipv4address, nil
-
+	if ipv4REDashes.Match(fqdn) {
+		match := string(ipv4REDashes.FindSubmatch(fqdn)[2])
+		match = strings.Replace(match, "-", ".", -1)
+		ipv4address = net.ParseIP(match).To4()
+		if ipv4address == nil {
+			return ipv4address, fmt.Errorf("should be valid A but isn't: %s", fqdn)
 		}
+		return ipv4address, nil
+
 	}
 	return ipv4address, fmt.Errorf("should be valid A but isn't: %s", fqdn)
 }

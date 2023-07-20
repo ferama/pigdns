@@ -19,7 +19,12 @@ import (
 )
 
 const (
-	directory         = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	// dev
+	directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+	// prod
+	// directory = "https://acme-v02.api.letsencrypt.org/directory"
+
 	privKeyFilename   = "privkey.pem"
 	fullChainFilename = "fullchain.pem"
 
@@ -119,7 +124,10 @@ func (c *Certman) renew() error {
 		return fmt.Errorf("getting certificate key: %v", err)
 	}
 
-	domains := []string{c.domain}
+	domains := []string{
+		// request a wildcard cert
+		fmt.Sprintf("*.%s", c.domain),
+	}
 	// then you need a certificate request; here's a simple one - we need
 	// to fill out the template, then create the actual CSR, then parse it
 	csrTemplate := &x509.CertificateRequest{DNSNames: domains}
