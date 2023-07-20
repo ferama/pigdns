@@ -18,7 +18,9 @@ import (
 )
 
 const (
-	directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	directory         = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	privKeyFilename   = "privkey.pem"
+	fullChainFilename = "fullchain.pem"
 )
 
 func writeFile(datadir string, name string, content []byte) error {
@@ -41,14 +43,14 @@ type Certman struct {
 	domain  string
 	datadir string
 
-	account *account
+	accountMan *accountMan
 }
 
 func New(domain string, datadir string) *Certman {
 	c := &Certman{
 		domain:  domain,
 		datadir: datadir,
-		account: &account{
+		accountMan: &accountMan{
 			datadir: datadir,
 		},
 	}
@@ -56,17 +58,48 @@ func New(domain string, datadir string) *Certman {
 	return c
 }
 
-func (c *Certman) Run() error {
-	// a context allows us to cancel long-running ops
-	ctx := context.Background()
+func (c *Certman) getPrivateKey() (*ecdsa.PrivateKey, error) {
 	certPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return fmt.Errorf("generating certificate key: %v", err)
+		return nil, fmt.Errorf("generating certificate key: %v", err)
 	}
 
 	x509Encoded, _ := x509.MarshalPKCS8PrivateKey(certPrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
-	writeFile(c.datadir, "privkey.pem", pemEncoded)
+	writeFile(c.datadir, privKeyFilename, pemEncoded)
+
+	return certPrivateKey, nil
+}
+
+func (c *Certman) needsRenew() bool {
+	path := filepath.Join(c.datadir, fullChainFilename)
+	if _, err := os.Stat(path); err == nil {
+		pemEncoded, _ := os.ReadFile(path)
+		block, _ := pem.Decode(pemEncoded)
+		crt, _ := x509.ParseCertificate(block.Bytes)
+		diff := time.Until(crt.NotAfter)
+		log.Println(diff)
+		log.Printf(
+			"DNS: %s, Issuer: %s, NotBefore: %s, NotAfter: %s",
+			crt.DNSNames,
+			crt.Issuer,
+			crt.NotBefore,
+			crt.NotAfter,
+		)
+	}
+
+	return true
+}
+
+func (c *Certman) Run() error {
+	c.needsRenew()
+
+	// a context allows us to cancel long-running ops
+	ctx := context.Background()
+	certPrivateKey, err := c.getPrivateKey()
+	if err != nil {
+		return fmt.Errorf("getting certificate key: %v", err)
+	}
 
 	domains := []string{c.domain}
 	// then you need a certificate request; here's a simple one - we need
@@ -84,10 +117,9 @@ func (c *Certman) Run() error {
 	// now we can make our low-level ACME client
 	client := &acme.Client{
 		Directory: directory,
-		// Logger: logger,
 	}
 
-	account, err := c.account.get(ctx)
+	account, err := c.accountMan.get(ctx)
 	if err != nil {
 		return fmt.Errorf("new account: %v", err)
 	}
@@ -140,25 +172,15 @@ func (c *Certman) Run() error {
 		// simple, so we will just do one at a time; we wait for the ACME
 		// server to tell us the challenge has been solved by polling the
 		// authorization status
-		maxRetries := 10
 
-		// acmec.Token().Set(challenge.Token)
 		acmec.Token().Set(challenge.DNS01KeyAuthorization())
 
-		for {
-			authz, err = client.PollAuthorization(ctx, *account, authz)
-			if err == nil {
-				break
-			}
-			log.Printf("[certman] expecting record: %s TXT %s", challenge.DNS01TXTRecordName(), challenge.DNS01KeyAuthorization())
+		authz, err = client.PollAuthorization(ctx, *account, authz)
+		if err != nil {
 			log.Printf("[certman] %s\n", err)
-			maxRetries--
-			if maxRetries == 0 {
-				return fmt.Errorf("max retries exhausted")
-			}
-
-			time.Sleep(5 * time.Second)
+			return err
 		}
+		log.Printf("[certman] expecting record: %s TXT %s", challenge.DNS01TXTRecordName(), challenge.DNS01KeyAuthorization())
 
 		// if we got here, then the challenge was solved successfully, hurray!
 	}
@@ -184,7 +206,7 @@ func (c *Certman) Run() error {
 	// all done! store it somewhere safe, along with its key
 	cert := certChains[0]
 	log.Printf("[certman] got certificate %q\n", cert.URL)
-	writeFile(c.datadir, "fullchain.pem", cert.ChainPEM)
+	writeFile(c.datadir, fullChainFilename, cert.ChainPEM)
 
 	return nil
 }

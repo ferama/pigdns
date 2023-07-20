@@ -20,11 +20,11 @@ const (
 	accountPrivKeyFilename = "account-privkey.pem"
 )
 
-type account struct {
+type accountMan struct {
 	datadir string
 }
 
-func (a *account) get(ctx context.Context) (*acme.Account, error) {
+func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
 	path := filepath.Join(a.datadir, accountPrivKeyFilename)
 	if _, err := os.Stat(path); err == nil {
 		pemEncoded, _ := os.ReadFile(path)
@@ -58,7 +58,7 @@ func (a *account) get(ctx context.Context) (*acme.Account, error) {
 	return a.create(ctx)
 }
 
-func (a *account) create(ctx context.Context) (*acme.Account, error) {
+func (a *accountMan) create(ctx context.Context) (*acme.Account, error) {
 
 	// before you can get a cert, you'll need an account registered with
 	// the ACME CA - it also needs a private key and should obviously be

@@ -94,7 +94,7 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 		}
 
 		if err != nil {
-			log.Println("ERROR", err)
+			log.Println("[regexip]", err)
 		}
 
 	}
