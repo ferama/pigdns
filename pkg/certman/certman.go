@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/acmec"
@@ -18,22 +19,11 @@ import (
 
 const (
 	directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
-	mail      = "you@test.com"
 )
 
-type Certman struct {
-	domain string
-}
+func writeFile(datadir string, name string, content []byte) error {
+	path := filepath.Join(datadir, name)
 
-func New(d string) *Certman {
-	c := &Certman{
-		domain: d,
-	}
-
-	return c
-}
-
-func (c *Certman) writeFile(path string, content []byte) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -47,6 +37,25 @@ func (c *Certman) writeFile(path string, content []byte) error {
 	return nil
 }
 
+type Certman struct {
+	domain  string
+	datadir string
+
+	account *account
+}
+
+func New(domain string, datadir string) *Certman {
+	c := &Certman{
+		domain:  domain,
+		datadir: datadir,
+		account: &account{
+			datadir: datadir,
+		},
+	}
+
+	return c
+}
+
 func (c *Certman) Run() error {
 	// a context allows us to cancel long-running ops
 	ctx := context.Background()
@@ -57,7 +66,7 @@ func (c *Certman) Run() error {
 
 	x509Encoded, _ := x509.MarshalPKCS8PrivateKey(certPrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
-	c.writeFile("privkey.pem", pemEncoded)
+	writeFile(c.datadir, "privkey.pem", pemEncoded)
 
 	domains := []string{c.domain}
 	// then you need a certificate request; here's a simple one - we need
@@ -72,29 +81,13 @@ func (c *Certman) Run() error {
 		return fmt.Errorf("parsing generated CSR: %v", err)
 	}
 
-	// before you can get a cert, you'll need an account registered with
-	// the ACME CA - it also needs a private key and should obviously be
-	// different from any key used for certificates!
-	accountPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("generating account key: %v", err)
-	}
-	account := acme.Account{
-		Contact:              []string{"mailto:" + mail},
-		TermsOfServiceAgreed: true,
-		PrivateKey:           accountPrivateKey,
-	}
-
 	// now we can make our low-level ACME client
 	client := &acme.Client{
 		Directory: directory,
 		// Logger: logger,
 	}
 
-	// if the account is new, we need to create it; only do this once!
-	// then be sure to securely store the account key and metadata so
-	// you can reuse it later!
-	account, err = client.NewAccount(ctx, account)
+	account, err := c.account.get(ctx)
 	if err != nil {
 		return fmt.Errorf("new account: %v", err)
 	}
@@ -105,7 +98,7 @@ func (c *Certman) Run() error {
 		ids = append(ids, acme.Identifier{Type: "dns", Value: domain})
 	}
 	order := acme.Order{Identifiers: ids}
-	order, err = client.NewOrder(ctx, account, order)
+	order, err = client.NewOrder(ctx, *account, order)
 	if err != nil {
 		return fmt.Errorf("creating new order: %v", err)
 	}
@@ -114,7 +107,7 @@ func (c *Certman) Run() error {
 	// authorization object; we must make the authorization "valid"
 	// by solving any of the challenges offered for it
 	for _, authzURL := range order.Authorizations {
-		authz, err := client.GetAuthorization(ctx, account, authzURL)
+		authz, err := client.GetAuthorization(ctx, *account, authzURL)
 		if err != nil {
 			return fmt.Errorf("getting authorization %q: %v", authzURL, err)
 		}
@@ -135,7 +128,7 @@ func (c *Certman) Run() error {
 
 		// once you are ready to solve the challenge, let the ACME
 		// server know it should begin
-		challenge, err = client.InitiateChallenge(ctx, account, challenge)
+		challenge, err = client.InitiateChallenge(ctx, *account, challenge)
 		if err != nil {
 			return fmt.Errorf("initiating challenge %q: %v", challenge.URL, err)
 		}
@@ -153,7 +146,7 @@ func (c *Certman) Run() error {
 		acmec.Token().Set(challenge.DNS01KeyAuthorization())
 
 		for {
-			authz, err = client.PollAuthorization(ctx, account, authz)
+			authz, err = client.PollAuthorization(ctx, *account, authz)
 			if err == nil {
 				break
 			}
@@ -173,7 +166,7 @@ func (c *Certman) Run() error {
 	// to request a certificate, we finalize the order; this function
 	// will poll the order status for us and return once the cert is
 	// ready (or until there is an error)
-	order, err = client.FinalizeOrder(ctx, account, order, csr.Raw)
+	order, err = client.FinalizeOrder(ctx, *account, order, csr.Raw)
 	if err != nil {
 		return fmt.Errorf("finalizing order: %v", err)
 	}
@@ -183,15 +176,15 @@ func (c *Certman) Run() error {
 	// of trust for the same end-entity certificate, so this function
 	// returns all of them; you can decide which one to use based on
 	// your own requirements
-	certChains, err := client.GetCertificateChain(ctx, account, order.Certificate)
+	certChains, err := client.GetCertificateChain(ctx, *account, order.Certificate)
 	if err != nil {
 		return fmt.Errorf("downloading certs: %v", err)
 	}
 
 	// all done! store it somewhere safe, along with its key
 	cert := certChains[0]
-	log.Printf("Certificate %q\n", cert.URL)
-	c.writeFile("fullchain.pem", cert.ChainPEM)
+	log.Printf("[certman] got certificate %q\n", cert.URL)
+	writeFile(c.datadir, "fullchain.pem", cert.ChainPEM)
 
 	return nil
 }

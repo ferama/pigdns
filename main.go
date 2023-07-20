@@ -19,7 +19,7 @@ const (
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
 // Chain rings are called in reverse order
-func buildChain(domain string) dns.Handler {
+func buildChain() dns.Handler {
 	var chain dns.Handler
 
 	// leaf handler (is the latest one)
@@ -42,17 +42,18 @@ func buildChain(domain string) dns.Handler {
 func main() {
 	domain := flag.String("domain", "", "a domain")
 	port := flag.Int("port", 53, "listen udp port")
+	datadir := flag.String("datadir", ".", "data dir where pigdns data will be stored")
 	flag.Parse()
 
 	if *domain == "" {
 		log.Fatal("you must set the domain flag")
 	}
 
-	cm := certman.New(*domain)
+	cm := certman.New(*domain, *datadir)
 	go cm.Run()
 
 	// attach request handler func
-	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain(*domain))
+	dns.Handle(fmt.Sprintf("%s.", *domain), buildChain())
 
 	// start server
 	server := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
