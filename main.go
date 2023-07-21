@@ -8,6 +8,7 @@ import (
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/ferama/pigdns/pkg/web"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 )
@@ -60,6 +61,9 @@ var rootCmd = &cobra.Command{
 		cm := certman.New(domain, datadir, email)
 		go cm.Run()
 
+		ws := web.NewWebServer(datadir)
+		go ws.Run()
+
 		// attach request handler func
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
 
@@ -68,7 +72,7 @@ var rootCmd = &cobra.Command{
 			Addr: ":" + strconv.Itoa(port),
 			Net:  "udp",
 		}
-		log.Printf("listening at :%d\n", port)
+		log.Printf("listening on ':%d'", port)
 
 		err := server.ListenAndServe()
 		defer server.Shutdown()

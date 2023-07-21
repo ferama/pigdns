@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/acmec"
@@ -25,13 +26,15 @@ const (
 	// prod
 	// directory = "https://acme-v02.api.letsencrypt.org/directory"
 
-	privKeyFilename   = "privkey.pem"
-	fullChainFilename = "fullchain.pem"
+	PrivKeyFilename   = "privkey.pem"
+	FullChainFilename = "fullchain.pem"
 
 	// if days left is less than this value,
 	// a new certificate will be requested
 	renewDaysBeforeExpires = 35
 )
+
+var CertmanMU sync.Mutex
 
 func writeFile(datadir string, name string, content []byte) error {
 	path := filepath.Join(datadir, name)
@@ -77,13 +80,13 @@ func (c *Certman) getPrivateKey() (*ecdsa.PrivateKey, error) {
 
 	x509Encoded, _ := x509.MarshalPKCS8PrivateKey(certPrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
-	writeFile(c.datadir, privKeyFilename, pemEncoded)
+	writeFile(c.datadir, PrivKeyFilename, pemEncoded)
 
 	return certPrivateKey, nil
 }
 
 func (c *Certman) needsRenew() bool {
-	path := filepath.Join(c.datadir, fullChainFilename)
+	path := filepath.Join(c.datadir, FullChainFilename)
 	if _, err := os.Stat(path); err == nil {
 		pemEncoded, _ := os.ReadFile(path)
 		block, _ := pem.Decode(pemEncoded)
@@ -106,12 +109,14 @@ func (c *Certman) needsRenew() bool {
 
 func (c *Certman) Run() {
 	for {
+		CertmanMU.Lock()
 		if c.needsRenew() {
 			err := c.renew()
 			if err != nil {
 				log.Println(err)
 			}
 		}
+		CertmanMU.Unlock()
 		time.Sleep(12 * time.Hour)
 	}
 }
@@ -232,7 +237,7 @@ func (c *Certman) renew() error {
 	// all done! store it somewhere safe, along with its key
 	cert := certChains[0]
 	log.Printf("[certman] got certificate %q\n", cert.URL)
-	writeFile(c.datadir, fullChainFilename, cert.ChainPEM)
+	writeFile(c.datadir, FullChainFilename, cert.ChainPEM)
 
 	return nil
 }
