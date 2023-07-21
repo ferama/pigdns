@@ -64,8 +64,11 @@ var rootCmd = &cobra.Command{
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
 
 		// start server
-		server := &dns.Server{Addr: ":" + strconv.Itoa(port), Net: "udp"}
-		log.Printf("starting at %d\n", port)
+		server := &dns.Server{
+			Addr: ":" + strconv.Itoa(port),
+			Net:  "udp",
+		}
+		log.Printf("listening at :%d\n", port)
 
 		err := server.ListenAndServe()
 		defer server.Shutdown()

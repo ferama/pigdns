@@ -61,11 +61,11 @@ func (h *Handler) getAAAA(name string) (net.IP, error) {
 }
 
 // returns a *dns.Msg if has an answer. nil otherwise
-func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
+func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 	haveAnswer := false
+	logMsg := ""
 	for _, q := range m.Question {
-		log.Printf("[regexip] query for %s\n", q.Name)
-
+		logMsg = fmt.Sprintf("%s[regexip] query=%s", logMsg, q.Name)
 		var ip net.IP
 		var err error
 
@@ -87,19 +87,16 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 			if err == nil {
 				m.Answer = append(m.Answer, rr)
 				haveAnswer = true
+				logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
 			}
+		} else {
+			logMsg = fmt.Sprintf("%s, answer=no-answer", logMsg)
 		}
-
-		if err != nil {
-			log.Println("[regexip]", err)
-		}
-
 	}
 	if !haveAnswer {
-		return nil
+		return nil, logMsg
 	}
-
-	return m
+	return m, logMsg
 }
 
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
@@ -108,11 +105,14 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m.Authoritative = true
 	m.Rcode = dns.RcodeSuccess
 
+	logMsg := ""
+
 	switch r.Opcode {
 	case dns.OpcodeQuery:
-		m = h.parseQuery(m)
+		m, logMsg = h.parseQuery(m)
 	}
 
+	log.Println(logMsg)
 	if m != nil {
 		w.WriteMsg(m)
 		return

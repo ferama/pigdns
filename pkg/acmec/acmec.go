@@ -20,6 +20,9 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 	haveAnswer := false
 
 	token := Token()
+	if token.Get() == "" {
+		return nil
+	}
 
 	for _, q := range m.Question {
 		log.Printf("[acmec] query for %s\n", q.Name)
@@ -30,9 +33,6 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 				continue
 			}
 		default:
-			continue
-		}
-		if token.Get() == "" {
 			continue
 		}
 
@@ -66,7 +66,6 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if m != nil {
-
 		w.WriteMsg(m)
 		return
 	}
