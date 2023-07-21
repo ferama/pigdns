@@ -91,10 +91,10 @@ func (c *Certman) needsRenew() bool {
 		diff := time.Until(crt.NotAfter)
 		expiresInDays := int(math.Round(diff.Hours() / 24))
 		log.Printf(
-			"[certman] cert -> NotBefore: %s, NotAfter: %s, Expires in: %d days",
+			"[certman] cert -> Expires in: %d days, NotBefore: %s, NotAfter: %s",
+			expiresInDays,
 			crt.NotBefore,
 			crt.NotAfter,
-			expiresInDays,
 		)
 		if expiresInDays > renewDaysBeforeExpires {
 			return false
