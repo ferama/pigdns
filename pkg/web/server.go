@@ -2,11 +2,8 @@ package web
 
 import (
 	"log"
-	"net/http"
-	"os"
-	"path/filepath"
 
-	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/web/routes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,15 +17,8 @@ type webServer struct {
 
 func NewWebServer(datadir string) *webServer {
 
-	// Install admin apis
 	gin.SetMode(gin.ReleaseMode)
 	ginrouter := gin.Default()
-	// ginrouter := gin.New()
-	// ginrouter.Use(
-	// 	// do not log k8s calls to health
-	// 	// gin.LoggerWithWriter(gin.DefaultWriter, "/health"),
-	// 	gin.Recovery(),
-	// )
 
 	s := &webServer{
 		router:  ginrouter,
@@ -40,15 +30,6 @@ func NewWebServer(datadir string) *webServer {
 	return s
 }
 
-func (s *webServer) readFile(filename string) ([]byte, error) {
-	path := filepath.Join(s.datadir, filename)
-	_, err := os.Stat(path)
-	if err == nil {
-		return os.ReadFile(path)
-	}
-	return []byte{}, err
-}
-
 func (s *webServer) setupRoutes() {
 	// setup health endpoint
 	s.router.GET("/health", func(c *gin.Context) {
@@ -57,29 +38,7 @@ func (s *webServer) setupRoutes() {
 		})
 	})
 
-	s.router.GET("/certs/"+certman.FullChainFilename, func(c *gin.Context) {
-		certman.CertmanMU.Lock()
-		defer certman.CertmanMU.Unlock()
-
-		content, err := s.readFile(certman.FullChainFilename)
-		if err == nil {
-			c.Data(http.StatusOK, gin.MIMEPlain, content)
-		} else {
-			c.AbortWithError(http.StatusNotFound, err)
-		}
-	})
-
-	s.router.GET("/certs/"+certman.PrivKeyFilename, func(c *gin.Context) {
-		certman.CertmanMU.Lock()
-		defer certman.CertmanMU.Unlock()
-
-		content, err := s.readFile(certman.PrivKeyFilename)
-		if err == nil {
-			c.Data(http.StatusOK, gin.MIMEPlain, content)
-		} else {
-			c.AbortWithError(http.StatusNotFound, err)
-		}
-	})
+	routes.CertRoutes(s.datadir, s.router.Group("/certs"))
 }
 
 func (s *webServer) Run() {

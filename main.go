@@ -24,6 +24,8 @@ func init() {
 	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
 	rootCmd.Flags().StringP("datadir", "a", ".", "data dir where pigdns data will be stored")
 	rootCmd.Flags().IntP("port", "p", 53, "udp listen port")
+
+	rootCmd.Flags().BoolP("webenable", "w", false, "if to enable web ui")
 }
 
 // the first handler that write back to the client calling
@@ -58,11 +60,15 @@ var rootCmd = &cobra.Command{
 		datadir, _ := cmd.Flags().GetString("datadir")
 		port, _ := cmd.Flags().GetInt("port")
 
+		webenable, _ := cmd.Flags().GetBool("webenable")
+
 		cm := certman.New(domain, datadir, email)
 		go cm.Run()
 
-		ws := web.NewWebServer(datadir)
-		go ws.Run()
+		if webenable {
+			ws := web.NewWebServer(datadir)
+			go ws.Run()
+		}
 
 		// attach request handler func
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
