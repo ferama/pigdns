@@ -39,6 +39,7 @@ func (s *webServer) setupRoutes() {
 	})
 
 	routes.CertRoutes(s.datadir, s.router.Group("/certs"))
+	routes.RootRoutes(s.router.Group("/"))
 }
 
 func (s *webServer) Run() {
