@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 
 	"github.com/ferama/pigdns/pkg/acmec"
@@ -26,24 +27,64 @@ func init() {
 	rootCmd.Flags().IntP("port", "p", 53, "udp listen port")
 
 	rootCmd.Flags().BoolP("webenable", "w", false, "if to enable web ui")
+
+	rootCmd.Flags().StringP("ns-record", "n", "", "[optional] how to answer to NS queries for the domain")
+
+	// pigdns ... -i 192.168.10.1 -i 127.0.0.1
+	rootCmd.Flags().StringArrayP("ns-ips", "i", []string{}, "[optional] how to answer to A and AAAA queries for the domain")
+}
+
+func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
+	for _, ip := range nsIPs {
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			log.Fatalf("[root] %s is not a valid ip address", ip)
+		}
+		// TODO: detect if is IPv4 or IPv6 and aswer
+		// with A or AAAA
+	}
+
+	return func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+
+		if r.Opcode != dns.OpcodeQuery {
+			return
+		}
+
+		havHanswer := false
+		for _, q := range m.Question {
+			switch q.Qtype {
+			case dns.TypeNS:
+				if nsRecord != "" {
+					rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, "NS", nsRecord))
+					if err == nil {
+						m.Answer = append(m.Answer, rr)
+						havHanswer = true
+					}
+				}
+			}
+		}
+		if !havHanswer {
+			rr, _ := dns.NewRR(defaultRes)
+			m.Answer = append(m.Answer, rr)
+		}
+
+		w.WriteMsg(m)
+	}
 }
 
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
 // Chain rings are called in reverse order
-func buildChain() dns.Handler {
+func buildChain(cmd *cobra.Command) dns.Handler {
 	var chain dns.Handler
 
+	nsRecord, _ := cmd.Flags().GetString("ns-record")
+	nsIps, _ := cmd.Flags().GetStringArray("ns-ips")
+
 	// leaf handler (is the latest one)
-	chain = dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
-		m := new(dns.Msg)
-		m.SetReply(r)
-
-		rr, _ := dns.NewRR(defaultRes)
-		m.Answer = append(m.Answer, rr)
-
-		w.WriteMsg(m)
-	})
+	chain = dns.HandlerFunc(rootHandler(nsRecord, nsIps))
 
 	chain = &regexip.Handler{Next: chain}
 	chain = &acmec.Handler{Next: chain}
@@ -53,7 +94,7 @@ func buildChain() dns.Handler {
 
 var rootCmd = &cobra.Command{
 	Use:  "pigdns",
-	Long: "The tool to create relieable ssh tunnels.",
+	Long: "dynamic dns resolver",
 	Run: func(cmd *cobra.Command, args []string) {
 		domain, _ := cmd.Flags().GetString("domain")
 		email, _ := cmd.Flags().GetString("email")
@@ -71,7 +112,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// attach request handler func
-		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+		dns.Handle(fmt.Sprintf("%s.", domain), buildChain(cmd))
 
 		// start server
 		server := &dns.Server{
