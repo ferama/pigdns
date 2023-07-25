@@ -33,9 +33,10 @@ func init() {
 
 	// cert
 	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
+	rootCmd.Flags().BoolP("certman-use-staging", "s", false, "use staging let's encrypt api")
 
 	// web
-	rootCmd.Flags().BoolP("webenable", "w", false, "if to enable web ui")
+	rootCmd.Flags().BoolP("enable-web", "w", false, "if to enable web ui")
 }
 
 func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
@@ -136,12 +137,13 @@ var rootCmd = &cobra.Command{
 		datadir, _ := cmd.Flags().GetString("datadir")
 		port, _ := cmd.Flags().GetInt("port")
 
-		webenable, _ := cmd.Flags().GetBool("webenable")
+		enableWeb, _ := cmd.Flags().GetBool("enable-web")
+		certmanUseStaging, _ := cmd.Flags().GetBool("certman-use-staging")
 
-		cm := certman.New(domain, datadir, email)
+		cm := certman.New(domain, datadir, email, certmanUseStaging)
 		go cm.Run()
 
-		if webenable {
+		if enableWeb {
 			ws := web.NewWebServer(datadir)
 			go ws.Run()
 		}

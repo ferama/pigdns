@@ -21,10 +21,10 @@ import (
 
 const (
 	// dev
-	directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	directoryStaging = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 	// prod
-	// directory = "https://acme-v02.api.letsencrypt.org/directory"
+	directory = "https://acme-v02.api.letsencrypt.org/directory"
 
 	PrivKeyFilename   = "privkey.pem"
 	FullChainFilename = "fullchain.pem"
@@ -53,20 +53,27 @@ func writeFile(datadir string, name string, content []byte) error {
 }
 
 type Certman struct {
-	domain  string
-	datadir string
+	domain     string
+	datadir    string
+	useStaging bool
 
 	accountMan *accountMan
 }
 
-func New(domain string, datadir string, email string) *Certman {
+func New(domain string, datadir string, email string, useStaging bool) *Certman {
 	c := &Certman{
-		domain:  domain,
-		datadir: datadir,
+		domain:     domain,
+		datadir:    datadir,
+		useStaging: useStaging,
 		accountMan: &accountMan{
 			datadir: datadir,
 			email:   email,
 		},
+	}
+	if c.useStaging {
+		log.Println("[certman] using STAGING le api")
+	} else {
+		log.Println("[certman] using PRODUCTION le api")
 	}
 
 	return c
@@ -148,6 +155,9 @@ func (c *Certman) renew() error {
 	// now we can make our low-level ACME client
 	client := &acme.Client{
 		Directory: directory,
+	}
+	if c.useStaging {
+		client.Directory = directoryStaging
 	}
 
 	account, err := c.accountMan.get(ctx)
