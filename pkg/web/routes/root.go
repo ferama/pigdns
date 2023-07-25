@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,4 +15,7 @@ func RootRoutes(router *gin.RouterGroup) {
 }
 
 func (r *rootGroup) root(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.html", gin.H{
+		"content": "Main website",
+	})
 }

@@ -18,10 +18,12 @@ type webServer struct {
 func NewWebServer(datadir string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
-	ginrouter := gin.Default()
+	router := gin.Default()
+
+	router.LoadHTMLGlob("pkg/web/templates/*")
 
 	s := &webServer{
-		router:  ginrouter,
+		router:  router,
 		datadir: datadir,
 	}
 	s.setupRoutes()
