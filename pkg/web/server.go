@@ -13,9 +13,10 @@ type webServer struct {
 	router *gin.Engine
 
 	datadir string
+	domain  string
 }
 
-func NewWebServer(datadir string) *webServer {
+func NewWebServer(datadir string, domain string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -25,6 +26,7 @@ func NewWebServer(datadir string) *webServer {
 	s := &webServer{
 		router:  router,
 		datadir: datadir,
+		domain:  domain,
 	}
 	s.setupRoutes()
 
@@ -41,7 +43,7 @@ func (s *webServer) setupRoutes() {
 	})
 
 	routes.CertRoutes(s.datadir, s.router.Group("/certs"))
-	routes.RootRoutes(s.router.Group("/"))
+	routes.RootRoutes(s.domain, s.router.Group("/"))
 }
 
 func (s *webServer) Run() {

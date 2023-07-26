@@ -1,11 +1,40 @@
 {{ template "header.html" }}
 <main>
-  <div class="container">
-    <div class="row">
-      <div class="col">
-        <h1>Hello, world!</h1>
-      </div>
-    </div>
-  </div>
+  <p class="fs-5 col-md-12">
+    PigDNS is a magic dns resolver. It uses regular expressions to automatically generate
+    responses to DNS queries. 
+  </p>
+  <p class="fs-5 col-md-12">
+    It also manages valid wildcard certificates for the domain <strong>*.{{.domain}}</strong>
+  </p>
+  <p class="fs-5 col-md-12">
+    You can always get fresh certs from:
+    <ul>
+      <li><a target="_blank" href="certs/fullchain.pem">fullchain.pem</a></li>
+      <li><a target="_blank" href="certs/privkey.pem">privkey.pem</a></li>
+    </ul>
+  </p>
+  <br>
+  <h3 class="text-body-emphasis">Examples</h3>
+  <p class="fs-5 col-md-8">
+      <table class="table">
+        <tr>
+          <th>Domain</th>
+          <th>Record</th>
+        </tr>
+        <tr>
+          <td>192-168-10-1.{{ .domain }}</td>
+          <td>192.168.10.1</td>
+        </tr>
+        <tr>
+          <td>service1-192-168-5-80.{{ .domain }}</td>
+          <td>192.168.5.80</td>
+        </tr>
+        <tr>
+          <td>sso-156-72-10-8-dev.{{ .domain }}</td>
+          <td>156.72.10.8</td>
+        </tr>
+      </table>
+  </p>
 </main>
 {{ template "footer.html" }}

@@ -29,6 +29,12 @@ Run
 $ pigdns --domain pig.yourdomain.io
 ```
 
+or if you want pigdns to answer with its root domain NS and A record too:
+
+```sh
+$ pigdns --domain pig.yourdomain.io -n pigdns.yourdomain.io -i 159.12.16.4
+```
+
 ## Query Examples
 
 * 192-168-1-10.pig.yourdomain.io -> 192.168.10.1

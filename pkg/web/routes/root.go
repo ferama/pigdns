@@ -6,16 +6,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type rootGroup struct{}
+type rootGroup struct {
+	domain string
+}
 
-func RootRoutes(router *gin.RouterGroup) {
-	r := &rootGroup{}
+func RootRoutes(domain string, router *gin.RouterGroup) {
+	r := &rootGroup{
+		domain: domain,
+	}
 
 	router.GET("", r.root)
 }
 
 func (r *rootGroup) root(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"content": "Main website",
+		"domain": r.domain,
 	})
 }

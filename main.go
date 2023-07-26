@@ -144,7 +144,7 @@ var rootCmd = &cobra.Command{
 		go cm.Run()
 
 		if enableWeb {
-			ws := web.NewWebServer(datadir)
+			ws := web.NewWebServer(datadir, domain)
 			go ws.Run()
 		}
 
