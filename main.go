@@ -66,7 +66,7 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 
 		havHanswer := false
 		for _, q := range m.Question {
-			logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.Name)
+			logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.String())
 
 			switch q.Qtype {
 			case dns.TypeNS:
@@ -102,6 +102,7 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 			rr, _ := dns.NewRR(defaultRes)
 			m.Answer = append(m.Answer, rr)
 			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
+
 		}
 
 		log.Println(logMsg)

@@ -65,7 +65,7 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 	haveAnswer := false
 	logMsg := ""
 	for _, q := range m.Question {
-		logMsg = fmt.Sprintf("%s[regexip] query=%s", logMsg, q.Name)
+		logMsg = fmt.Sprintf("%s[regexip] query=%s", logMsg, q.String())
 		var ip net.IP
 		var err error
 
@@ -91,7 +91,7 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 				logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
 			}
 		} else {
-			logMsg = fmt.Sprintf("%s, answer=no-answer", logMsg)
+			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 		}
 	}
 	if !haveAnswer {
