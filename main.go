@@ -53,7 +53,6 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 			IPv4s = append(IPv4s, parsedIP.String())
 		}
 	}
-	log.Println(IPv6s)
 
 	return func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
