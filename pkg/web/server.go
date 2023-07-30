@@ -2,7 +2,9 @@ package web
 
 import (
 	"crypto/tls"
+	"embed"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +15,9 @@ import (
 	"github.com/ferama/pigdns/pkg/web/routes"
 	"github.com/gin-gonic/gin"
 )
+
+//go:embed templates/*
+var f embed.FS
 
 type webServer struct {
 	router *gin.Engine
@@ -29,8 +34,8 @@ func NewWebServer(datadir string, domain string, https bool) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
-
-	router.LoadHTMLGlob("pkg/web/templates/*")
+	templ := template.Must(template.New("").ParseFS(f, "templates/*.html"))
+	router.SetHTMLTemplate(templ)
 
 	s := &webServer{
 		router:  router,
