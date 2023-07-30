@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"strconv"
-	"strings"
 
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/ferama/pigdns/pkg/web"
+	"github.com/ferama/pigdns/pkg/zone"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 )
@@ -27,9 +26,7 @@ func init() {
 	rootCmd.Flags().StringP("domain", "d", "", "the pigdns domain")
 	rootCmd.MarkFlagRequired("domain")
 	rootCmd.Flags().IntP("port", "p", 53, "udp listen port")
-	rootCmd.Flags().StringP("ns-record", "n", "", "[optional] how to answer to NS queries for the domain")
-	// pigdns ... -i 192.168.10.1 -i 127.0.0.1
-	rootCmd.Flags().StringArrayP("ns-ips", "i", []string{}, "[optional] how to answer to A and AAAA queries for the domain")
+	rootCmd.Flags().StringP("zone-file", "z", "", "zone file")
 
 	// cert
 	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
@@ -40,21 +37,7 @@ func init() {
 	rootCmd.Flags().BoolP("web-https", "t", false, "if to enable web https")
 }
 
-func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
-	IPv4s := []string{}
-	IPv6s := []string{}
-	for _, ip := range nsIPs {
-		parsedIP := net.ParseIP(ip)
-		if parsedIP == nil {
-			log.Fatalf("[root] %s is not a valid ip address", ip)
-		}
-		if strings.Contains(parsedIP.String(), ":") {
-			IPv6s = append(IPv6s, parsedIP.String())
-		} else {
-			IPv4s = append(IPv4s, parsedIP.String())
-		}
-	}
-
+func rootHandler() dns.HandlerFunc {
 	return func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -64,46 +47,9 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 		}
 		logMsg := ""
 
-		havHanswer := false
-		for _, q := range m.Question {
-			logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.String())
-
-			switch q.Qtype {
-			case dns.TypeNS:
-				if nsRecord != "" {
-					rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, "NS", nsRecord))
-					if err == nil {
-						m.Answer = append(m.Answer, rr)
-						havHanswer = true
-						logMsg = fmt.Sprintf("%s answer=%s", logMsg, nsRecord)
-					}
-				}
-			case dns.TypeA:
-				for _, ip := range IPv4s {
-					rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, "A", ip))
-					if err == nil {
-						m.Answer = append(m.Answer, rr)
-						havHanswer = true
-						logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
-					}
-				}
-			case dns.TypeAAAA:
-				for _, ip := range IPv6s {
-					rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, "AAAA", ip))
-					if err == nil {
-						m.Answer = append(m.Answer, rr)
-						havHanswer = true
-						logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
-					}
-				}
-			}
-		}
-		if !havHanswer {
-			rr, _ := dns.NewRR(defaultRes)
-			m.Answer = append(m.Answer, rr)
-			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
-
-		}
+		rr, _ := dns.NewRR(defaultRes)
+		m.Answer = append(m.Answer, rr)
+		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 
 		log.Println(logMsg)
 		w.WriteMsg(m)
@@ -116,13 +62,14 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 func buildChain(cmd *cobra.Command) dns.Handler {
 	var chain dns.Handler
 
-	nsRecord, _ := cmd.Flags().GetString("ns-record")
-	nsIps, _ := cmd.Flags().GetStringArray("ns-ips")
+	domain, _ := cmd.Flags().GetString("domain")
+	zoneFile, _ := cmd.Flags().GetString("zone-file")
 
 	// leaf handler (is the latest one)
-	chain = dns.HandlerFunc(rootHandler(nsRecord, nsIps))
+	chain = dns.HandlerFunc(rootHandler())
 
 	chain = &regexip.Handler{Next: chain}
+	chain = zone.New(chain, domain, zoneFile)
 	chain = &acmec.Handler{Next: chain}
 
 	return chain
