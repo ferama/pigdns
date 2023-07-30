@@ -47,13 +47,13 @@ func rootHandler(nsRecord string, nsIPs []string) dns.HandlerFunc {
 		if parsedIP == nil {
 			log.Fatalf("[root] %s is not a valid ip address", ip)
 		}
-		if strings.Contains(string(parsedIP), ":") {
+		if strings.Contains(parsedIP.String(), ":") {
 			IPv6s = append(IPv6s, parsedIP.String())
 		} else {
 			IPv4s = append(IPv4s, parsedIP.String())
 		}
-
 	}
+	log.Println(IPv6s)
 
 	return func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)

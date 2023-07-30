@@ -79,7 +79,7 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 			ip, err = h.getAAAA(q.Name)
 			typeSring = "AAAA"
 		default:
-			logMsg = fmt.Sprintf("%s, answer=no-answer", logMsg)
+			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 			continue
 		}
 
