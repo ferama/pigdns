@@ -55,10 +55,11 @@ a		   	IN  A       192.168.200.202
 	t.Log(zoneFile)
 	cont, _ := os.ReadFile(zoneFile)
 	t.Log(string(cont))
-	time.Sleep(1 * time.Second)
 
 	server := startServer(zoneFile)
 	defer server.Shutdown()
+
+	time.Sleep(1 * time.Second)
 
 	m := new(dns.Msg)
 	m.SetQuestion("a.pig.io.", dns.TypeA)

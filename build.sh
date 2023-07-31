@@ -20,5 +20,3 @@ GOOS=linux GOARCH=arm64 build
 GOOS=linux GOARCH=amd64 build
 
 GOOS=darwin GOARCH=arm64 build
-
-GOOS=windows GOARCH=amd64 build

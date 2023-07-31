@@ -6,10 +6,12 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/miekg/dns"
 )
+
+const confPollInterval = 5 * time.Second
 
 type Handler struct {
 	Next dns.Handler
@@ -19,6 +21,8 @@ type Handler struct {
 	origin   string
 
 	records []dns.RR
+
+	cachedZoneFileModTime time.Time
 
 	wg sync.WaitGroup
 }
@@ -30,10 +34,6 @@ func New(next dns.Handler, domain string, zoneFile string) dns.Handler {
 		zoneFile: zoneFile,
 		domain:   domain,
 		origin:   fmt.Sprintf("%s.", domain),
-	}
-
-	if zoneFile != "" {
-		h.loadZonefile()
 	}
 
 	go h.watchConfig()
@@ -65,31 +65,17 @@ func (h *Handler) loadZonefile() {
 }
 
 func (h *Handler) watchConfig() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer watcher.Close()
-	err = watcher.Add(h.zoneFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Has(fsnotify.Write) {
-				h.loadZonefile()
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Println("error:", err)
+		stat, err := os.Stat(h.zoneFile)
+		if err != nil {
+			log.Fatal("failed checking key file modification time: %w", err)
 		}
+
+		if stat.ModTime().After(h.cachedZoneFileModTime) {
+			h.loadZonefile()
+			h.cachedZoneFileModTime = stat.ModTime()
+		}
+		time.Sleep(confPollInterval)
 	}
 }
 
