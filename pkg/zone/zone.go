@@ -79,12 +79,12 @@ func (h *Handler) watchConfig() {
 	}
 }
 
-func (h *Handler) handleRecursive(r dns.RR, m *dns.Msg, qtype uint16) (*dns.Msg, string) {
+func (h *Handler) handleDeep(r dns.RR, m *dns.Msg, qtype uint16) (*dns.Msg, string) {
 	switch qtype {
 	case dns.TypeCNAME:
-		rc := r.(*dns.CNAME)
+		cname := r.(*dns.CNAME)
 		nm := m.Copy()
-		nm.SetQuestion(rc.Target, dns.TypeA)
+		nm.SetQuestion(cname.Target, dns.TypeA)
 		return h.parseQuery(nm)
 	}
 
@@ -109,7 +109,7 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 			}
 
 			if record.Header().Rrtype != q.Qtype {
-				rmsg, rlog := h.handleRecursive(record, m, record.Header().Rrtype)
+				rmsg, rlog := h.handleDeep(record, m, record.Header().Rrtype)
 				log.Println(rlog)
 				if rmsg != nil {
 					m.Answer = append(m.Answer, rmsg.Answer...)

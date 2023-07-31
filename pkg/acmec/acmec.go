@@ -17,8 +17,6 @@ type Handler struct {
 }
 
 func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
-	haveAnswer := false
-
 	token := Token()
 	if token.Get() == "" {
 		return nil
@@ -41,13 +39,12 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 		rr.Header().Ttl = 120 // seconds
 		if err == nil {
 			m.Answer = append(m.Answer, rr)
-			haveAnswer = true
 		} else {
 			log.Println(err)
 		}
 	}
 
-	if !haveAnswer {
+	if len(m.Answer) == 0 {
 		return nil
 	}
 
