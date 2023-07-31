@@ -66,8 +66,9 @@ func New(domain string, datadir string, email string, useStaging bool) *Certman 
 		datadir:    datadir,
 		useStaging: useStaging,
 		accountMan: &accountMan{
-			datadir: datadir,
-			email:   email,
+			datadir:    datadir,
+			email:      email,
+			useStaging: useStaging,
 		},
 	}
 	if c.useStaging {

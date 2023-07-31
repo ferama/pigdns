@@ -16,8 +16,9 @@ import (
 )
 
 type accountMan struct {
-	email   string
-	datadir string
+	email      string
+	datadir    string
+	useStaging bool
 }
 
 func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
@@ -34,6 +35,9 @@ func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
 
 		client := &acme.Client{
 			Directory: directory,
+		}
+		if a.useStaging {
+			client.Directory = directoryStaging
 		}
 
 		account := acme.Account{
@@ -78,6 +82,9 @@ func (a *accountMan) create(ctx context.Context) (*acme.Account, error) {
 
 	client := &acme.Client{
 		Directory: directory,
+	}
+	if a.useStaging {
+		client.Directory = directoryStaging
 	}
 
 	// if the account is new, we need to create it; only do this once!
