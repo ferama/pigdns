@@ -2,6 +2,7 @@ package zone
 
 import (
 	"log"
+	"net"
 	"os"
 	"path"
 	"testing"
@@ -89,5 +90,36 @@ a		   	IN  A       192.168.200.202
 	}
 	if len(resp.Answer) != 1 {
 		t.Fatalf("Expected two RR in answer section got %d", len(resp.Answer))
+	}
+}
+
+func TestCNAME(t *testing.T) {
+	z := `
+$TTL    30M
+			IN  NS      pigdns.io.
+a		   	IN  A       192.168.200.201
+b		   	IN  CNAME   a
+`
+	zoneFile := createTempFile(t, z)
+
+	server := startServer(zoneFile)
+	defer server.Shutdown()
+
+	time.Sleep(1 * time.Second)
+
+	m := new(dns.Msg)
+	m.SetQuestion("b.pig.io.", dns.TypeA)
+	resp, err := dns.Exchange(m, testListenAddress)
+	if err != nil {
+		t.Fatalf("Expected to receive reply, but didn't: %s", err)
+	}
+	if len(resp.Answer) != 2 {
+		t.Fatalf("Expected two RR in answer section got %d", len(resp.Answer))
+	}
+	rr := resp.Answer[0]
+	a := rr.(*dns.A)
+	ip := net.ParseIP("192.168.200.201")
+	if !a.A.Equal(ip) {
+		t.Fatal("expected ip to be equals")
 	}
 }

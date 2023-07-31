@@ -79,11 +79,22 @@ func (h *Handler) watchConfig() {
 	}
 }
 
+func (h *Handler) handleRecursive(r dns.RR, m *dns.Msg, qtype uint16) (*dns.Msg, string) {
+	switch qtype {
+	case dns.TypeCNAME:
+		rc := r.(*dns.CNAME)
+		nm := m.Copy()
+		nm.SetQuestion(rc.Target, dns.TypeA)
+		return h.parseQuery(nm)
+	}
+
+	return nil, ""
+}
+
 func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 	h.wg.Wait()
 
 	logMsg := ""
-	haveAnswer := false
 	for _, q := range m.Question {
 		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
 		for _, record := range h.records {
@@ -98,16 +109,20 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 			}
 
 			if record.Header().Rrtype != q.Qtype {
-				continue
+				rmsg, rlog := h.handleRecursive(record, m, record.Header().Rrtype)
+				log.Println(rlog)
+				if rmsg != nil {
+					m.Answer = append(m.Answer, rmsg.Answer...)
+				} else {
+					continue
+				}
 			}
 
 			m.Answer = append(m.Answer, record)
-			haveAnswer = true
-
 			logMsg = fmt.Sprintf("%s answer=%s", logMsg, record)
 		}
 	}
-	if !haveAnswer {
+	if len(m.Answer) == 0 {
 		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 		return nil, logMsg
 	}
