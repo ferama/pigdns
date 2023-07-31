@@ -141,6 +141,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	log.Println(logMsg)
 	if m != nil {
+		m.Rcode = dns.RcodeSuccess
 		w.WriteMsg(m)
 		return
 	}

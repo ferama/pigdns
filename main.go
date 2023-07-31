@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultRes = "pigdns.io. 1800 IN SOA pigdns.io. pigdns.io. 1502165581 14400 3600 604800 14400"
+	defaultRes = "github.com/ferama/pigdns. 1800 IN SOA github.com/ferama/pigdns. github.com/ferama/pigdns. 1502165581 14400 3600 604800 14400"
 )
 
 func init() {
@@ -65,7 +65,9 @@ func buildChain(cmd *cobra.Command) dns.Handler {
 	chain = dns.HandlerFunc(rootHandler())
 
 	chain = &regexip.Handler{Next: chain}
-	chain = zone.New(chain, domain, zoneFile)
+	if zoneFile != "" {
+		chain = zone.New(chain, domain, zoneFile)
+	}
 	chain = &acmec.Handler{Next: chain}
 
 	return chain
