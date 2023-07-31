@@ -16,6 +16,7 @@ type Handler struct {
 
 	zoneFile string
 	domain   string
+	origin   string
 
 	records []dns.RR
 
@@ -28,6 +29,7 @@ func New(next dns.Handler, domain string, zoneFile string) dns.Handler {
 		records:  make([]dns.RR, 0),
 		zoneFile: zoneFile,
 		domain:   domain,
+		origin:   fmt.Sprintf("%s.", domain),
 	}
 
 	if zoneFile != "" {
@@ -49,9 +51,10 @@ func (h *Handler) loadZonefile() {
 	if err != nil {
 		log.Fatalf("cannot read file: %s", err)
 	}
+	defer z.Close()
+	log.Printf("[zone] reading file '%s'", h.zoneFile)
 
-	origin := fmt.Sprintf("%s.", h.domain)
-	zp := dns.NewZoneParser(z, origin, "")
+	zp := dns.NewZoneParser(z, h.origin, "")
 	for {
 		rr, ok := zp.Next()
 		if !ok {
@@ -79,7 +82,6 @@ func (h *Handler) watchConfig() {
 				return
 			}
 			if event.Has(fsnotify.Write) {
-				log.Println("[zone] modified file:", event.Name)
 				h.loadZonefile()
 			}
 		case err, ok := <-watcher.Errors:
@@ -101,6 +103,10 @@ func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
 		for _, record := range h.records {
 			rname := strings.ToLower(record.Header().Name)
 			qname := strings.ToLower(q.Name)
+			if rname == "" {
+				rname = h.origin
+				record.Header().Name = h.origin
+			}
 			if rname != qname {
 				continue
 			}
