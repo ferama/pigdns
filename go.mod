@@ -3,6 +3,7 @@ module github.com/ferama/pigdns
 go 1.20
 
 require (
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/mholt/acmez v1.2.0
 	github.com/miekg/dns v1.1.55

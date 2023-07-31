@@ -45,13 +45,9 @@ func rootHandler() dns.HandlerFunc {
 		if r.Opcode != dns.OpcodeQuery {
 			return
 		}
-		logMsg := ""
-
 		rr, _ := dns.NewRR(defaultRes)
 		m.Answer = append(m.Answer, rr)
-		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 
-		log.Println(logMsg)
 		w.WriteMsg(m)
 	}
 }
