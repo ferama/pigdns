@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
@@ -25,7 +26,7 @@ func init() {
 	// dns server
 	rootCmd.Flags().StringP("domain", "d", "", "the pigdns domain")
 	rootCmd.MarkFlagRequired("domain")
-	rootCmd.Flags().IntP("port", "p", 53, "udp listen port")
+	rootCmd.Flags().IntP("port", "p", 53, "listen port")
 	rootCmd.Flags().StringP("zone-file", "z", "", "zone file")
 
 	// cert
@@ -73,6 +74,18 @@ func buildChain(cmd *cobra.Command) dns.Handler {
 	return chain
 }
 
+func startServer(net string, port int) {
+	server := &dns.Server{
+		Addr: ":" + strconv.Itoa(port),
+		Net:  net,
+	}
+	err := server.ListenAndServe()
+	defer server.Shutdown()
+	if err != nil {
+		log.Fatalf("failed to start server: %s\n ", err.Error())
+	}
+}
+
 var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
@@ -94,21 +107,24 @@ var rootCmd = &cobra.Command{
 			go ws.Run()
 		}
 
-		// attach request handler func
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain(cmd))
 
-		// start server
-		server := &dns.Server{
-			Addr: ":" + strconv.Itoa(port),
-			Net:  "udp",
-		}
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			startServer("udp", port)
+			wg.Done()
+		}()
+
+		wg.Add(1)
+		go func() {
+			startServer("tcp", port)
+			wg.Done()
+		}()
+
 		log.Printf("listening on ':%d'", port)
 
-		err := server.ListenAndServe()
-		defer server.Shutdown()
-		if err != nil {
-			log.Fatalf("failed to start server: %s\n ", err.Error())
-		}
+		wg.Wait()
 	},
 }
 
