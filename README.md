@@ -5,6 +5,12 @@
 * nip.io
 * sslip.io
 
+It also includes:
+
+* Automagic Let's Encrypt certificate management for the handled domain (using the DNS01 challenge)
+* A friendly page to get always fresh certificates
+* Special cases handling using a standard zone file
+
 ## Project STATUS
 PigDNS is in early development stages
 
@@ -32,7 +38,16 @@ Run
 $ pigdns --domain pig.yourdomain.io
 ```
 
+
 ## Query Examples
 
-* 192-168-1-10.pig.yourdomain.io -> 192.168.10.1
-* abc-192-168-1-10-def.pig.yourdomain.io -> 192.168.10.1
+```
+dig +short 192-168-1-10.yourdomain.io
+192.168.1.10
+
+dig +short abc-192-168-1-10-def.pig.yourdomain.io
+192.168.10.1
+
+dig +short 2a01-4f8-c17-b8f--2.pig.yourdomain.io
+2a01:4f8:c17:b8f::2
+```
