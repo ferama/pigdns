@@ -99,6 +99,10 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 	if record.Header().Rrtype != q.Qtype {
 		switch record.Header().Rrtype {
 		case dns.TypeCNAME:
+			if q.Qtype != dns.TypeA && q.Qtype != dns.TypeAAAA {
+				return logMsg
+			}
+
 			cname := record.(*dns.CNAME)
 
 			// try find query target record
