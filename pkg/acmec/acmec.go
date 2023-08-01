@@ -16,10 +16,10 @@ type Handler struct {
 	Next dns.Handler
 }
 
-func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
+func (h *Handler) parseQuery(m *dns.Msg) {
 	token := Token()
 	if token.Get() == "" {
-		return nil
+		return
 	}
 
 	for _, q := range m.Question {
@@ -43,12 +43,6 @@ func (h *Handler) parseQuery(m *dns.Msg) *dns.Msg {
 			log.Println(err)
 		}
 	}
-
-	if len(m.Answer) == 0 {
-		return nil
-	}
-
-	return m
 }
 
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
@@ -59,10 +53,10 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
-		m = h.parseQuery(m)
+		h.parseQuery(m)
 	}
 
-	if m != nil {
+	if len(m.Answer) != 0 {
 		w.WriteMsg(m)
 		return
 	}

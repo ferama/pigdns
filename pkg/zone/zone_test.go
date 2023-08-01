@@ -93,13 +93,15 @@ a		   	IN  A       192.168.200.202
 	}
 }
 
-func TestCNAME(t *testing.T) {
+func TestCNAMEA(t *testing.T) {
 	z := `
 $TTL    30M
 			IN  NS      pigdns.io.
 a		   	IN  A       192.168.200.201
 b		   	IN  CNAME   a
 c		   	IN  CNAME   b
+d			IN 	AAAA	2a01:4f8:c17:b8f::2
+e			IN 	CNAME 	d
 `
 	zoneFile := createTempFile(t, z)
 
@@ -121,6 +123,40 @@ c		   	IN  CNAME   b
 	a := rr.(*dns.A)
 	ip := net.ParseIP("192.168.200.201")
 	if !a.A.Equal(ip) {
+		t.Fatal("expected ip to be equals")
+	}
+}
+
+func TestCNAMEAAAA(t *testing.T) {
+	z := `
+$TTL    30M
+			IN  NS      pigdns.io.
+a		   	IN  A       192.168.200.201
+b		   	IN  CNAME   a
+c		   	IN  CNAME   b
+d			IN 	AAAA	2a01:4f8:c17:b8f::2
+e			IN 	CNAME 	d
+`
+	zoneFile := createTempFile(t, z)
+
+	server := startServer(zoneFile)
+	defer server.Shutdown()
+
+	time.Sleep(1 * time.Second)
+
+	m := new(dns.Msg)
+	m.SetQuestion("e.pig.io.", dns.TypeAAAA)
+	resp, err := dns.Exchange(m, testListenAddress)
+	if err != nil {
+		t.Fatalf("Expected to receive reply (ipv6), but didn't: %s", err)
+	}
+	if len(resp.Answer) != 2 {
+		t.Fatalf("Expected two RR in answer section got %d", len(resp.Answer))
+	}
+	rr := resp.Answer[0]
+	aaaa := rr.(*dns.AAAA)
+	ip := net.ParseIP("2a01:4f8:c17:b8f::2")
+	if !aaaa.AAAA.Equal(ip) {
 		t.Fatal("expected ip to be equals")
 	}
 }

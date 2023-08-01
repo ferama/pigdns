@@ -83,25 +83,34 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 	logMsg := ""
 	rname := strings.ToLower(record.Header().Name)
 	qname := strings.ToLower(q.Name)
+
+	// record with empty name. append origin
 	if rname == "" {
 		rname = h.origin
 		record.Header().Name = h.origin
 	}
+
+	// not asking for current record. return
 	if rname != qname {
 		return logMsg
 	}
 
+	// handle special cases
 	if record.Header().Rrtype != q.Qtype {
 		switch record.Header().Rrtype {
 		case dns.TypeCNAME:
 			cname := record.(*dns.CNAME)
-			nm := m.Copy()
-			nm.SetQuestion(cname.Target, dns.TypeA)
-			rmsg, rlog := h.handleQuery(nm)
-			log.Println(rlog)
-			if rmsg != nil {
+
+			// try find query target record
+			rmsg := new(dns.Msg)
+			rmsg.SetQuestion(cname.Target, q.Qtype)
+			alog := h.handleQuery(rmsg)
+			if len(rmsg.Answer) != 0 {
+				log.Println(alog)
 				m.Answer = append(m.Answer, rmsg.Answer...)
-			} else {
+			}
+
+			if len(m.Answer) == 0 {
 				return logMsg
 			}
 		default:
@@ -115,37 +124,39 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 	return logMsg
 }
 
-func (h *Handler) handleQuery(m *dns.Msg) (*dns.Msg, string) {
+func (h *Handler) handleQuery(m *dns.Msg) string {
 	h.wg.Wait()
 
 	logMsg := ""
 	for _, q := range m.Question {
 		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
 		for _, record := range h.records {
-			rlog := h.handleRecord(m, record, q)
+			rlog := ""
+			rlog = h.handleRecord(m, record, q)
 			logMsg = fmt.Sprintf("%s%s", logMsg, rlog)
 		}
 	}
 	if len(m.Answer) == 0 {
 		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
-		return nil, logMsg
+		return logMsg
 	}
-	return m, logMsg
+	return logMsg
 }
 
 func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
+
 	logMsg := ""
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
-		m, logMsg = h.handleQuery(m)
+		logMsg = h.handleQuery(m)
 	}
 
 	log.Println(logMsg)
-	if m != nil {
+	if len(m.Answer) != 0 {
 		m.Rcode = dns.RcodeSuccess
 		w.WriteMsg(m)
 		return

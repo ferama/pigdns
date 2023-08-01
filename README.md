@@ -42,12 +42,12 @@ $ pigdns --domain pig.yourdomain.io
 ## Query Examples
 
 ```
-dig +short 192-168-1-10.yourdomain.io
+$ dig +short 192-168-1-10.yourdomain.io
 192.168.1.10
 
-dig +short abc-192-168-1-10-def.pig.yourdomain.io
+$ dig +short abc-192-168-1-10-def.pig.yourdomain.io
 192.168.10.1
 
-dig +short 2a01-4f8-c17-b8f--2.pig.yourdomain.io
+$ dig +short 2a01-4f8-c17-b8f--2.pig.yourdomain.io
 2a01:4f8:c17:b8f::2
 ```
