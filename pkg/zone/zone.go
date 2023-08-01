@@ -79,47 +79,51 @@ func (h *Handler) watchConfig() {
 	}
 }
 
-func (h *Handler) handleDeep(r dns.RR, m *dns.Msg, qtype uint16) (*dns.Msg, string) {
-	switch qtype {
-	case dns.TypeCNAME:
-		cname := r.(*dns.CNAME)
-		nm := m.Copy()
-		nm.SetQuestion(cname.Target, dns.TypeA)
-		return h.parseQuery(nm)
+func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string {
+	logMsg := ""
+	rname := strings.ToLower(record.Header().Name)
+	qname := strings.ToLower(q.Name)
+	if rname == "" {
+		rname = h.origin
+		record.Header().Name = h.origin
+	}
+	if rname != qname {
+		return logMsg
 	}
 
-	return nil, ""
+	if record.Header().Rrtype != q.Qtype {
+		switch record.Header().Rrtype {
+		case dns.TypeCNAME:
+			cname := record.(*dns.CNAME)
+			nm := m.Copy()
+			nm.SetQuestion(cname.Target, dns.TypeA)
+			rmsg, rlog := h.handleQuery(nm)
+			log.Println(rlog)
+			if rmsg != nil {
+				m.Answer = append(m.Answer, rmsg.Answer...)
+			} else {
+				return logMsg
+			}
+		default:
+			return logMsg
+		}
+	}
+
+	m.Answer = append(m.Answer, record)
+	logMsg = fmt.Sprintf("%s answer=%s", logMsg, record)
+
+	return logMsg
 }
 
-func (h *Handler) parseQuery(m *dns.Msg) (*dns.Msg, string) {
+func (h *Handler) handleQuery(m *dns.Msg) (*dns.Msg, string) {
 	h.wg.Wait()
 
 	logMsg := ""
 	for _, q := range m.Question {
 		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
 		for _, record := range h.records {
-			rname := strings.ToLower(record.Header().Name)
-			qname := strings.ToLower(q.Name)
-			if rname == "" {
-				rname = h.origin
-				record.Header().Name = h.origin
-			}
-			if rname != qname {
-				continue
-			}
-
-			if record.Header().Rrtype != q.Qtype {
-				rmsg, rlog := h.handleDeep(record, m, record.Header().Rrtype)
-				log.Println(rlog)
-				if rmsg != nil {
-					m.Answer = append(m.Answer, rmsg.Answer...)
-				} else {
-					continue
-				}
-			}
-
-			m.Answer = append(m.Answer, record)
-			logMsg = fmt.Sprintf("%s answer=%s", logMsg, record)
+			rlog := h.handleRecord(m, record, q)
+			logMsg = fmt.Sprintf("%s%s", logMsg, rlog)
 		}
 	}
 	if len(m.Answer) == 0 {
@@ -137,7 +141,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
-		m, logMsg = h.parseQuery(m)
+		m, logMsg = h.handleQuery(m)
 	}
 
 	log.Println(logMsg)

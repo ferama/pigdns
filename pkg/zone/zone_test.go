@@ -99,6 +99,7 @@ $TTL    30M
 			IN  NS      pigdns.io.
 a		   	IN  A       192.168.200.201
 b		   	IN  CNAME   a
+c		   	IN  CNAME   b
 `
 	zoneFile := createTempFile(t, z)
 
@@ -108,13 +109,13 @@ b		   	IN  CNAME   a
 	time.Sleep(1 * time.Second)
 
 	m := new(dns.Msg)
-	m.SetQuestion("b.pig.io.", dns.TypeA)
+	m.SetQuestion("c.pig.io.", dns.TypeA)
 	resp, err := dns.Exchange(m, testListenAddress)
 	if err != nil {
 		t.Fatalf("Expected to receive reply, but didn't: %s", err)
 	}
-	if len(resp.Answer) != 2 {
-		t.Fatalf("Expected two RR in answer section got %d", len(resp.Answer))
+	if len(resp.Answer) != 3 {
+		t.Fatalf("Expected three RR in answer section got %d", len(resp.Answer))
 	}
 	rr := resp.Answer[0]
 	a := rr.(*dns.A)
