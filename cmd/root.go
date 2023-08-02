@@ -11,15 +11,12 @@ import (
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-)
-
-const (
-	defaultRes = "github.com/ferama/pigdns. 1800 IN SOA github.com/ferama/pigdns. github.com/ferama/pigdns. 1502165581 14400 3600 604800 14400"
 )
 
 func init() {
@@ -59,20 +56,31 @@ func init() {
 	viper.BindPFlag("web-apikey", rootCmd.Flags().Lookup("web-apikey"))
 	rootCmd.Flags().StringP("web-subdomain", "b", "",
 		`use a dubdomain to enable https (we have valid certs for subdomains only). You should
-enable the zone file too (--zone-file flag) and register the subdomain`)
+enable the zone file too (--zone-file flag) and register the subdomain. usually 'www' is used`)
 	viper.BindPFlag("web-subdomain", rootCmd.Flags().Lookup("web-subdomain"))
 }
 
 func rootHandler() dns.HandlerFunc {
 	return func(w dns.ResponseWriter, r *dns.Msg) {
+		logMsg := ""
 		m := new(dns.Msg)
 		m.SetReply(r)
+		m.Authoritative = true
+		m.Rcode = dns.RcodeSuccess
+
+		for _, q := range m.Question {
+			logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.String())
+		}
 
 		if r.Opcode != dns.OpcodeQuery {
 			return
 		}
-		rr, _ := dns.NewRR(defaultRes)
+
+		rr := utils.GetSOArecord()
 		m.Answer = append(m.Answer, rr)
+
+		logMsg = fmt.Sprintf("%s answer=%s", logMsg, rr)
+		log.Println(logMsg)
 
 		w.WriteMsg(m)
 	}
