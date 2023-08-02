@@ -35,7 +35,7 @@ func init() {
 
 	// web
 	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
-	rootCmd.Flags().BoolP("web-https", "t", false, "if to enable web https")
+	rootCmd.Flags().StringP("web-subdomain", "b", "", "use a dubdomain to enable https (we have valid certs for subdomains only)")
 }
 
 func rootHandler() dns.HandlerFunc {
@@ -96,14 +96,14 @@ var rootCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetInt("port")
 
 		webEnable, _ := cmd.Flags().GetBool("web-enable")
-		webHTTPS, _ := cmd.Flags().GetBool("web-https")
+		webSubdomain, _ := cmd.Flags().GetString("web-subdomain")
 		certmanUseStaging, _ := cmd.Flags().GetBool("certman-use-staging")
 
 		cm := certman.New(domain, datadir, email, certmanUseStaging)
 		go cm.Run()
 
 		if webEnable {
-			ws := web.NewWebServer(datadir, domain, webHTTPS)
+			ws := web.NewWebServer(datadir, domain, webSubdomain)
 			go ws.Run()
 		}
 

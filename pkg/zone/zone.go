@@ -68,12 +68,12 @@ func (h *Handler) watchConfig() {
 	for {
 		stat, err := os.Stat(h.zoneFile)
 		if err != nil {
-			log.Fatal("failed checking key file modification time: %w", err)
-		}
-
-		if stat.ModTime().After(h.cachedZoneFileModTime) {
-			h.loadZonefile()
-			h.cachedZoneFileModTime = stat.ModTime()
+			log.Println("failed checking key file modification time: %w", err)
+		} else {
+			if stat.ModTime().After(h.cachedZoneFileModTime) {
+				h.loadZonefile()
+				h.cachedZoneFileModTime = stat.ModTime()
+			}
 		}
 		time.Sleep(confPollInterval)
 	}

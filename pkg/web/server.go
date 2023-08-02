@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
@@ -22,15 +23,16 @@ var f embed.FS
 type webServer struct {
 	router *gin.Engine
 
-	datadir string
-	domain  string
-	https   bool
+	datadir   string
+	domain    string
+	subdomain string
+	https     bool
 
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
 }
 
-func NewWebServer(datadir string, domain string, https bool) *webServer {
+func NewWebServer(datadir string, domain string, subdomain string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -38,10 +40,11 @@ func NewWebServer(datadir string, domain string, https bool) *webServer {
 	router.SetHTMLTemplate(templ)
 
 	s := &webServer{
-		router:  router,
-		datadir: datadir,
-		domain:  domain,
-		https:   https,
+		router:    router,
+		datadir:   datadir,
+		domain:    domain,
+		https:     subdomain != "",
+		subdomain: subdomain,
 	}
 	s.setupRoutes()
 	return s
@@ -90,12 +93,33 @@ func (s *webServer) Run() {
 
 	log.Printf("web listening on ':443'")
 	go http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.subdomain != "" {
+			if !strings.HasPrefix(r.Host, s.subdomain+".") {
+				u := *r.URL
+				u.Host = fmt.Sprintf("%s.%s", s.subdomain, r.Host)
+				u.Scheme = "https"
+				http.Redirect(w, r, u.String(), http.StatusFound)
+				return
+			}
+		}
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
 	}))
 
 	srv := http.Server{
-		Addr:    ":443",
-		Handler: s.router,
+		Addr: ":443",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if s.subdomain != "" {
+				if !strings.HasPrefix(r.Host, s.subdomain+".") {
+					u := *r.URL
+					u.Host = fmt.Sprintf("%s.%s", s.subdomain, r.Host)
+					u.Scheme = "https"
+					http.Redirect(w, r, u.String(), http.StatusFound)
+					return
+				}
+			}
+
+			s.router.ServeHTTP(w, r)
+		}),
 	}
 
 	tlsConfig := &tls.Config{
