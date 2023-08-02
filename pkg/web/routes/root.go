@@ -7,19 +7,29 @@ import (
 )
 
 type rootGroup struct {
-	domain string
+	domain      string
+	keyRequired bool
+	https       bool
 }
 
-func RootRoutes(domain string, router *gin.RouterGroup) {
+func RootRoutes(domain string, keyRequired bool, https bool, router *gin.RouterGroup) {
 	r := &rootGroup{
-		domain: domain,
+		domain:      domain,
+		keyRequired: keyRequired,
+		https:       https,
 	}
 
 	router.GET("", r.root)
 }
 
 func (r *rootGroup) root(c *gin.Context) {
+	protocol := "http"
+	if r.https {
+		protocol = "https"
+	}
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"domain": r.domain,
+		"protocol":    protocol,
+		"domain":      r.domain,
+		"keyRequired": r.keyRequired,
 	})
 }

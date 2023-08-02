@@ -35,6 +35,7 @@ func init() {
 
 	// web
 	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
+	rootCmd.Flags().StringP("web-apikey", "k", "", "use an api key to download certs. if empty no protection will be enabled")
 	rootCmd.Flags().StringP("web-subdomain", "b", "",
 		`use a dubdomain to enable https (we have valid certs for subdomains only). You should
 enable the zone file too (--zone-file flag) and register the subdomain`)
@@ -99,13 +100,14 @@ var rootCmd = &cobra.Command{
 
 		webEnable, _ := cmd.Flags().GetBool("web-enable")
 		webSubdomain, _ := cmd.Flags().GetString("web-subdomain")
+		webApikey, _ := cmd.Flags().GetString("web-apikey")
 		certmanUseStaging, _ := cmd.Flags().GetBool("certman-use-staging")
 
 		cm := certman.New(domain, datadir, email, certmanUseStaging)
 		go cm.Run()
 
 		if webEnable {
-			ws := web.NewWebServer(datadir, domain, webSubdomain)
+			ws := web.NewWebServer(datadir, domain, webSubdomain, webApikey)
 			go ws.Run()
 		}
 

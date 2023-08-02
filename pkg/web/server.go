@@ -26,13 +26,14 @@ type webServer struct {
 	datadir   string
 	domain    string
 	subdomain string
+	apikey    string
 	https     bool
 
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
 }
 
-func NewWebServer(datadir string, domain string, subdomain string) *webServer {
+func NewWebServer(datadir string, domain string, subdomain string, apikey string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -43,6 +44,7 @@ func NewWebServer(datadir string, domain string, subdomain string) *webServer {
 		router:    router,
 		datadir:   datadir,
 		domain:    domain,
+		apikey:    apikey,
 		https:     subdomain != "",
 		subdomain: subdomain,
 	}
@@ -58,8 +60,13 @@ func (s *webServer) setupRoutes() {
 		})
 	})
 
-	routes.CertRoutes(s.datadir, s.router.Group("/certs"))
-	routes.RootRoutes(s.domain, s.router.Group("/"))
+	certsGroup := s.router.Group("/certs")
+	if s.apikey != "" {
+		certsGroup.Use(authMiddleware(s.apikey))
+	}
+	routes.CertRoutes(s.datadir, certsGroup)
+
+	routes.RootRoutes(s.domain, s.apikey != "", s.https, s.router.Group("/"))
 }
 
 func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
