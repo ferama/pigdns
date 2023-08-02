@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,15 +9,22 @@ import (
 
 type rootGroup struct {
 	domain      string
+	subdomain   string
 	keyRequired bool
-	https       bool
+	isHTTPS     bool
 }
 
-func RootRoutes(domain string, keyRequired bool, https bool, router *gin.RouterGroup) {
+func RootRoutes(
+	domain string,
+	subdomain string,
+	keyRequired bool,
+	isHTTPS bool, router *gin.RouterGroup) {
+
 	r := &rootGroup{
 		domain:      domain,
+		subdomain:   subdomain,
 		keyRequired: keyRequired,
-		https:       https,
+		isHTTPS:     isHTTPS,
 	}
 
 	router.GET("", r.root)
@@ -24,12 +32,19 @@ func RootRoutes(domain string, keyRequired bool, https bool, router *gin.RouterG
 
 func (r *rootGroup) root(c *gin.Context) {
 	protocol := "http"
-	if r.https {
+	if r.isHTTPS {
 		protocol = "https"
 	}
+
+	sub := ""
+	if r.subdomain != "" {
+		sub = fmt.Sprintf("%s.", r.subdomain)
+	}
+
 	c.HTML(http.StatusOK, "index.html", gin.H{
 		"protocol":    protocol,
 		"domain":      r.domain,
+		"subdomain":   sub,
 		"keyRequired": r.keyRequired,
 	})
 }

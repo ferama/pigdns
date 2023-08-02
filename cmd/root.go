@@ -55,7 +55,6 @@ func init() {
 	// web
 	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
 	viper.BindPFlag("web-enable", rootCmd.Flags().Lookup("web-enable"))
-
 	rootCmd.Flags().StringP("web-apikey", "k", "", "use an api key to download certs. if empty no protection will be enabled")
 	viper.BindPFlag("web-apikey", rootCmd.Flags().Lookup("web-apikey"))
 	rootCmd.Flags().StringP("web-subdomain", "b", "",

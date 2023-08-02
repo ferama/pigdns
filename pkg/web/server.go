@@ -27,7 +27,7 @@ type webServer struct {
 	domain    string
 	subdomain string
 	apikey    string
-	https     bool
+	useHTTPS  bool
 
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
@@ -45,7 +45,7 @@ func NewWebServer(datadir string, domain string, subdomain string, apikey string
 		datadir:   datadir,
 		domain:    domain,
 		apikey:    apikey,
-		https:     subdomain != "",
+		useHTTPS:  subdomain != "",
 		subdomain: subdomain,
 	}
 	s.setupRoutes()
@@ -66,7 +66,12 @@ func (s *webServer) setupRoutes() {
 	}
 	routes.CertRoutes(s.datadir, certsGroup)
 
-	routes.RootRoutes(s.domain, s.apikey != "", s.https, s.router.Group("/"))
+	routes.RootRoutes(
+		s.domain,
+		s.subdomain,
+		s.apikey != "",
+		s.useHTTPS,
+		s.router.Group("/"))
 }
 
 func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -89,7 +94,7 @@ func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, e
 }
 
 func (s *webServer) Run() {
-	if !s.https {
+	if !s.useHTTPS {
 		log.Printf("web listening on ':80'")
 		srv := http.Server{
 			Addr:    ":80",

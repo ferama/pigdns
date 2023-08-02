@@ -2,6 +2,8 @@
 {{ if .keyRequired }}
 {{ $key = "-H \"X-API-KEY: <your-api-key>\"" }}
 {{ end }}
+
+
 {{ template "header.html" }}
 <main>
   <p class="fs-5 col-md-12">
@@ -15,8 +17,8 @@
     You can always get fresh certs using:
   </p>
   <code>
-  curl -s {{ $key }} {{ .protocol }}://{{ .domain }}/certs/fullchain.pem
-  curl -s {{ $key }} {{ .protocol }}://{{ .domain }}/certs/privkey.pem
+  curl -s {{ $key }} {{ .protocol }}://{{ .subdomain }}{{ .domain }}/certs/fullchain.pem
+  curl -s {{ $key }} {{ .protocol }}://{{ .subdomain }}{{ .domain }}/certs/privkey.pem
   </code>
   <br>
   <h3 class="text-body-emphasis">Examples</h3>
