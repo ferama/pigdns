@@ -35,7 +35,9 @@ func init() {
 
 	// web
 	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
-	rootCmd.Flags().StringP("web-subdomain", "b", "", "use a dubdomain to enable https (we have valid certs for subdomains only)")
+	rootCmd.Flags().StringP("web-subdomain", "b", "",
+		`use a dubdomain to enable https (we have valid certs for subdomains only). You should
+enable the zone file too (--zone-file flag) and register the subdomain`)
 }
 
 func rootHandler() dns.HandlerFunc {
