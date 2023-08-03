@@ -6,22 +6,23 @@ import (
 	"strings"
 
 	"github.com/miekg/dns"
+	"github.com/spf13/viper"
 )
 
 type Handler struct {
 	Next dns.Handler
 
-	domain   string
-	origin   string
-	zoneFile *ZoneFile
+	domain string
+	origin string
 }
 
-func New(next dns.Handler, domain string, zoneFilePath string) dns.Handler {
+func New(next dns.Handler) dns.Handler {
+	domain := viper.GetString("domain")
+
 	h := &Handler{
-		Next:     next,
-		domain:   domain,
-		zoneFile: NewZoneFile(zoneFilePath, domain),
-		origin:   fmt.Sprintf("%s.", domain),
+		Next:   next,
+		domain: domain,
+		origin: fmt.Sprintf("%s.", domain),
 	}
 
 	return h
@@ -77,7 +78,7 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 }
 
 func (h *Handler) handleQuery(m *dns.Msg) string {
-	records := h.zoneFile.GetRecords()
+	records := ZoneFileInst().GetRecords()
 
 	logMsg := ""
 	for _, q := range m.Question {

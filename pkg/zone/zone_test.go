@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/spf13/viper"
 )
 
 const testListenAddress = "127.0.0.1:6353"
@@ -19,13 +20,15 @@ func createTempFile(t *testing.T, content string) string {
 	if err != nil {
 		t.Fail()
 	}
+	viper.Set("domain", "pig.io")
+	viper.Set("zone-file", tmpfile)
 
 	return tmpfile
 }
 
 func startServer(zoneFile string) *dns.Server {
 	n := dns.HandlerFunc(func(w dns.ResponseWriter, m *dns.Msg) {})
-	zone := New(n, "pig.io", zoneFile)
+	zone := New(n)
 	dns.Handle("pig.io.", zone)
 
 	server := &dns.Server{
@@ -59,6 +62,8 @@ a		   	IN  A       192.168.200.202
 
 	server := startServer(zoneFile)
 	defer server.Shutdown()
+
+	ZoneFileInst().setZoneFile(zoneFile)
 
 	time.Sleep(1 * time.Second)
 
@@ -108,6 +113,8 @@ e			IN 	CNAME 	d
 	server := startServer(zoneFile)
 	defer server.Shutdown()
 
+	ZoneFileInst().setZoneFile(zoneFile)
+
 	time.Sleep(1 * time.Second)
 
 	m := new(dns.Msg)
@@ -141,6 +148,8 @@ e			IN 	CNAME 	d
 
 	server := startServer(zoneFile)
 	defer server.Shutdown()
+
+	ZoneFileInst().setZoneFile(zoneFile)
 
 	time.Sleep(1 * time.Second)
 
