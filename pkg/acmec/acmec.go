@@ -35,7 +35,6 @@ func (h *Handler) parseQuery(m *dns.Msg) {
 		}
 
 		rr, err := dns.NewRR(fmt.Sprintf("%s TXT %s", q.Name, token.Get()))
-		// rr.Header().Ttl = 180 // seconds
 		rr.Header().Ttl = 120 // seconds
 		if err == nil {
 			m.Answer = append(m.Answer, rr)
@@ -49,7 +48,6 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
-	m.Rcode = dns.RcodeSuccess
 
 	switch r.Opcode {
 	case dns.OpcodeQuery:
@@ -57,6 +55,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if len(m.Answer) != 0 {
+		m.Rcode = dns.RcodeSuccess
 		w.WriteMsg(m)
 		return
 	}
