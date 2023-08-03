@@ -14,29 +14,34 @@ import (
 const confPollInterval = 5 * time.Second
 
 var (
-	instance *ZoneFile
+	instance *zoneFile
 	once     sync.Once
 )
 
-type ZoneFile struct {
-	file                  string
-	origin                string
+type zoneFile struct {
+	// the path of the zone file
+	filePath string
+
+	// zone origin
+	origin string
+
 	cachedZoneFileModTime time.Time
 
+	// zone loaded records
 	records []dns.RR
 
 	mu   sync.Mutex
 	zfmu sync.Mutex
 }
 
-func ZoneFileInst() *ZoneFile {
+func ZoneFileInst() *zoneFile {
 	once.Do(func() {
 		path := viper.GetString("zone-file")
 		domain := viper.GetString("domain")
 
-		instance = &ZoneFile{
-			file:   path,
-			origin: fmt.Sprintf("%s.", domain),
+		instance = &zoneFile{
+			filePath: path,
+			origin:   fmt.Sprintf("%s.", domain),
 		}
 
 		instance.checkConfigFile()
@@ -48,17 +53,17 @@ func ZoneFileInst() *ZoneFile {
 
 // setZoneFile is actually used for tests.
 // zone file path should never change during normal runs
-func (z *ZoneFile) setZoneFile(path string) {
+func (z *zoneFile) setZoneFile(path string) {
 	z.zfmu.Lock()
 	defer z.zfmu.Unlock()
 
-	z.file = path
+	z.filePath = path
 	z.checkConfigFile()
 }
 
 // checks if config file changed and if yes reload it
-func (z *ZoneFile) checkConfigFile() {
-	stat, err := os.Stat(z.file)
+func (z *zoneFile) checkConfigFile() {
+	stat, err := os.Stat(z.filePath)
 	if err != nil {
 		log.Println("failed checking key file modification time:", err)
 	} else {
@@ -70,7 +75,7 @@ func (z *ZoneFile) checkConfigFile() {
 }
 
 // periodically run check for changes on config file
-func (z *ZoneFile) watchConfig() {
+func (z *zoneFile) watchConfig() {
 	for {
 		z.zfmu.Lock()
 		z.checkConfigFile()
@@ -80,25 +85,25 @@ func (z *ZoneFile) watchConfig() {
 	}
 }
 
-func (z *ZoneFile) GetRecords() []dns.RR {
+func (z *zoneFile) GetRecords() []dns.RR {
 	z.mu.Lock()
 	defer z.mu.Unlock()
 
 	return z.records
 }
 
-func (z *ZoneFile) loadZonefile() {
+func (z *zoneFile) loadZonefile() {
 	z.mu.Lock()
 	defer z.mu.Unlock()
 
 	z.records = make([]dns.RR, 0)
 
-	f, err := os.Open(z.file)
+	f, err := os.Open(z.filePath)
 	if err != nil {
 		log.Fatalf("cannot read file: %s", err)
 	}
 	defer f.Close()
-	log.Printf("[zone] reading file '%s'", z.file)
+	log.Printf("[zone] reading file '%s'", z.filePath)
 
 	zp := dns.NewZoneParser(f, z.origin, "")
 	for {
