@@ -3,80 +3,28 @@ package zone
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/miekg/dns"
 )
 
-const confPollInterval = 5 * time.Second
-
 type Handler struct {
 	Next dns.Handler
 
-	zoneFile string
 	domain   string
 	origin   string
-
-	records []dns.RR
-
-	cachedZoneFileModTime time.Time
-
-	wg sync.WaitGroup
+	zoneFile *ZoneFile
 }
 
-func New(next dns.Handler, domain string, zoneFile string) dns.Handler {
+func New(next dns.Handler, domain string, zoneFilePath string) dns.Handler {
 	h := &Handler{
 		Next:     next,
-		records:  make([]dns.RR, 0),
-		zoneFile: zoneFile,
 		domain:   domain,
+		zoneFile: NewZoneFile(zoneFilePath, domain),
 		origin:   fmt.Sprintf("%s.", domain),
 	}
 
-	go h.watchConfig()
-
 	return h
-}
-
-func (h *Handler) loadZonefile() {
-	h.wg.Add(1)
-	defer h.wg.Done()
-
-	h.records = make([]dns.RR, 0)
-
-	z, err := os.Open(h.zoneFile)
-	if err != nil {
-		log.Fatalf("cannot read file: %s", err)
-	}
-	defer z.Close()
-	log.Printf("[zone] reading file '%s'", h.zoneFile)
-
-	zp := dns.NewZoneParser(z, h.origin, "")
-	for {
-		rr, ok := zp.Next()
-		if !ok {
-			break
-		}
-		h.records = append(h.records, rr)
-	}
-}
-
-func (h *Handler) watchConfig() {
-	for {
-		stat, err := os.Stat(h.zoneFile)
-		if err != nil {
-			log.Println("failed checking key file modification time: %w", err)
-		} else {
-			if stat.ModTime().After(h.cachedZoneFileModTime) {
-				h.loadZonefile()
-				h.cachedZoneFileModTime = stat.ModTime()
-			}
-		}
-		time.Sleep(confPollInterval)
-	}
 }
 
 func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string {
@@ -129,12 +77,12 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 }
 
 func (h *Handler) handleQuery(m *dns.Msg) string {
-	h.wg.Wait()
+	records := h.zoneFile.GetRecords()
 
 	logMsg := ""
 	for _, q := range m.Question {
 		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
-		for _, record := range h.records {
+		for _, record := range records {
 			rlog := ""
 			rlog = h.handleRecord(m, record, q)
 			logMsg = fmt.Sprintf("%s%s", logMsg, rlog)

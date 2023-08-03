@@ -93,14 +93,14 @@ func buildChain() dns.Handler {
 	var chain dns.Handler
 
 	domain := viper.GetString("domain")
-	zoneFile := viper.GetString("zone-file")
+	zoneFilePath := viper.GetString("zone-file")
 
 	// leaf handler (is the latest one)
 	chain = dns.HandlerFunc(rootHandler())
 
 	chain = &regexip.Handler{Next: chain}
-	if zoneFile != "" {
-		chain = zone.New(chain, domain, zoneFile)
+	if zoneFilePath != "" {
+		chain = zone.New(chain, domain, zoneFilePath)
 	}
 	chain = &acmec.Handler{Next: chain}
 
