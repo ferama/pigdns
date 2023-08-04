@@ -29,7 +29,8 @@ type zoneFile struct {
 
 	// zone loaded records
 	records []dns.RR
-	ns      []*dns.NS
+	// nameserver records
+	ns []*dns.NS
 
 	mu   sync.Mutex
 	zfmu sync.Mutex
