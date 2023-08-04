@@ -9,7 +9,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const testListenAddress = "127.0.0.1:6353"
+const testListenAddress = "127.0.0.1:6354"
 
 func startServer() *dns.Server {
 	n := dns.HandlerFunc(func(w dns.ResponseWriter, m *dns.Msg) {})
