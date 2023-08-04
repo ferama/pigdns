@@ -29,6 +29,7 @@ type zoneFile struct {
 
 	// zone loaded records
 	records []dns.RR
+	ns      []*dns.NS
 
 	mu   sync.Mutex
 	zfmu sync.Mutex
@@ -92,6 +93,13 @@ func (z *zoneFile) GetRecords() []dns.RR {
 	return z.records
 }
 
+func (z *zoneFile) GetNS() []*dns.NS {
+	z.mu.Lock()
+	defer z.mu.Unlock()
+
+	return z.ns
+}
+
 func (z *zoneFile) loadZonefile() {
 	z.mu.Lock()
 	defer z.mu.Unlock()
@@ -113,6 +121,10 @@ func (z *zoneFile) loadZonefile() {
 				log.Println("[zone]", r)
 			}
 			break
+		}
+		switch rr.Header().Rrtype {
+		case dns.TypeNS:
+			z.ns = append(z.ns, rr.(*dns.NS))
 		}
 		z.records = append(z.records, rr)
 	}

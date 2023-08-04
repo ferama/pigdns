@@ -84,6 +84,7 @@ func (h *Handler) handleQuery(m *dns.Msg) string {
 	for _, q := range m.Question {
 		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
 		for _, record := range records {
+
 			rlog := ""
 			rlog = h.handleRecord(m, record, q)
 			logMsg = fmt.Sprintf("%s%s", logMsg, rlog)
