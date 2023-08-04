@@ -11,7 +11,6 @@ import (
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
 	"github.com/miekg/dns"
@@ -76,7 +75,7 @@ func rootHandler() dns.HandlerFunc {
 			return
 		}
 
-		rr := utils.GetSOArecord()
+		rr := zone.GetSOArecord()
 		m.Answer = append(m.Answer, rr)
 
 		logMsg = fmt.Sprintf("%s answer=%s", logMsg, rr)
