@@ -38,7 +38,7 @@ $ pigdns --domain pig.yourdomain.io
 #### Query Examples
 
 ```
-$ dig +short 192-168-1-10.yourdomain.io
+$ dig +short 192-168-1-10.pig.yourdomain.io
 192.168.1.10
 
 $ dig +short abc-192-168-1-10-def.pig.yourdomain.io
@@ -57,7 +57,7 @@ is monitored and changes will be loaded at runtime
 $ pigdns --domain pig.yourdomain.io -z ./zone.conf
 ```
 
-The `zone.conf` file
+The `zone.conf` file:
 ```ini
 $TTL    30M
             IN  NS      pigdns.io.
@@ -74,6 +74,13 @@ abc         IN  A       192.168.100.4
 ; aaaa records
 aaaa        IN  AAAA    2a01:4f8:c17:b8f::2
 bbbb        IN  CNAME   aaaa
+```
+
+Now you can query for
+```
+$ dig +short abc.pig.yourdomain.io
+192.168.100.3
+192.168.100.4
 ```
 
 ## Enable web page and http certificates download
