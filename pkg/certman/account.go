@@ -24,6 +24,7 @@ type accountMan struct {
 func (a *accountMan) get(ctx context.Context) (*acme.Account, error) {
 	accountPrivKeyFilename := fmt.Sprintf("%s.pem", a.email)
 	path := filepath.Join(a.datadir, accountPrivKeyFilename)
+
 	if _, err := os.Stat(path); err == nil {
 		pemEncoded, _ := os.ReadFile(path)
 		block, _ := pem.Decode([]byte(pemEncoded))

@@ -60,7 +60,7 @@ func (h *Handler) getAAAA(name string) (net.IP, error) {
 	return ipv16address, nil
 }
 
-// returns a *dns.Msg if has an answer. nil otherwise
+// returns a log message
 func (h *Handler) parseQuery(m *dns.Msg) string {
 	logMsg := ""
 	for _, q := range m.Question {

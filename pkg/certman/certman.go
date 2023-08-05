@@ -36,20 +36,19 @@ const (
 
 var CertmanMU sync.Mutex
 
-func writeFile(datadir string, name string, content []byte) error {
+func writeFile(datadir string, name string, content []byte) {
 	path := filepath.Join(datadir, name)
 
 	f, err := os.Create(path)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 	defer f.Close()
 
 	_, err = f.Write(content)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	return nil
 }
 
 type Certman struct {
