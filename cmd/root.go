@@ -49,6 +49,8 @@ func init() {
 	viper.BindPFlag("email", rootCmd.Flags().Lookup("email"))
 	rootCmd.Flags().BoolP("certman-use-staging", "s", false, "use staging let's encrypt api")
 	viper.BindPFlag("certman-use-staging", rootCmd.Flags().Lookup("certman-use-staging"))
+	rootCmd.Flags().Bool("certman-disable", false, "disables certmanager")
+	viper.BindPFlag("certman-disable", rootCmd.Flags().Lookup("certman-disable"))
 
 	// web
 	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
@@ -142,8 +144,11 @@ var rootCmd = &cobra.Command{
 
 		forwarderEnable := viper.GetBool("forwarder-enable")
 
-		cm := certman.New(domain, datadir, email, certmanUseStaging)
-		go cm.Run()
+		certmanDisable := viper.GetBool("certman-disable")
+		if !certmanDisable {
+			cm := certman.New(domain, datadir, email, certmanUseStaging)
+			go cm.Run()
+		}
 
 		if webEnable {
 			ws := web.NewWebServer(datadir, domain, webSubdomain, webApikey)
