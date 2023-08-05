@@ -10,6 +10,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/forward"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
@@ -36,11 +37,12 @@ func init() {
 	// dns server
 	rootCmd.Flags().StringP("domain", "d", "", "the pigdns domain")
 	viper.BindPFlag("domain", rootCmd.Flags().Lookup("domain"))
-
 	rootCmd.Flags().IntP("port", "p", 53, "listen port")
 	viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
 	rootCmd.Flags().StringP("zone-file", "z", "", "zone file")
 	viper.BindPFlag("zone-file", rootCmd.Flags().Lookup("zone-file"))
+	rootCmd.Flags().BoolP("forwarder-enable", "f", false, "if true, forwards not managed zones to general public dns")
+	viper.BindPFlag("forwarder-enable", rootCmd.Flags().Lookup("forwarder-enable"))
 
 	// cert
 	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
@@ -138,6 +140,8 @@ var rootCmd = &cobra.Command{
 		webApikey := viper.GetString("web-apikey")
 		certmanUseStaging := viper.GetBool("certman-use-staging")
 
+		forwarderEnable := viper.GetBool("forwarder-enable")
+
 		cm := certman.New(domain, datadir, email, certmanUseStaging)
 		go cm.Run()
 
@@ -147,6 +151,12 @@ var rootCmd = &cobra.Command{
 		}
 
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+
+		if forwarderEnable {
+			dns.Handle(".", &forward.Handler{
+				Next: dns.HandlerFunc(rootHandler()),
+			})
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(1)

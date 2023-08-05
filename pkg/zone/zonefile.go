@@ -44,6 +44,8 @@ func ZoneFileInst() *zoneFile {
 		instance = &zoneFile{
 			filePath: path,
 			origin:   fmt.Sprintf("%s.", domain),
+			ns:       make([]*dns.NS, 0),
+			records:  make([]dns.RR, 0),
 		}
 
 		instance.checkConfigFile()
@@ -65,9 +67,12 @@ func (z *zoneFile) setZoneFile(path string) {
 
 // checks if config file changed and if yes reload it
 func (z *zoneFile) checkConfigFile() {
+	if z.filePath == "" {
+		return
+	}
 	stat, err := os.Stat(z.filePath)
 	if err != nil {
-		log.Println("failed checking key file modification time:", err)
+		log.Println("[zone] failed checking key file modification time:", err)
 	} else {
 		if stat.ModTime().After(z.cachedZoneFileModTime) {
 			z.loadZonefile()
