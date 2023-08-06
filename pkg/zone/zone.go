@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
@@ -17,7 +18,7 @@ type Handler struct {
 }
 
 func New(next dns.Handler) dns.Handler {
-	domain := viper.GetString("domain")
+	domain := viper.GetString(utils.DomainFlag)
 
 	h := &Handler{
 		Next:   next,

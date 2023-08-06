@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
@@ -38,8 +39,8 @@ type zoneFile struct {
 
 func ZoneFileInst() *zoneFile {
 	once.Do(func() {
-		path := viper.GetString("zone-file")
-		domain := viper.GetString("domain")
+		path := viper.GetString(utils.ZoneFileFlag)
+		domain := viper.GetString(utils.DomainFlag)
 
 		instance = &zoneFile{
 			filePath: path,

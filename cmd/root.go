@@ -12,11 +12,16 @@ import (
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/forward"
 	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+)
+
+const (
+	DomainFlag = "domain"
 )
 
 func init() {
@@ -31,36 +36,43 @@ func init() {
 	viper.SetEnvPrefix("pigdns")
 
 	// common
-	rootCmd.Flags().StringP("datadir", "a", ".", "data dir where pigdns data will be stored")
-	viper.BindPFlag("datadir", rootCmd.Flags().Lookup("datadir"))
+	rootCmd.Flags().StringP(utils.DatadirFlag, "a", ".", "data dir where pigdns data will be stored")
+	viper.BindPFlag(utils.DatadirFlag, rootCmd.Flags().Lookup(utils.DatadirFlag))
 
 	// dns server
-	rootCmd.Flags().StringP("domain", "d", "", "the pigdns domain")
-	viper.BindPFlag("domain", rootCmd.Flags().Lookup("domain"))
-	rootCmd.Flags().IntP("port", "p", 53, "listen port")
-	viper.BindPFlag("port", rootCmd.Flags().Lookup("port"))
-	rootCmd.Flags().StringP("zone-file", "z", "", "zone file")
-	viper.BindPFlag("zone-file", rootCmd.Flags().Lookup("zone-file"))
-	rootCmd.Flags().BoolP("forwarder-enable", "f", false, "if true, forwards not managed zones to general public dns")
-	viper.BindPFlag("forwarder-enable", rootCmd.Flags().Lookup("forwarder-enable"))
+	rootCmd.Flags().StringP(utils.DomainFlag, "d", "", "the pigdns domain")
+	viper.BindPFlag(utils.DomainFlag, rootCmd.Flags().Lookup(utils.DomainFlag))
+
+	rootCmd.Flags().IntP(utils.PortFlag, "p", 53, "listen port")
+	viper.BindPFlag(utils.PortFlag, rootCmd.Flags().Lookup(utils.PortFlag))
+
+	rootCmd.Flags().StringP(utils.ZoneFileFlag, "z", "", "zone file")
+	viper.BindPFlag(utils.ZoneFileFlag, rootCmd.Flags().Lookup(utils.ZoneFileFlag))
+
+	rootCmd.Flags().BoolP(utils.ForwarderEnableFlag, "f", false, "if true, forwards not managed zones to general public dns")
+	viper.BindPFlag(utils.ForwarderEnableFlag, rootCmd.Flags().Lookup(utils.ForwarderEnableFlag))
 
 	// cert
-	rootCmd.Flags().StringP("email", "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
-	viper.BindPFlag("email", rootCmd.Flags().Lookup("email"))
-	rootCmd.Flags().BoolP("certman-use-staging", "s", false, "use staging let's encrypt api")
-	viper.BindPFlag("certman-use-staging", rootCmd.Flags().Lookup("certman-use-staging"))
-	rootCmd.Flags().Bool("certman-disable", false, "disables certmanager")
-	viper.BindPFlag("certman-disable", rootCmd.Flags().Lookup("certman-disable"))
+	rootCmd.Flags().StringP(utils.CertmanEmailFlag, "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
+	viper.BindPFlag(utils.CertmanEmailFlag, rootCmd.Flags().Lookup(utils.CertmanEmailFlag))
+
+	rootCmd.Flags().BoolP(utils.CertmanUseStagingFlag, "s", false, "use staging let's encrypt api")
+	viper.BindPFlag(utils.CertmanUseStagingFlag, rootCmd.Flags().Lookup(utils.CertmanUseStagingFlag))
+
+	rootCmd.Flags().BoolP(utils.CertmanEnableFlag, "c", false, "enable certmanager")
+	viper.BindPFlag(utils.CertmanEnableFlag, rootCmd.Flags().Lookup(utils.CertmanEnableFlag))
 
 	// web
-	rootCmd.Flags().BoolP("web-enable", "w", false, "if to enable web ui")
-	viper.BindPFlag("web-enable", rootCmd.Flags().Lookup("web-enable"))
-	rootCmd.Flags().StringP("web-apikey", "k", "", "use an api key to download certs. if empty no protection will be enabled")
-	viper.BindPFlag("web-apikey", rootCmd.Flags().Lookup("web-apikey"))
-	rootCmd.Flags().StringP("web-subdomain", "b", "",
+	rootCmd.Flags().BoolP(utils.WebEnableFlag, "w", false, "if to enable web ui")
+	viper.BindPFlag(utils.WebEnableFlag, rootCmd.Flags().Lookup(utils.WebEnableFlag))
+
+	rootCmd.Flags().StringP(utils.WebApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
+	viper.BindPFlag(utils.WebApiKeyFlag, rootCmd.Flags().Lookup(utils.WebApiKeyFlag))
+
+	rootCmd.Flags().StringP(utils.WebSubdomainFlag, "b", "",
 		`use a dubdomain to enable https (we have valid certs for subdomains only). You should
 enable the zone file too (--zone-file flag) and register the subdomain. usually 'www' is used`)
-	viper.BindPFlag("web-subdomain", rootCmd.Flags().Lookup("web-subdomain"))
+	viper.BindPFlag(utils.WebSubdomainFlag, rootCmd.Flags().Lookup(utils.WebSubdomainFlag))
 }
 
 func rootHandler() dns.HandlerFunc {
@@ -95,7 +107,7 @@ func rootHandler() dns.HandlerFunc {
 func buildChain() dns.Handler {
 	var chain dns.Handler
 
-	zoneFilePath := viper.GetString("zone-file")
+	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
 
 	// leaf handler (is the latest one)
 	chain = dns.HandlerFunc(rootHandler())
@@ -125,7 +137,7 @@ var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
 	Run: func(cmd *cobra.Command, args []string) {
-		domain := viper.GetString("domain")
+		domain := viper.GetString(utils.DomainFlag)
 
 		if domain == "" {
 			fmt.Printf("ERROR: domain is required\n\n")
@@ -133,19 +145,19 @@ var rootCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		email := viper.GetString("email")
-		datadir := viper.GetString("datadir")
-		port := viper.GetInt("port")
+		email := viper.GetString(utils.CertmanEmailFlag)
+		datadir := viper.GetString(utils.DatadirFlag)
+		port := viper.GetInt(utils.PortFlag)
 
-		webEnable := viper.GetBool("web-enable")
-		webSubdomain := viper.GetString("web-subdomain")
-		webApikey := viper.GetString("web-apikey")
-		certmanUseStaging := viper.GetBool("certman-use-staging")
+		webEnable := viper.GetBool(utils.WebEnableFlag)
+		webSubdomain := viper.GetString(utils.WebSubdomainFlag)
+		webApikey := viper.GetString(utils.WebApiKeyFlag)
+		certmanUseStaging := viper.GetBool(utils.CertmanUseStagingFlag)
 
-		forwarderEnable := viper.GetBool("forwarder-enable")
+		forwarderEnable := viper.GetBool(utils.ForwarderEnableFlag)
 
-		certmanDisable := viper.GetBool("certman-disable")
-		if !certmanDisable {
+		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
+		if certmanEnable {
 			cm := certman.New(domain, datadir, email, certmanUseStaging)
 			go cm.Run()
 		}

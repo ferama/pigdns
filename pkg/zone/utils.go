@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
 
 func GetSOArecord() dns.RR {
-	domain := viper.GetString("domain")
+	domain := viper.GetString(utils.DomainFlag)
 	currentTime := time.Now().Format("20060102")
 
 	// fallback to domain (not correct but we could not have a better answer)
