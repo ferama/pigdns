@@ -49,8 +49,18 @@ func init() {
 	rootCmd.Flags().StringP(utils.ZoneFileFlag, "z", "", "zone file")
 	viper.BindPFlag(utils.ZoneFileFlag, rootCmd.Flags().Lookup(utils.ZoneFileFlag))
 
-	rootCmd.Flags().BoolP(utils.ForwarderEnableFlag, "f", false, "if true, forwards not managed zones to general public dns")
-	viper.BindPFlag(utils.ForwarderEnableFlag, rootCmd.Flags().Lookup(utils.ForwarderEnableFlag))
+	// forwarder
+	rootCmd.Flags().BoolP(utils.ForwardEnableFlag, "f", false, "if true, forwards not managed zones to general public dns")
+	viper.BindPFlag(utils.ForwardEnableFlag, rootCmd.Flags().Lookup(utils.ForwardEnableFlag))
+	rootCmd.Flags().StringArray(utils.ForwardAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
+The list can be set using env var or multiple flags.
+Example (with env var):
+  PIGDNS_FORWARD_ALLOW_NETS="127.0.0.1/32 192.168.10.0/24" pigdns -f ...
+
+Or with multiple flags:
+  pigdns -d pig.io -f --forward-allow-nets "192.168.10.0/24" --forward-allow-nets "127.0.0.1/32"
+`)
+	viper.BindPFlag(utils.ForwardAllowNetworks, rootCmd.Flags().Lookup(utils.ForwardAllowNetworks))
 
 	// cert
 	rootCmd.Flags().StringP(utils.CertmanEmailFlag, "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
@@ -59,7 +69,7 @@ func init() {
 	rootCmd.Flags().BoolP(utils.CertmanUseStagingFlag, "s", false, "use staging let's encrypt api")
 	viper.BindPFlag(utils.CertmanUseStagingFlag, rootCmd.Flags().Lookup(utils.CertmanUseStagingFlag))
 
-	rootCmd.Flags().BoolP(utils.CertmanEnableFlag, "c", false, "enable certmanager")
+	rootCmd.Flags().BoolP(utils.CertmanEnableFlag, "c", false, "enable certmanager. to make it works pigdns must listen on port 53 and reachable from the internet")
 	viper.BindPFlag(utils.CertmanEnableFlag, rootCmd.Flags().Lookup(utils.CertmanEnableFlag))
 
 	// web
@@ -154,7 +164,7 @@ var rootCmd = &cobra.Command{
 		webApikey := viper.GetString(utils.WebApiKeyFlag)
 		certmanUseStaging := viper.GetBool(utils.CertmanUseStagingFlag)
 
-		forwarderEnable := viper.GetBool(utils.ForwarderEnableFlag)
+		forwarderEnable := viper.GetBool(utils.ForwardEnableFlag)
 
 		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
 		if certmanEnable {
