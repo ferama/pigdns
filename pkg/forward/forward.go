@@ -3,6 +3,7 @@ package forward
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/utils"
@@ -12,29 +13,33 @@ import (
 
 const dialTimeout = 8 * time.Second
 
-var upstream = []string{
-	"1.1.1.1:53",
-	"208.67.222.222:53",
-	"208.67.220.220:53",
-}
-
 type Handler struct {
 	Next dns.Handler
 }
 
-func (h *Handler) getAnswer(m *dns.Msg, net string) error {
+func (h *Handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
 	client := &dns.Client{
 		Timeout: dialTimeout,
 		Net:     net,
 	}
 
-	resp, _, err := client.Exchange(m, upstream[0])
+	resp, _, err := client.Exchange(m, nsaddr)
 	if err != nil {
 		return err
+
 	}
 
+	log.Println("[forward] quering ns", nsaddr)
 	if resp.Truncated {
-		return h.getAnswer(m, "tcp")
+		return h.getAnswer(m, "tcp", nsaddr)
+	}
+
+	if !resp.Authoritative && len(resp.Ns) > 0 {
+		n := rand.Intn(len(resp.Ns))
+		rr := resp.Ns[n]
+		ns := rr.(*dns.NS)
+		addr := fmt.Sprintf("%s:53", ns.Ns)
+		return h.getAnswer(m, net, addr)
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
@@ -64,7 +69,9 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	m.SetQuestion(q.Name, q.Qtype)
 
-	err = h.getAnswer(m, "udp")
+	// nsaddr := fmt.Sprintf("%s:53", upstream[0])
+	nsaddr := fmt.Sprintf("%s:53", getRootNS())
+	err = h.getAnswer(m, "udp", nsaddr)
 	if err != nil {
 		logMsg = fmt.Sprintf("%s %s", logMsg, err)
 		log.Println(logMsg)
