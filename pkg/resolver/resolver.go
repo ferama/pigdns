@@ -34,6 +34,32 @@ func (h *handler) resolveNS(resp *dns.Msg) string {
 	rr := resp.Ns[n]
 	ns := rr.(*dns.NS)
 
+	// root nameservers will answer filling the NS section (as authoritative)
+	// and putting the resolved A and AAAA records into extra section
+	// $ dig @198.41.0.4 google.it
+	// ;; AUTHORITY SECTION:
+	// it.			172800	IN	NS	d.dns.it.
+	// it.			172800	IN	NS	r.dns.it.
+	// it.			172800	IN	NS	a.dns.it.
+	// it.			172800	IN	NS	nameserver.cnr.it.
+	// it.			172800	IN	NS	dns.nic.it.
+	// it.			172800	IN	NS	m.dns.it.
+
+	// ;; ADDITIONAL SECTION:
+	// d.dns.it.		172800	IN	A	45.142.220.39
+	// d.dns.it.		172800	IN	AAAA	2a0e:dbc0::39
+	// r.dns.it.		172800	IN	A	193.206.141.46
+	// r.dns.it.		172800	IN	AAAA	2001:760:ffff:ffff::ca
+	// a.dns.it.		172800	IN	A	194.0.16.215
+	// a.dns.it.		172800	IN	AAAA	2001:678:12:0:194:0:16:215
+	// nameserver.cnr.it.	172800	IN	A	194.119.192.34
+	// nameserver.cnr.it.	172800	IN	AAAA	2a00:1620:c0:220:194:119:192:34
+	// dns.nic.it.		172800	IN	A	192.12.192.5
+	// dns.nic.it.		172800	IN	AAAA	2a00:d40:1:1::5
+	// m.dns.it.		172800	IN	A	217.29.76.4
+	// m.dns.it.		172800	IN	AAAA	2001:1ac0:0:200:0:a5d1:6004:2
+
+	// we are going to extract the resolved records from the extra section
 	var ipv4 net.IP
 	var ipv6 net.IP
 	for _, e := range resp.Extra {
@@ -50,7 +76,21 @@ func (h *handler) resolveNS(resp *dns.Msg) string {
 		}
 	}
 
-	// no A or AAAA records in Extra
+	// If we query the second level NS we get something like this intead:
+	// $ dig @194.0.16.215 google.it
+	// ;; QUESTION SECTION:
+	// ;google.it.			IN	A
+
+	// ;; AUTHORITY SECTION:
+	// google.it.		10800	IN	NS	ns2.google.com.
+	// google.it.		10800	IN	NS	ns4.google.com.
+	// google.it.		10800	IN	NS	ns1.google.com.
+	// google.it.		10800	IN	NS	ns3.google.com.
+	//
+	// no A or AAAA records in Extra section
+	// So we here are going to ask the rootNS server who can resolve the
+	// ns2.google.com. name and will recursively resolve the final A and AAAA record
+	// using the authoritative nameserver
 	if ipv4 == nil && ipv6 == nil {
 		n := rand.Intn(len(resp.Ns))
 		ns := resp.Ns[n].(*dns.NS)
