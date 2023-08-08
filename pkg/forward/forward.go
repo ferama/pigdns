@@ -28,6 +28,19 @@ func NewForwarder(next dns.Handler) *handler {
 }
 
 func (h *handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
+
+	q := m.Question[0]
+	cachedMsg, err := h.cache.get(q)
+	if err == nil {
+		m.Answer = append(m.Answer, cachedMsg.Answer...)
+		m.Extra = append(m.Extra, cachedMsg.Extra...)
+		m.Ns = append(m.Ns, cachedMsg.Ns...)
+
+		logMsg := fmt.Sprintf("[forward] query=%s cached-response", q.String())
+		log.Println(logMsg)
+		return nil
+	}
+
 	client := &dns.Client{
 		Timeout: dialTimeout,
 		Net:     net,
@@ -53,6 +66,10 @@ func (h *handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
+	m.Extra = append(m.Extra, resp.Extra...)
+	m.Ns = append(m.Ns, resp.Ns...)
+	log.Printf("[forward] got\n%s", m)
+	h.cache.set(q, m)
 	return nil
 }
 
@@ -76,39 +93,24 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	q := r.Question[0]
 	logMsg = fmt.Sprintf("%s[forward] query=%s", logMsg, q.String())
 
-	msg, err := h.cache.get(q)
-	if err == nil {
-		m = msg
-		m.SetReply(r)
+	m.SetQuestion(q.Name, q.Qtype)
 
-		logMsg = fmt.Sprintf("%s cached-response", logMsg)
+	// nsaddr := fmt.Sprintf("%s:53", upstream[0])
+	nsaddr := fmt.Sprintf("%s:53", getRootNS())
+	err = h.getAnswer(m, "udp", nsaddr)
+	if err != nil {
+		logMsg = fmt.Sprintf("%s %s", logMsg, err)
+		log.Println(logMsg)
+		h.Next.ServeDNS(w, r)
+		return
+	}
 
+	m.SetReply(r)
+	if len(m.Answer) != 0 {
 		log.Println(logMsg)
 		m.Rcode = dns.RcodeSuccess
 		w.WriteMsg(m)
 		return
-	} else {
-		m.SetQuestion(q.Name, q.Qtype)
-
-		// nsaddr := fmt.Sprintf("%s:53", upstream[0])
-		nsaddr := fmt.Sprintf("%s:53", getRootNS())
-		err = h.getAnswer(m, "udp", nsaddr)
-		if err != nil {
-			logMsg = fmt.Sprintf("%s %s", logMsg, err)
-			log.Println(logMsg)
-			h.Next.ServeDNS(w, r)
-			return
-		}
-
-		m.SetReply(r)
-		if len(m.Answer) != 0 {
-			h.cache.set(q, m)
-
-			log.Println(logMsg)
-			m.Rcode = dns.RcodeSuccess
-			w.WriteMsg(m)
-			return
-		}
 	}
 
 	h.Next.ServeDNS(w, r)

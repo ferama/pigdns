@@ -12,20 +12,24 @@ import (
 
 const expiredCheckInterval = 10 * time.Second
 
-type cache struct {
-	// dns.Question fields
-	// Name -> Qtype -> Qclass => packed msg
-	data map[string][]byte
+type item struct {
+	// when the item expires
+	expires time.Time
+	// when the item born (for eviction)
+	birth time.Time
 
-	expires map[string]time.Time
+	msg []byte
+}
+
+type cache struct {
+	data map[string]item
 
 	mu sync.Mutex
 }
 
 func newCache() *cache {
 	c := &cache{
-		data:    make(map[string][]byte),
-		expires: make(map[string]time.Time),
+		data: make(map[string]item),
 	}
 	go c.checkExpired()
 	return c
@@ -35,11 +39,10 @@ func (c *cache) checkExpired() {
 	for {
 
 		c.mu.Lock()
-		for k, v := range c.expires {
-			if time.Now().After(v) {
+		for k, v := range c.data {
+			if time.Now().After(v.expires) {
 				log.Println("expired", k)
 				delete(c.data, k)
-				delete(c.expires, k)
 			}
 		}
 		c.mu.Unlock()
@@ -72,8 +75,11 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 	expireTime := time.Now().Add(time.Duration(minTTL) * time.Second)
 	key := c.buildKey(q)
 
-	c.expires[key] = expireTime
-	c.data[key] = packed
+	c.data[key] = item{
+		expires: expireTime,
+		birth:   time.Now(),
+		msg:     packed,
+	}
 	return nil
 }
 
@@ -81,7 +87,7 @@ func (c *cache) get(q dns.Question) (*dns.Msg, error) {
 	key := c.buildKey(q)
 	if val, ok := c.data[key]; ok {
 		msg := new(dns.Msg)
-		err := msg.Unpack(val)
+		err := msg.Unpack(val.msg)
 		if err != nil {
 			return nil, err
 		}
