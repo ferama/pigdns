@@ -29,7 +29,7 @@ func NewResolver(next dns.Handler) *handler {
 }
 
 // TODO: handle ipv6
-func (h *handler) resolveNS(resp *dns.Msg) string {
+func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
 	n := rand.Intn(len(resp.Ns))
 	rr := resp.Ns[n]
 	ns := rr.(*dns.NS)
@@ -46,18 +46,18 @@ func (h *handler) resolveNS(resp *dns.Msg) string {
 	// it.			172800	IN	NS	m.dns.it.
 
 	// ;; ADDITIONAL SECTION:
-	// d.dns.it.		172800	IN	A	45.142.220.39
-	// d.dns.it.		172800	IN	AAAA	2a0e:dbc0::39
-	// r.dns.it.		172800	IN	A	193.206.141.46
-	// r.dns.it.		172800	IN	AAAA	2001:760:ffff:ffff::ca
-	// a.dns.it.		172800	IN	A	194.0.16.215
-	// a.dns.it.		172800	IN	AAAA	2001:678:12:0:194:0:16:215
-	// nameserver.cnr.it.	172800	IN	A	194.119.192.34
+	// d.dns.it.			172800	IN	A		45.142.220.39
+	// d.dns.it.			172800	IN	AAAA	2a0e:dbc0::39
+	// r.dns.it.			172800	IN	A		193.206.141.46
+	// r.dns.it.			172800	IN	AAAA	2001:760:ffff:ffff::ca
+	// a.dns.it.			172800	IN	A		194.0.16.215
+	// a.dns.it.			172800	IN	AAAA	2001:678:12:0:194:0:16:215
+	// nameserver.cnr.it.	172800	IN	A		194.119.192.34
 	// nameserver.cnr.it.	172800	IN	AAAA	2a00:1620:c0:220:194:119:192:34
-	// dns.nic.it.		172800	IN	A	192.12.192.5
-	// dns.nic.it.		172800	IN	AAAA	2a00:d40:1:1::5
-	// m.dns.it.		172800	IN	A	217.29.76.4
-	// m.dns.it.		172800	IN	AAAA	2001:1ac0:0:200:0:a5d1:6004:2
+	// dns.nic.it.			172800	IN	A		192.12.192.5
+	// dns.nic.it.			172800	IN	AAAA	2a00:d40:1:1::5
+	// m.dns.it.			172800	IN	A		217.29.76.4
+	// m.dns.it.			172800	IN	AAAA	2001:1ac0:0:200:0:a5d1:6004:2
 
 	// we are going to extract the resolved records from the extra section
 	var ipv4 net.IP
@@ -95,33 +95,42 @@ func (h *handler) resolveNS(resp *dns.Msg) string {
 		n := rand.Intn(len(resp.Ns))
 		ns := resp.Ns[n].(*dns.NS)
 
-		rootNS := fmt.Sprintf("%s:53", getRootNS())
 		m := new(dns.Msg)
-		m.SetQuestion(ns.Ns, dns.TypeA)
-		h.getAnswer(m, "udp", rootNS)
+		var rootNS string
+		if clientIsIPv6 {
+			rootNS = fmt.Sprintf("%s:53", getRootNSIPv6())
+			m.SetQuestion(ns.Ns, dns.TypeAAAA)
+		} else {
+			rootNS = fmt.Sprintf("%s:53", getRootNSIPv4())
+			m.SetQuestion(ns.Ns, dns.TypeA)
+		}
+
+		h.getAnswer(m, "udp", rootNS, clientIsIPv6)
 
 		var ipv4 net.IP
-		// var ipv6 net.IP
+		var ipv6 net.IP
 		for _, e := range m.Answer {
 			switch e.Header().Rrtype {
 			case dns.TypeA:
 				a := e.(*dns.A)
 				ipv4 = a.A
-				// case dns.TypeAAAA:
-				// 	aaaa := e.(*dns.AAAA)
-				// 	ipv6 = aaaa.AAAA
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = aaaa.AAAA
 			}
 		}
-		// log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
+		if clientIsIPv6 {
+			return fmt.Sprintf("[%s]:53", ipv6)
+		}
 		return fmt.Sprintf("%s:53", ipv4)
 	}
-	// log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
-
-	addr := fmt.Sprintf("%s:53", ipv4)
-	return addr
+	if clientIsIPv6 {
+		return fmt.Sprintf("[%s]:53", ipv6)
+	}
+	return fmt.Sprintf("%s:53", ipv4)
 }
 
-func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
+func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsIPv6 bool) error {
 
 	q := m.Question[0]
 	cachedMsg, err := h.cache.get(q)
@@ -147,13 +156,13 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
 
 	log.Printf("[resolver] quering ns %s, query=%s", nsaddr, q.String())
 	if resp.Truncated {
-		return h.getAnswer(m, "tcp", nsaddr)
+		return h.getAnswer(m, "tcp", nsaddr, clientIsIPv6)
 	}
 
 	if !resp.Authoritative && len(resp.Ns) > 0 {
 		// find the authoritative ns
-		addr := h.resolveNS(resp)
-		return h.getAnswer(m, network, addr)
+		addr := h.resolveNS(resp, clientIsIPv6)
+		return h.getAnswer(m, network, addr, clientIsIPv6)
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
@@ -185,9 +194,15 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	m.SetQuestion(q.Name, q.Qtype)
 
-	// nsaddr := fmt.Sprintf("%s:53", upstream[0])
-	nsaddr := fmt.Sprintf("%s:53", getRootNS())
-	err = h.getAnswer(m, "udp", nsaddr)
+	clientIsIPv6 := utils.IsIPv6(w.RemoteAddr())
+	var nsaddr string
+	if clientIsIPv6 {
+		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
+	} else {
+		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
+	}
+
+	err = h.getAnswer(m, "udp", nsaddr, clientIsIPv6)
 	if err != nil {
 		logMsg = fmt.Sprintf("%s %s", logMsg, err)
 		log.Println(logMsg)

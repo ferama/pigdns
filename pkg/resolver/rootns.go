@@ -24,10 +24,29 @@ var (
 		"202.12.27.33",   //m
 	}
 
-	rootNSIPv6 = []string{}
+	rootNSIPv6 = []string{
+		"2001:503:ba3e::2:30", //a
+		"2001:500:200::b",     //b
+		"2001:500:2::c",       //c
+		"2001:500:2d::d",      //d
+		"2001:500:a8::e",      //e
+		"2001:500:2f::f",      //f
+		"2001:500:12::d0d",    //g
+		"2001:500:1::53",      //h
+		"2001:7fe::53",        //i
+		"2001:503:c27::2:30",  //j
+		"2001:7fd::1",         //k
+		"2001:500:9f::42",     //l
+		"2001:dc3::35",        //m
+	}
 )
 
-func getRootNS() string {
+func getRootNSIPv4() string {
 	n := rand.Intn(len(rootNSIPv4))
 	return rootNSIPv4[n]
+}
+
+func getRootNSIPv6() string {
+	n := rand.Intn(len(rootNSIPv6))
+	return rootNSIPv6[n]
 }
