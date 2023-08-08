@@ -1,4 +1,4 @@
-package forward
+package resolver
 
 import (
 	"math/rand"

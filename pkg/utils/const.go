@@ -8,8 +8,8 @@ const (
 	ZoneFileFlag = "zone-file"
 
 	// forwarder
-	ForwardEnableFlag    = "forward-enable"
-	ForwardAllowNetworks = "forward-allow-nets"
+	ResolverEnableFlag    = "forward-enable"
+	ResolverAllowNetworks = "forward-allow-nets"
 
 	// certmanager
 	CertmanEmailFlag      = "certman-email"

@@ -1,4 +1,4 @@
-package forward
+package resolver
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const expiredCheckInterval = 60 * time.Second
+const expiredCheckInterval = 2 * time.Second
 
 type item struct {
 	// when the item expires
@@ -41,7 +41,7 @@ func (c *cache) checkExpired() {
 		c.mu.Lock()
 		for k, v := range c.data {
 			if time.Now().After(v.expires) {
-				log.Println("expired", k)
+				log.Println("[cache] expired", k)
 				delete(c.data, k)
 			}
 		}
@@ -84,12 +84,18 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 }
 
 func (c *cache) get(q dns.Question) (*dns.Msg, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	key := c.buildKey(q)
 	if val, ok := c.data[key]; ok {
 		msg := new(dns.Msg)
 		err := msg.Unpack(val.msg)
 		if err != nil {
 			return nil, err
+		}
+		for _, a := range msg.Answer {
+			a.Header().Ttl = uint32(time.Until(val.expires).Seconds())
 		}
 		return msg, nil
 	}

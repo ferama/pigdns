@@ -1,4 +1,4 @@
-package forward
+package resolver
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ type handler struct {
 	cache *cache
 }
 
-func NewForwarder(next dns.Handler) *handler {
+func NewResolver(next dns.Handler) *handler {
 	h := &handler{
 		Next:  next,
 		cache: newCache(),
@@ -28,6 +28,7 @@ func NewForwarder(next dns.Handler) *handler {
 	return h
 }
 
+// TODO: handle ipv6
 func (h *handler) resolveNS(resp *dns.Msg) string {
 	n := rand.Intn(len(resp.Ns))
 	rr := resp.Ns[n]
@@ -60,21 +61,21 @@ func (h *handler) resolveNS(resp *dns.Msg) string {
 		h.getAnswer(m, "udp", rootNS)
 
 		var ipv4 net.IP
-		var ipv6 net.IP
+		// var ipv6 net.IP
 		for _, e := range m.Answer {
 			switch e.Header().Rrtype {
 			case dns.TypeA:
 				a := e.(*dns.A)
 				ipv4 = a.A
-			case dns.TypeAAAA:
-				aaaa := e.(*dns.AAAA)
-				ipv6 = aaaa.AAAA
+				// case dns.TypeAAAA:
+				// 	aaaa := e.(*dns.AAAA)
+				// 	ipv6 = aaaa.AAAA
 			}
 		}
-		log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
+		// log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
 		return fmt.Sprintf("%s:53", ipv4)
 	}
-	log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
+	// log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
 
 	addr := fmt.Sprintf("%s:53", ipv4)
 	return addr
@@ -89,7 +90,7 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
 		m.Extra = append(m.Extra, cachedMsg.Extra...)
 		m.Ns = append(m.Ns, cachedMsg.Ns...)
 
-		logMsg := fmt.Sprintf("[forward] query=%s cached-response", q.String())
+		logMsg := fmt.Sprintf("[resolver] query=%s cached-response", q.String())
 		log.Println(logMsg)
 		return nil
 	}
@@ -104,12 +105,13 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
 		return err
 	}
 
-	log.Printf("[forward] quering ns %s, query=%s", nsaddr, q.String())
+	log.Printf("[resolver] quering ns %s, query=%s", nsaddr, q.String())
 	if resp.Truncated {
 		return h.getAnswer(m, "tcp", nsaddr)
 	}
 
 	if !resp.Authoritative && len(resp.Ns) > 0 {
+		// find the authoritative ns
 		addr := h.resolveNS(resp)
 		return h.getAnswer(m, network, addr)
 	}
@@ -122,13 +124,13 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
 }
 
 func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
-	allowedNets := viper.GetStringSlice(utils.ForwardAllowNetworks)
+	allowedNets := viper.GetStringSlice(utils.ResolverAllowNetworks)
 	allowed, err := utils.IsClientAllowed(w.RemoteAddr(), allowedNets)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if !allowed {
-		log.Printf("[forward] client '%s' is not allowed", w.RemoteAddr())
+		log.Printf("[resolver] client '%s' is not allowed", w.RemoteAddr())
 		h.Next.ServeDNS(w, r)
 		return
 	}
@@ -139,7 +141,7 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	logMsg := ""
 
 	q := r.Question[0]
-	logMsg = fmt.Sprintf("%s[forward] query=%s", logMsg, q.String())
+	logMsg = fmt.Sprintf("%s[resolver] query=%s", logMsg, q.String())
 
 	m.SetQuestion(q.Name, q.Qtype)
 

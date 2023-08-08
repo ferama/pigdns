@@ -10,8 +10,8 @@ import (
 
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/forward"
 	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/ferama/pigdns/pkg/resolver"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
@@ -49,18 +49,18 @@ func init() {
 	rootCmd.Flags().StringP(utils.ZoneFileFlag, "z", "", "zone file")
 	viper.BindPFlag(utils.ZoneFileFlag, rootCmd.Flags().Lookup(utils.ZoneFileFlag))
 
-	// forwarder
-	rootCmd.Flags().BoolP(utils.ForwardEnableFlag, "f", false, "if true, forwards not managed zones to general public dns")
-	viper.BindPFlag(utils.ForwardEnableFlag, rootCmd.Flags().Lookup(utils.ForwardEnableFlag))
-	rootCmd.Flags().StringArray(utils.ForwardAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
+	// resolver
+	rootCmd.Flags().BoolP(utils.ResolverEnableFlag, "f", false, "if true, resolve not managed zones starting from root ns")
+	viper.BindPFlag(utils.ResolverEnableFlag, rootCmd.Flags().Lookup(utils.ResolverEnableFlag))
+	rootCmd.Flags().StringArray(utils.ResolverAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
 The list can be set using env var or multiple flags.
 Example (with env var):
-  PIGDNS_FORWARD_ALLOW_NETS="127.0.0.1/32 192.168.10.0/24" pigdns -f ...
+  PIGDNS_RESOLVER_ALLOW_NETS="127.0.0.1/32 192.168.10.0/24" pigdns -f ...
 
 Or with multiple flags:
-  pigdns -d pig.io -f --forward-allow-nets "192.168.10.0/24" --forward-allow-nets "127.0.0.1/32"
+  pigdns -d pig.io -f --resolver-allow-nets "192.168.10.0/24" --resolver-allow-nets "127.0.0.1/32"
 `)
-	viper.BindPFlag(utils.ForwardAllowNetworks, rootCmd.Flags().Lookup(utils.ForwardAllowNetworks))
+	viper.BindPFlag(utils.ResolverAllowNetworks, rootCmd.Flags().Lookup(utils.ResolverAllowNetworks))
 
 	// cert
 	rootCmd.Flags().StringP(utils.CertmanEmailFlag, "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
@@ -164,7 +164,7 @@ var rootCmd = &cobra.Command{
 		webApikey := viper.GetString(utils.WebApiKeyFlag)
 		certmanUseStaging := viper.GetBool(utils.CertmanUseStagingFlag)
 
-		forwarderEnable := viper.GetBool(utils.ForwardEnableFlag)
+		resolverEnable := viper.GetBool(utils.ResolverEnableFlag)
 
 		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
 		if certmanEnable {
@@ -179,9 +179,9 @@ var rootCmd = &cobra.Command{
 
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
 
-		if forwarderEnable {
-			forwarder := forward.NewForwarder(rootHandler())
-			dns.Handle(".", forwarder)
+		if resolverEnable {
+			resolver := resolver.NewResolver(rootHandler())
+			dns.Handle(".", resolver)
 		}
 
 		var wg sync.WaitGroup
