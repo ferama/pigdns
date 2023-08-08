@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/acmec"
+	"github.com/ferama/pigdns/pkg/certman/acmec"
 	"github.com/mholt/acmez/acme"
 )
 

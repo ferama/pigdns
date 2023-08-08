@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/certman/acmec"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/ferama/pigdns/pkg/regexip/web"
 	"github.com/ferama/pigdns/pkg/resolver"
@@ -124,7 +124,10 @@ func buildChain() dns.Handler {
 	if zoneFilePath != "" {
 		chain = zone.New(chain)
 	}
-	chain = &acmec.Handler{Next: chain}
+	certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
+	if certmanEnable {
+		chain = &acmec.Handler{Next: chain}
+	}
 
 	return chain
 }
