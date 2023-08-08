@@ -11,9 +11,9 @@ import (
 	"github.com/ferama/pigdns/pkg/acmec"
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/regexip"
+	"github.com/ferama/pigdns/pkg/regexip/web"
 	"github.com/ferama/pigdns/pkg/resolver"
 	"github.com/ferama/pigdns/pkg/utils"
-	"github.com/ferama/pigdns/pkg/web"
 	"github.com/ferama/pigdns/pkg/zone"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
@@ -46,7 +46,7 @@ func init() {
 	viper.BindPFlag(utils.ZoneFileFlag, rootCmd.Flags().Lookup(utils.ZoneFileFlag))
 
 	// resolver
-	rootCmd.Flags().BoolP(utils.ResolverEnableFlag, "f", false, "if true, resolve not managed zones starting from root ns")
+	rootCmd.Flags().BoolP(utils.ResolverEnableFlag, "r", false, "if true, resolve not managed zones starting from root ns")
 	viper.BindPFlag(utils.ResolverEnableFlag, rootCmd.Flags().Lookup(utils.ResolverEnableFlag))
 	rootCmd.Flags().StringArray(utils.ResolverAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
 The list can be set using env var or multiple flags.

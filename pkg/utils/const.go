@@ -7,9 +7,9 @@ const (
 	PortFlag     = "port"
 	ZoneFileFlag = "zone-file"
 
-	// forwarder
-	ResolverEnableFlag    = "forward-enable"
-	ResolverAllowNetworks = "forward-allow-nets"
+	// resolver
+	ResolverEnableFlag    = "resolver-enable"
+	ResolverAllowNetworks = "resolver-allow-nets"
 
 	// certmanager
 	CertmanEmailFlag      = "certman-email"
