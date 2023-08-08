@@ -10,7 +10,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const expiredCheckInterval = 10 * time.Second
+const expiredCheckInterval = 60 * time.Second
 
 type item struct {
 	// when the item expires

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/utils"
@@ -11,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-const dialTimeout = 8 * time.Second
+const dialTimeout = 10 * time.Second
 
 type handler struct {
 	Next dns.Handler
@@ -27,7 +28,59 @@ func NewForwarder(next dns.Handler) *handler {
 	return h
 }
 
-func (h *handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
+func (h *handler) resolveNS(resp *dns.Msg) string {
+	n := rand.Intn(len(resp.Ns))
+	rr := resp.Ns[n]
+	ns := rr.(*dns.NS)
+
+	var ipv4 net.IP
+	var ipv6 net.IP
+	for _, e := range resp.Extra {
+		if e.Header().Name != ns.Ns {
+			continue
+		}
+		switch e.Header().Rrtype {
+		case dns.TypeA:
+			a := e.(*dns.A)
+			ipv4 = a.A
+		case dns.TypeAAAA:
+			aaaa := e.(*dns.AAAA)
+			ipv6 = aaaa.AAAA
+		}
+	}
+
+	// no A or AAAA records in Extra
+	if ipv4 == nil && ipv6 == nil {
+		n := rand.Intn(len(resp.Ns))
+		ns := resp.Ns[n].(*dns.NS)
+
+		rootNS := fmt.Sprintf("%s:53", getRootNS())
+		m := new(dns.Msg)
+		m.SetQuestion(ns.Ns, dns.TypeA)
+		h.getAnswer(m, "udp", rootNS)
+
+		var ipv4 net.IP
+		var ipv6 net.IP
+		for _, e := range m.Answer {
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = a.A
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = aaaa.AAAA
+			}
+		}
+		log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
+		return fmt.Sprintf("%s:53", ipv4)
+	}
+	log.Printf("ns: %s ipv4: %s, ipv6: %s", ns.Ns, ipv4, ipv6)
+
+	addr := fmt.Sprintf("%s:53", ipv4)
+	return addr
+}
+
+func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string) error {
 
 	q := m.Question[0]
 	cachedMsg, err := h.cache.get(q)
@@ -43,32 +96,27 @@ func (h *handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
 
 	client := &dns.Client{
 		Timeout: dialTimeout,
-		Net:     net,
+		Net:     network,
 	}
 
 	resp, _, err := client.Exchange(m, nsaddr)
 	if err != nil {
 		return err
-
 	}
 
-	log.Println("[forward] quering ns", nsaddr)
+	log.Printf("[forward] quering ns %s, query=%s", nsaddr, q.String())
 	if resp.Truncated {
 		return h.getAnswer(m, "tcp", nsaddr)
 	}
 
 	if !resp.Authoritative && len(resp.Ns) > 0 {
-		n := rand.Intn(len(resp.Ns))
-		rr := resp.Ns[n]
-		ns := rr.(*dns.NS)
-		addr := fmt.Sprintf("%s:53", ns.Ns)
-		return h.getAnswer(m, net, addr)
+		addr := h.resolveNS(resp)
+		return h.getAnswer(m, network, addr)
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
 	m.Extra = append(m.Extra, resp.Extra...)
 	m.Ns = append(m.Ns, resp.Ns...)
-	log.Printf("[forward] got\n%s", m)
 	h.cache.set(q, m)
 	return nil
 }
