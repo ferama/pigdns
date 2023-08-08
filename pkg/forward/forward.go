@@ -13,11 +13,21 @@ import (
 
 const dialTimeout = 8 * time.Second
 
-type Handler struct {
+type handler struct {
 	Next dns.Handler
+
+	cache *cache
 }
 
-func (h *Handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
+func NewForwarder(next dns.Handler) *handler {
+	h := &handler{
+		Next:  next,
+		cache: newCache(),
+	}
+	return h
+}
+
+func (h *handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
 	client := &dns.Client{
 		Timeout: dialTimeout,
 		Net:     net,
@@ -46,7 +56,7 @@ func (h *Handler) getAnswer(m *dns.Msg, net string, nsaddr string) error {
 	return nil
 }
 
-func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	allowedNets := viper.GetStringSlice(utils.ForwardAllowNetworks)
 	allowed, err := utils.IsClientAllowed(w.RemoteAddr(), allowedNets)
 	if err != nil {
@@ -60,31 +70,45 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	m := new(dns.Msg)
 	m.Authoritative = false
-	m.RecursionDesired = true
 
 	logMsg := ""
 
 	q := r.Question[0]
 	logMsg = fmt.Sprintf("%s[forward] query=%s", logMsg, q.String())
 
-	m.SetQuestion(q.Name, q.Qtype)
+	msg, err := h.cache.get(q)
+	if err == nil {
+		m = msg
+		m.SetReply(r)
 
-	// nsaddr := fmt.Sprintf("%s:53", upstream[0])
-	nsaddr := fmt.Sprintf("%s:53", getRootNS())
-	err = h.getAnswer(m, "udp", nsaddr)
-	if err != nil {
-		logMsg = fmt.Sprintf("%s %s", logMsg, err)
-		log.Println(logMsg)
-		h.Next.ServeDNS(w, r)
-		return
-	}
+		logMsg = fmt.Sprintf("%s cached-response", logMsg)
 
-	m.SetReply(r)
-	if len(m.Answer) != 0 {
 		log.Println(logMsg)
 		m.Rcode = dns.RcodeSuccess
 		w.WriteMsg(m)
 		return
+	} else {
+		m.SetQuestion(q.Name, q.Qtype)
+
+		// nsaddr := fmt.Sprintf("%s:53", upstream[0])
+		nsaddr := fmt.Sprintf("%s:53", getRootNS())
+		err = h.getAnswer(m, "udp", nsaddr)
+		if err != nil {
+			logMsg = fmt.Sprintf("%s %s", logMsg, err)
+			log.Println(logMsg)
+			h.Next.ServeDNS(w, r)
+			return
+		}
+
+		m.SetReply(r)
+		if len(m.Answer) != 0 {
+			h.cache.set(q, m)
+
+			log.Println(logMsg)
+			m.Rcode = dns.RcodeSuccess
+			w.WriteMsg(m)
+			return
+		}
 	}
 
 	h.Next.ServeDNS(w, r)

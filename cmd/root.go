@@ -180,9 +180,8 @@ var rootCmd = &cobra.Command{
 		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
 
 		if forwarderEnable {
-			dns.Handle(".", &forward.Handler{
-				Next: dns.HandlerFunc(rootHandler()),
-			})
+			forwarder := forward.NewForwarder(rootHandler())
+			dns.Handle(".", forwarder)
 		}
 
 		var wg sync.WaitGroup
