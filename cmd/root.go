@@ -20,10 +20,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	DomainFlag = "domain"
-)
-
 func init() {
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
@@ -63,7 +59,9 @@ Or with multiple flags:
 	viper.BindPFlag(utils.ResolverAllowNetworks, rootCmd.Flags().Lookup(utils.ResolverAllowNetworks))
 
 	// cert
-	rootCmd.Flags().StringP(utils.CertmanEmailFlag, "e", "user@not-exists.com", "let's encrypt will use this to contact you about expiring certificate")
+	rootCmd.Flags().StringP(utils.CertmanEmailFlag, "e", "user@not-exists.com", `
+let's encrypt will use this address to contact you about expiring 
+certificate`)
 	viper.BindPFlag(utils.CertmanEmailFlag, rootCmd.Flags().Lookup(utils.CertmanEmailFlag))
 
 	rootCmd.Flags().BoolP(utils.CertmanUseStagingFlag, "s", false, "use staging let's encrypt api")
@@ -143,17 +141,19 @@ func startServer(net string, port int) {
 	}
 }
 
+func failWithHelp(cmd *cobra.Command, msg string) {
+	fmt.Printf("ERROR: %s\n\n", msg)
+	cmd.Help()
+	os.Exit(1)
+}
+
 var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
 	Run: func(cmd *cobra.Command, args []string) {
 		domain := viper.GetString(utils.DomainFlag)
 
-		if domain == "" {
-			fmt.Printf("ERROR: domain is required\n\n")
-			cmd.Help()
-			os.Exit(1)
-		}
+		domainEnable := domain != ""
 
 		email := viper.GetString(utils.CertmanEmailFlag)
 		datadir := viper.GetString(utils.DatadirFlag)
@@ -167,17 +167,25 @@ var rootCmd = &cobra.Command{
 		resolverEnable := viper.GetBool(utils.ResolverEnableFlag)
 
 		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
+		if certmanEnable && !domainEnable {
+			failWithHelp(cmd, "cannot enable certman without a domain. please set the 'domain' flag")
+		}
 		if certmanEnable {
 			cm := certman.New(domain, datadir, email, certmanUseStaging)
 			go cm.Run()
 		}
 
+		if webEnable && !domainEnable {
+			failWithHelp(cmd, "cannot enable web without a domain. please set the 'domain' flag")
+		}
 		if webEnable {
 			ws := web.NewWebServer(datadir, domain, webSubdomain, webApikey)
 			go ws.Run()
 		}
 
-		dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+		if domainEnable {
+			dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+		}
 
 		if resolverEnable {
 			resolver := resolver.NewResolver(rootHandler())
