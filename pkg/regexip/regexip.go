@@ -1,12 +1,14 @@
 package regexip
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"regexp"
 	"strings"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
 
@@ -21,7 +23,7 @@ var (
 )
 
 type Handler struct {
-	Next dns.Handler
+	Next pigdns.Handler
 }
 
 func (h *Handler) getA(name string) (net.IP, error) {
@@ -98,7 +100,7 @@ func (h *Handler) parseQuery(m *dns.Msg) string {
 	return logMsg
 }
 
-func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
@@ -117,5 +119,5 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	h.Next.ServeDNS(w, r)
+	h.Next.ServeDNS(c, w, r)
 }

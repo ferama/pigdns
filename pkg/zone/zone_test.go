@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"context"
 	"log"
 	"net"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
@@ -27,9 +29,9 @@ func createTempFile(t *testing.T, content string) string {
 }
 
 func startServer(zoneFile string) *dns.Server {
-	n := dns.HandlerFunc(func(w dns.ResponseWriter, m *dns.Msg) {})
+	n := pigdns.HandlerFunc(func(c context.Context, w dns.ResponseWriter, m *dns.Msg) {})
 	zone := New(n)
-	dns.Handle("pig.io.", zone)
+	pigdns.Handle("pig.io.", zone)
 
 	server := &dns.Server{
 		Addr: testListenAddress,

@@ -1,23 +1,25 @@
 package zone
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
 
 type Handler struct {
-	Next dns.Handler
+	Next pigdns.Handler
 
 	domain string
 	origin string
 }
 
-func New(next dns.Handler) dns.Handler {
+func New(next pigdns.Handler) pigdns.Handler {
 	domain := viper.GetString(utils.DomainFlag)
 
 	h := &Handler{
@@ -98,7 +100,7 @@ func (h *Handler) handleQuery(m *dns.Msg) string {
 	return logMsg
 }
 
-func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Authoritative = true
@@ -117,5 +119,5 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	h.Next.ServeDNS(w, r)
+	h.Next.ServeDNS(c, w, r)
 }

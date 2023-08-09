@@ -1,12 +1,14 @@
 package resolver
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
 	"net"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
@@ -15,12 +17,12 @@ import (
 const dialTimeout = 10 * time.Second
 
 type handler struct {
-	Next dns.Handler
+	Next pigdns.Handler
 
 	cache *cache
 }
 
-func NewResolver(next dns.Handler) *handler {
+func NewResolver(next pigdns.Handler) *handler {
 	h := &handler{
 		Next:  next,
 		cache: newCache(),
@@ -172,7 +174,7 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsI
 	return nil
 }
 
-func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+func (h *handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
 	allowedNets := viper.GetStringSlice(utils.ResolverAllowNetworks)
 	allowed, err := utils.IsClientAllowed(w.RemoteAddr(), allowedNets)
 	if err != nil {
@@ -180,7 +182,7 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	if !allowed {
 		log.Printf("[resolver] client '%s' is not allowed", w.RemoteAddr())
-		h.Next.ServeDNS(w, r)
+		h.Next.ServeDNS(c, w, r)
 		return
 	}
 
@@ -206,7 +208,7 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	if err != nil {
 		logMsg = fmt.Sprintf("%s %s", logMsg, err)
 		log.Println(logMsg)
-		h.Next.ServeDNS(w, r)
+		h.Next.ServeDNS(c, w, r)
 		return
 	}
 
@@ -218,5 +220,5 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	h.Next.ServeDNS(w, r)
+	h.Next.ServeDNS(c, w, r)
 }

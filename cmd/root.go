@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/certman/acmec"
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/regexip"
 	"github.com/ferama/pigdns/pkg/regexip/web"
 	"github.com/ferama/pigdns/pkg/resolver"
@@ -83,8 +85,8 @@ enable the zone file too (--zone-file flag) and register the subdomain. usually 
 	viper.BindPFlag(utils.WebSubdomainFlag, rootCmd.Flags().Lookup(utils.WebSubdomainFlag))
 }
 
-func rootHandler() dns.HandlerFunc {
-	return func(w dns.ResponseWriter, r *dns.Msg) {
+func rootHandler() pigdns.HandlerFunc {
+	return func(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
 		logMsg := ""
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -112,13 +114,13 @@ func rootHandler() dns.HandlerFunc {
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
 // Chain rings are called in reverse order
-func buildChain() dns.Handler {
-	var chain dns.Handler
+func buildChain() pigdns.Handler {
+	var chain pigdns.Handler
 
 	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
 
 	// leaf handler (is the latest one)
-	chain = dns.HandlerFunc(rootHandler())
+	chain = pigdns.HandlerFunc(rootHandler())
 
 	chain = &regexip.Handler{Next: chain}
 	if zoneFilePath != "" {
@@ -187,12 +189,13 @@ var rootCmd = &cobra.Command{
 		}
 
 		if domainEnable {
-			dns.Handle(fmt.Sprintf("%s.", domain), buildChain())
+			pigdns.Handle(fmt.Sprintf("%s.", domain), buildChain())
 		}
 
 		if resolverEnable {
 			resolver := resolver.NewResolver(rootHandler())
-			dns.Handle(".", resolver)
+			pigdns.Handle(".", resolver)
+
 		}
 
 		var wg sync.WaitGroup

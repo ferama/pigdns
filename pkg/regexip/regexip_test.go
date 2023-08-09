@@ -1,22 +1,24 @@
 package regexip
 
 import (
+	"context"
 	"log"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
 
 const testListenAddress = "127.0.0.1:6354"
 
 func startServer() *dns.Server {
-	n := dns.HandlerFunc(func(w dns.ResponseWriter, m *dns.Msg) {})
+	n := pigdns.HandlerFunc(func(c context.Context, w dns.ResponseWriter, m *dns.Msg) {})
 	rxip := &Handler{
 		Next: n,
 	}
-	dns.Handle("pig.io.", rxip)
+	pigdns.Handle("pig.io.", rxip)
 
 	server := &dns.Server{
 		Addr: testListenAddress,
