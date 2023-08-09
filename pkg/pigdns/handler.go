@@ -19,7 +19,7 @@ func (f HandlerFunc) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Ms
 
 func Handle(pattern string, handler Handler) {
 	dns.HandleFunc(pattern, func(w dns.ResponseWriter, m *dns.Msg) {
-		ctx := InitializeCtx(w, m)
+		ctx := newContext(w, m)
 		handler.ServeDNS(ctx, w, m)
 	})
 }

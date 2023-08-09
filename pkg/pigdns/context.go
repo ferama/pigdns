@@ -13,7 +13,7 @@ type (
 
 type PigContext context.Context
 
-func InitializeCtx(w dns.ResponseWriter, m *dns.Msg) PigContext {
+func newContext(w dns.ResponseWriter, m *dns.Msg) PigContext {
 	ipv6 := utils.IsIPv6(w.RemoteAddr())
 	ctx := context.WithValue(context.Background(), IsIPv6{}, ipv6)
 
