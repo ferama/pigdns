@@ -10,13 +10,11 @@ import (
 	"github.com/miekg/dns"
 )
 
-const expiredCheckInterval = 60 * time.Second
+const expiredCheckInterval = 2 * time.Second
 
 type item struct {
 	// when the item expires
 	expires time.Time
-	// when the item born (for eviction)
-	birth time.Time
 
 	msg []byte
 }
@@ -77,7 +75,6 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 
 	c.data[key] = item{
 		expires: expireTime,
-		birth:   time.Now(),
 		msg:     packed,
 	}
 	return nil
