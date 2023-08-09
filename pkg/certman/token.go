@@ -1,4 +1,4 @@
-package acmec
+package certman
 
 import (
 	"sync"
@@ -9,7 +9,7 @@ var (
 	instance *token
 )
 
-// TunRegistry returns a singleton instance of Registry
+// Token returns a singleton instance of Token
 func Token() *token {
 	once.Do(func() {
 		instance = newToken()

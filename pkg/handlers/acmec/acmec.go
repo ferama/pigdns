@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 
+	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
@@ -19,7 +20,7 @@ type Handler struct {
 }
 
 func (h *Handler) parseQuery(m *dns.Msg) {
-	token := Token()
+	token := certman.Token()
 	if token.Get() == "" {
 		return
 	}

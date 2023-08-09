@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/regexip/web/routes"
+	"github.com/ferama/pigdns/pkg/handlers/regexip/web/routes"
 	"github.com/gin-gonic/gin"
 )
 

@@ -1,23 +1,20 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/certman/acmec"
+	"github.com/ferama/pigdns/pkg/handlers/acmec"
+	"github.com/ferama/pigdns/pkg/handlers/regexip"
+	"github.com/ferama/pigdns/pkg/handlers/regexip/web"
+	"github.com/ferama/pigdns/pkg/handlers/resolver"
+	"github.com/ferama/pigdns/pkg/handlers/root"
+	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
-	"github.com/ferama/pigdns/pkg/regexip"
-	"github.com/ferama/pigdns/pkg/regexip/web"
-	"github.com/ferama/pigdns/pkg/resolver"
+	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
-	"github.com/ferama/pigdns/pkg/zone"
-	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -85,32 +82,6 @@ enable the zone file too (--zone-file flag) and register the subdomain. usually 
 	viper.BindPFlag(utils.WebSubdomainFlag, rootCmd.Flags().Lookup(utils.WebSubdomainFlag))
 }
 
-func rootHandler() pigdns.HandlerFunc {
-	return func(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
-		logMsg := ""
-		m := new(dns.Msg)
-		m.SetReply(r)
-		m.Authoritative = true
-		m.Rcode = dns.RcodeSuccess
-
-		for _, q := range m.Question {
-			logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.String())
-		}
-
-		if r.Opcode != dns.OpcodeQuery {
-			return
-		}
-
-		rr := zone.GetSOArecord()
-		m.Answer = append(m.Answer, rr)
-
-		logMsg = fmt.Sprintf("%s answer=%s", logMsg, rr)
-		log.Println(logMsg)
-
-		w.WriteMsg(m)
-	}
-}
-
 // the first handler that write back to the client calling
 // w.WriteMsg(m) win. No other handler can write back anymore
 // Chain rings are called in reverse order
@@ -120,7 +91,7 @@ func buildChain() pigdns.Handler {
 	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
 
 	// leaf handler (is the latest one)
-	chain = pigdns.HandlerFunc(rootHandler())
+	chain = &root.Handler{}
 
 	chain = &regexip.Handler{Next: chain}
 	if zoneFilePath != "" {
@@ -132,18 +103,6 @@ func buildChain() pigdns.Handler {
 	}
 
 	return chain
-}
-
-func startServer(net string, port int) {
-	server := &dns.Server{
-		Addr: ":" + strconv.Itoa(port),
-		Net:  net,
-	}
-	err := server.ListenAndServe()
-	defer server.Shutdown()
-	if err != nil {
-		log.Fatalf("failed to start server: %s\n ", err.Error())
-	}
 }
 
 func failWithHelp(cmd *cobra.Command, msg string) {
@@ -193,27 +152,13 @@ var rootCmd = &cobra.Command{
 		}
 
 		if resolverEnable {
-			resolver := resolver.NewResolver(rootHandler())
+			resolver := resolver.NewResolver(&root.Handler{})
 			pigdns.Handle(".", resolver)
 
 		}
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			startServer("udp", port)
-			wg.Done()
-		}()
-
-		wg.Add(1)
-		go func() {
-			startServer("tcp", port)
-			wg.Done()
-		}()
-
-		log.Printf("listening on ':%d'", port)
-
-		wg.Wait()
+		s := server.NewServer(port)
+		s.Start()
 	},
 }
 

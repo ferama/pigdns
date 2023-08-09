@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/certman/acmec"
 	"github.com/mholt/acmez/acme"
 )
 
@@ -214,7 +213,7 @@ func (c *Certman) renew() error {
 		// server to tell us the challenge has been solved by polling the
 		// authorization status
 
-		acmec.Token().Set(challenge.DNS01KeyAuthorization())
+		Token().Set(challenge.DNS01KeyAuthorization())
 
 		authz, err = client.PollAuthorization(ctx, *account, authz)
 		if err != nil {
