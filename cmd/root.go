@@ -6,13 +6,7 @@ import (
 	"strings"
 
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/handlers/acmec"
-	"github.com/ferama/pigdns/pkg/handlers/regexip"
 	"github.com/ferama/pigdns/pkg/handlers/regexip/web"
-	"github.com/ferama/pigdns/pkg/handlers/resolver"
-	"github.com/ferama/pigdns/pkg/handlers/root"
-	"github.com/ferama/pigdns/pkg/handlers/zone"
-	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/spf13/cobra"
@@ -82,29 +76,6 @@ enable the zone file too (--zone-file flag) and register the subdomain. usually 
 	viper.BindPFlag(utils.WebSubdomainFlag, rootCmd.Flags().Lookup(utils.WebSubdomainFlag))
 }
 
-// the first handler that write back to the client calling
-// w.WriteMsg(m) win. No other handler can write back anymore
-// Chain rings are called in reverse order
-func buildChain() pigdns.Handler {
-	var chain pigdns.Handler
-
-	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
-
-	// leaf handler (is the latest one)
-	chain = &root.Handler{}
-
-	chain = &regexip.Handler{Next: chain}
-	if zoneFilePath != "" {
-		chain = zone.New(chain)
-	}
-	certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
-	if certmanEnable {
-		chain = &acmec.Handler{Next: chain}
-	}
-
-	return chain
-}
-
 func failWithHelp(cmd *cobra.Command, msg string) {
 	fmt.Printf("ERROR: %s\n\n", msg)
 	cmd.Help()
@@ -147,17 +118,7 @@ var rootCmd = &cobra.Command{
 			go ws.Run()
 		}
 
-		if domainEnable {
-			pigdns.Handle(fmt.Sprintf("%s.", domain), buildChain())
-		}
-
-		if resolverEnable {
-			resolver := resolver.NewResolver(&root.Handler{})
-			pigdns.Handle(".", resolver)
-
-		}
-
-		s := server.NewServer(port)
+		s := server.NewServer(port, domain, resolverEnable)
 		s.Start()
 	},
 }

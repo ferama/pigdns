@@ -1,22 +1,68 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
 
+	"github.com/ferama/pigdns/pkg/handlers/acmec"
+	"github.com/ferama/pigdns/pkg/handlers/regexip"
+	"github.com/ferama/pigdns/pkg/handlers/resolver"
+	"github.com/ferama/pigdns/pkg/handlers/root"
+	"github.com/ferama/pigdns/pkg/handlers/zone"
+	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/spf13/viper"
 )
 
 type Server struct {
-	port int
+	port   int
+	domain string
 }
 
-func NewServer(port int) *Server {
+func NewServer(port int, domain string, enableResolver bool) *Server {
 	s := &Server{
-		port: port,
+		port:   port,
+		domain: domain,
+	}
+
+	if domain != "" {
+		s.setupDomainHandler()
+	}
+	if enableResolver {
+		s.setupResolverHandler()
 	}
 	return s
+}
+
+func (s *Server) setupResolverHandler() {
+	resolver := resolver.NewResolver(&root.Handler{})
+	pigdns.Handle(".", resolver)
+}
+
+func (s *Server) setupDomainHandler() {
+	// the first handler that write back to the client calling
+	// w.WriteMsg(m) win. No other handler can write back anymore
+	// Chain rings are called in reverse order
+	var chain pigdns.Handler
+
+	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
+
+	// leaf handler (is the latest one)
+	chain = &root.Handler{}
+
+	chain = &regexip.Handler{Next: chain}
+	if zoneFilePath != "" {
+		chain = zone.New(chain)
+	}
+	certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
+	if certmanEnable {
+		chain = &acmec.Handler{Next: chain}
+	}
+
+	pigdns.Handle(fmt.Sprintf("%s.", s.domain), chain)
 }
 
 func (s *Server) run(net string) {
@@ -24,12 +70,14 @@ func (s *Server) run(net string) {
 		Addr: ":" + strconv.Itoa(s.port),
 		Net:  net,
 	}
+
 	err := server.ListenAndServe()
 	defer server.Shutdown()
 	if err != nil {
 		log.Fatalf("failed to start server: %s\n ", err.Error())
 	}
 }
+
 func (s *Server) Start() {
 	var wg sync.WaitGroup
 	wg.Add(1)
