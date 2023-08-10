@@ -6,12 +6,14 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
+	"golang.org/x/exp/slices"
 )
 
 const dialTimeout = 10 * time.Second
@@ -150,12 +152,17 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsI
 		Net:     network,
 	}
 
+	tmp, _ := netip.ParseAddrPort(nsaddr)
+	if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
+		log.Printf("[resolver] quering ROOT ns %s query=%s", tmp, q.String())
+	} else {
+		log.Printf("[resolver] quering ns %s, query=%s", nsaddr, q.String())
+	}
 	resp, _, err := client.Exchange(m, nsaddr)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[resolver] quering ns %s, query=%s", nsaddr, q.String())
 	if resp.Truncated {
 		return h.getAnswer(m, "tcp", nsaddr, clientIsIPv6)
 	}
