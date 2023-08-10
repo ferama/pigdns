@@ -1,4 +1,4 @@
-package resolver
+package cache
 
 import (
 	"bytes"
@@ -27,15 +27,15 @@ type item struct {
 	Msg []byte
 }
 
-type cache struct {
+type FileCache struct {
 	data    map[string]item
 	datadir string
 
 	mu sync.RWMutex
 }
 
-func newCache(datadir string) *cache {
-	c := &cache{
+func NewFileCache(datadir string) *FileCache {
+	c := &FileCache{
 		data:    make(map[string]item),
 		datadir: datadir,
 	}
@@ -44,7 +44,7 @@ func newCache(datadir string) *cache {
 	return c
 }
 
-func (c *cache) dump() {
+func (c *FileCache) dump() {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(c.data)
@@ -63,7 +63,7 @@ func (c *cache) dump() {
 	fi.Write(buf.Bytes())
 }
 
-func (c *cache) load() {
+func (c *FileCache) load() {
 	path := filepath.Join(c.datadir, "pig.cache")
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -79,7 +79,7 @@ func (c *cache) load() {
 	log.Printf("[cache] loaded items %d/%d", len(c.data), cacheMaxItems)
 }
 
-func (c *cache) checkExpired() {
+func (c *FileCache) checkExpired() {
 	for {
 
 		s := make([]struct {
@@ -125,11 +125,11 @@ func (c *cache) checkExpired() {
 	}
 }
 
-func (c *cache) buildKey(q dns.Question) string {
+func (c *FileCache) buildKey(q dns.Question) string {
 	return fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 }
 
-func (c *cache) set(q dns.Question, m *dns.Msg) error {
+func (c *FileCache) Set(q dns.Question, m *dns.Msg) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -156,7 +156,7 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 	return nil
 }
 
-func (c *cache) get(q dns.Question) (*dns.Msg, error) {
+func (c *FileCache) Get(q dns.Question) (*dns.Msg, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

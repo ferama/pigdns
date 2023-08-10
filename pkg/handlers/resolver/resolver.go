@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
@@ -21,13 +22,13 @@ const dialTimeout = 10 * time.Second
 type handler struct {
 	Next pigdns.Handler
 
-	cache *cache
+	cache cache.Cache
 }
 
 func NewResolver(next pigdns.Handler, datadir string) *handler {
 	h := &handler{
 		Next:  next,
-		cache: newCache(datadir),
+		cache: cache.NewFileCache(datadir),
 	}
 	return h
 }
@@ -136,7 +137,7 @@ func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
 func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsIPv6 bool) error {
 
 	q := m.Question[0]
-	cachedMsg, err := h.cache.get(q)
+	cachedMsg, err := h.cache.Get(q)
 	if err == nil {
 		m.Answer = append(m.Answer, cachedMsg.Answer...)
 		m.Extra = append(m.Extra, cachedMsg.Extra...)
@@ -176,7 +177,7 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsI
 	m.Answer = append(m.Answer, resp.Answer...)
 	m.Extra = append(m.Extra, resp.Extra...)
 	m.Ns = append(m.Ns, resp.Ns...)
-	h.cache.set(q, m)
+	h.cache.Set(q, m)
 	return nil
 }
 
