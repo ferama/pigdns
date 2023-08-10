@@ -19,49 +19,46 @@ type Handler struct {
 	Next pigdns.Handler
 }
 
-func (h *Handler) parseQuery(m *dns.Msg) {
+func (h *Handler) parseQuery(m *dns.Msg, r *pigdns.Request) {
 	token := certman.Token()
 	if token.Get() == "" {
 		return
 	}
 
-	for _, q := range m.Question {
-		log.Printf("[acmec] query for %s\n", q.Name)
+	log.Printf("[acmec] query for %s\n", r.Name())
 
-		switch q.Qtype {
-		case dns.TypeTXT:
-			if !dns01ChallengeRE.MatchString(q.Name) {
-				continue
-			}
-		default:
-			continue
+	switch r.QType() {
+	case dns.TypeTXT:
+		if !dns01ChallengeRE.MatchString(r.Name()) {
+			return
 		}
+	default:
+		return
+	}
 
-		rr, err := dns.NewRR(fmt.Sprintf("%s TXT %s", q.Name, token.Get()))
-		rr.Header().Ttl = 120 // seconds
-		if err == nil {
-			m.Answer = append(m.Answer, rr)
-		} else {
-			log.Println(err)
-		}
+	rr, err := dns.NewRR(fmt.Sprintf("%s TXT %s", r.Name(), token.Get()))
+	rr.Header().Ttl = 120 // seconds
+	if err == nil {
+		m.Answer = append(m.Answer, rr)
+	} else {
+		log.Println(err)
 	}
 }
 
-func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
+func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
-	m.SetReply(r)
 	m.Authoritative = true
 
-	switch r.Opcode {
+	switch r.Msg.Opcode {
 	case dns.OpcodeQuery:
-		h.parseQuery(m)
+		h.parseQuery(m, r)
 	}
 
 	if len(m.Answer) != 0 {
 		m.Rcode = dns.RcodeSuccess
-		w.WriteMsg(m)
+		r.Reply(m)
 		return
 	}
 
-	h.Next.ServeDNS(c, w, r)
+	h.Next.ServeDNS(c, r)
 }

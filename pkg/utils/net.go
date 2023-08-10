@@ -3,7 +3,6 @@ package utils
 import (
 	"net"
 	"net/netip"
-	"strings"
 )
 
 // IsAddrInNetwork checks if an address is contained into any of the
@@ -44,38 +43,4 @@ func IsClientAllowed(client net.Addr, allowedNets []string) (bool, error) {
 		return false, err
 	}
 	return r, nil
-}
-
-func IsIPv6(remote net.Addr) bool {
-	var ip string
-	switch addr := remote.(type) {
-	case *net.UDPAddr:
-		ip = addr.IP.String()
-	case *net.TCPAddr:
-		ip = addr.IP.String()
-	}
-	if ip == "" {
-		return false
-	}
-	if strings.Count(ip, ":") >= 2 {
-		return true
-	}
-	return false
-}
-func IsIPv4(remote net.Addr) bool {
-	var ip string
-	switch addr := remote.(type) {
-	case *net.UDPAddr:
-		ip = addr.IP.String()
-	case *net.TCPAddr:
-		ip = addr.IP.String()
-	}
-	if ip == "" {
-		return false
-	}
-
-	if strings.Count(ip, ":") >= 2 {
-		return false
-	}
-	return true
 }

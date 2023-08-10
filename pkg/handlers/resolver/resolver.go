@@ -33,7 +33,7 @@ func NewResolver(next pigdns.Handler, datadir string) *handler {
 	return h
 }
 
-func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
+func (h *handler) resolveNS(r *pigdns.Request, resp *dns.Msg) string {
 	n := rand.Intn(len(resp.Ns))
 	rr := resp.Ns[n]
 	ns := rr.(*dns.NS)
@@ -101,15 +101,16 @@ func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
 
 		m := new(dns.Msg)
 		var rootNS string
-		if clientIsIPv6 {
+		var newReq *pigdns.Request
+		if r.FamilyIsIPv6() {
 			rootNS = fmt.Sprintf("%s:53", getRootNSIPv6())
-			m.SetQuestion(ns.Ns, dns.TypeAAAA)
+			newReq = r.NewWithQuestion(ns.Ns, dns.TypeAAAA)
 		} else {
 			rootNS = fmt.Sprintf("%s:53", getRootNSIPv4())
-			m.SetQuestion(ns.Ns, dns.TypeA)
+			newReq = r.NewWithQuestion(ns.Ns, dns.TypeA)
 		}
 
-		h.getAnswer(m, "udp", rootNS, clientIsIPv6)
+		h.getAnswer(newReq, m, "udp", rootNS)
 
 		var ipv4 net.IP
 		var ipv6 net.IP
@@ -123,27 +124,30 @@ func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
 				ipv6 = aaaa.AAAA
 			}
 		}
-		if clientIsIPv6 {
+		if r.FamilyIsIPv6() {
 			return fmt.Sprintf("[%s]:53", ipv6)
 		}
 		return fmt.Sprintf("%s:53", ipv4)
 	}
-	if clientIsIPv6 {
+	if r.FamilyIsIPv6() {
 		return fmt.Sprintf("[%s]:53", ipv6)
 	}
 	return fmt.Sprintf("%s:53", ipv4)
 }
 
-func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsIPv6 bool) error {
+func (h *handler) getAnswer(r *pigdns.Request, m *dns.Msg, network string, nsaddr string) error {
 
-	q := m.Question[0]
+	q, err := r.Question()
+	if err != nil {
+		return err
+	}
 	cachedMsg, err := h.cache.Get(q)
 	if err == nil {
 		m.Answer = append(m.Answer, cachedMsg.Answer...)
 		m.Extra = append(m.Extra, cachedMsg.Extra...)
 		m.Ns = append(m.Ns, cachedMsg.Ns...)
 
-		logMsg := fmt.Sprintf("[resolver] query=%s cached-response", q.String())
+		logMsg := fmt.Sprintf("[resolver] query=%s cached-response", r.Name())
 		log.Println(logMsg)
 		return nil
 	}
@@ -155,23 +159,23 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsI
 
 	tmp, _ := netip.ParseAddrPort(nsaddr)
 	if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-		log.Printf("[resolver] quering ROOT ns %s query=%s", tmp, q.String())
+		log.Printf("[resolver] quering ROOT ns %s query=%s", tmp, r.Name())
 	} else {
-		log.Printf("[resolver] quering ns %s, query=%s", nsaddr, q.String())
+		log.Printf("[resolver] quering ns %s, query=%s", nsaddr, r.Name())
 	}
-	resp, _, err := client.Exchange(m, nsaddr)
+	resp, _, err := client.Exchange(r.Msg, nsaddr)
 	if err != nil {
 		return err
 	}
 
 	if resp.Truncated {
-		return h.getAnswer(m, "tcp", nsaddr, clientIsIPv6)
+		return h.getAnswer(r, m, "tcp", nsaddr)
 	}
 
 	if !resp.Authoritative && len(resp.Ns) > 0 {
 		// find the authoritative ns
-		addr := h.resolveNS(resp, clientIsIPv6)
-		return h.getAnswer(m, network, addr, clientIsIPv6)
+		addr := h.resolveNS(r, resp)
+		return h.getAnswer(r, m, network, addr)
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
@@ -181,51 +185,44 @@ func (h *handler) getAnswer(m *dns.Msg, network string, nsaddr string, clientIsI
 	return nil
 }
 
-func (h *handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
+func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	allowedNets := viper.GetStringSlice(utils.ResolverAllowNetworks)
-	allowed, err := utils.IsClientAllowed(w.RemoteAddr(), allowedNets)
+	allowed, err := utils.IsClientAllowed(r.ResponseWriter.RemoteAddr(), allowedNets)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if !allowed {
-		log.Printf("[resolver] client '%s' is not allowed", w.RemoteAddr())
-		h.Next.ServeDNS(c, w, r)
+		log.Printf("[resolver] client '%s' is not allowed", r.ResponseWriter.RemoteAddr())
+		h.Next.ServeDNS(c, r)
 		return
 	}
 
 	m := new(dns.Msg)
 	m.Authoritative = false
 
-	logMsg := ""
+	logMsg := fmt.Sprintf("[resolver] query=%s", r.Name())
 
-	q := r.Question[0]
-	logMsg = fmt.Sprintf("%s[resolver] query=%s", logMsg, q.String())
-
-	m.SetQuestion(q.Name, q.Qtype)
-
-	clientIsIPv6 := utils.IsIPv6(w.RemoteAddr())
 	var nsaddr string
-	if clientIsIPv6 {
+	if r.FamilyIsIPv6() {
 		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
 	} else {
 		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
 	}
 
-	err = h.getAnswer(m, "udp", nsaddr, clientIsIPv6)
+	err = h.getAnswer(r, m, "udp", nsaddr)
 	if err != nil {
 		logMsg = fmt.Sprintf("%s %s", logMsg, err)
 		log.Println(logMsg)
-		h.Next.ServeDNS(c, w, r)
+		h.Next.ServeDNS(c, r)
 		return
 	}
 
-	m.SetReply(r)
 	if len(m.Answer) != 0 {
 		log.Println(logMsg)
 		m.Rcode = dns.RcodeSuccess
-		w.WriteMsg(m)
+		r.Reply(m)
 		return
 	}
 
-	h.Next.ServeDNS(c, w, r)
+	h.Next.ServeDNS(c, r)
 }

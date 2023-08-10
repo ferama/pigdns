@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -62,7 +61,7 @@ func (s *Server) setupDomainHandler() {
 		chain = &acmec.Handler{Next: chain}
 	}
 
-	pigdns.Handle(fmt.Sprintf("%s.", s.domain), chain)
+	pigdns.Handle(dns.Fqdn(s.domain), chain)
 }
 
 func (s *Server) run(net string) {

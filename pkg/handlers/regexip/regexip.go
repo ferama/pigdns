@@ -63,61 +63,62 @@ func (h *Handler) getAAAA(name string) (net.IP, error) {
 }
 
 // returns a log message
-func (h *Handler) parseQuery(m *dns.Msg) string {
+func (h *Handler) parseQuery(m *dns.Msg, r *pigdns.Request) string {
 	logMsg := ""
-	for _, q := range m.Question {
-		logMsg = fmt.Sprintf("%s[regexip] query=%s", logMsg, q.String())
-		var ip net.IP
-		var err error
+	// for _, q := range m.Question {
+	logMsg = fmt.Sprintf("%s[regexip] query=%s", logMsg, r.Name())
+	var ip net.IP
+	var err error
 
-		typeSring := ""
+	typeSring := ""
 
-		switch q.Qtype {
-		case dns.TypeA:
-			ip, err = h.getA(q.Name)
-			typeSring = "A"
-		case dns.TypeAAAA:
-			ip, err = h.getAAAA(q.Name)
-			typeSring = "AAAA"
-		default:
-			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
-			continue
-		}
-
-		if err == nil {
-			rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", q.Name, typeSring, ip))
-			if err == nil {
-				m.Answer = append(m.Answer, rr)
-				logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
-			}
-		} else {
-			logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
-		}
+	switch r.QType() {
+	case dns.TypeA:
+		ip, err = h.getA(r.Name())
+		typeSring = "A"
+	case dns.TypeAAAA:
+		ip, err = h.getAAAA(r.Name())
+		typeSring = "AAAA"
+	default:
+		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 	}
+
+	if err == nil {
+		rr, err := dns.NewRR(fmt.Sprintf("%s %s %s", r.Name(), typeSring, ip))
+		if err == nil {
+			m.Answer = append(m.Answer, rr)
+			logMsg = fmt.Sprintf("%s answer=%s", logMsg, ip)
+		}
+	} else {
+		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
+	}
+	// }
 	if len(m.Answer) == 0 {
 		return logMsg
 	}
 	return logMsg
 }
 
-func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
+func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
-	m.SetReply(r)
+	m.SetReply(r.Msg)
 	m.Authoritative = true
 
 	logMsg := ""
 
-	switch r.Opcode {
-	case dns.OpcodeQuery:
-		logMsg = h.parseQuery(m)
+	if r.Msg.Opcode != dns.OpcodeQuery {
+		h.Next.ServeDNS(c, r)
+		return
 	}
+
+	logMsg = h.parseQuery(m, r)
 
 	log.Println(logMsg)
 	if len(m.Answer) != 0 {
 		m.Rcode = dns.RcodeSuccess
-		w.WriteMsg(m)
+		r.ResponseWriter.WriteMsg(m)
 		return
 	}
 
-	h.Next.ServeDNS(c, w, r)
+	h.Next.ServeDNS(c, r)
 }

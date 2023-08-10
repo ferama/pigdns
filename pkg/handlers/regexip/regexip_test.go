@@ -14,7 +14,7 @@ import (
 const testListenAddress = "127.0.0.1:6354"
 
 func startServer() *dns.Server {
-	n := pigdns.HandlerFunc(func(c context.Context, w dns.ResponseWriter, m *dns.Msg) {})
+	n := pigdns.HandlerFunc(func(c context.Context, r *pigdns.Request) {})
 	rxip := &Handler{
 		Next: n,
 	}

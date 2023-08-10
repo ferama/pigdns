@@ -31,10 +31,10 @@ func New(next pigdns.Handler) pigdns.Handler {
 	return h
 }
 
-func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string {
+func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, r *pigdns.Request) string {
 	logMsg := ""
 	rname := strings.ToLower(record.Header().Name)
-	qname := strings.ToLower(q.Name)
+	qname := r.Name()
 
 	// record with empty name. append origin
 	if rname == "" {
@@ -48,10 +48,10 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 	}
 
 	// handle special cases
-	if record.Header().Rrtype != q.Qtype {
+	if record.Header().Rrtype != r.QType() {
 		switch record.Header().Rrtype {
 		case dns.TypeCNAME:
-			if q.Qtype != dns.TypeA && q.Qtype != dns.TypeAAAA {
+			if r.QType() != dns.TypeA && r.QType() != dns.TypeAAAA {
 				return logMsg
 			}
 
@@ -59,8 +59,8 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 
 			// try find query target record
 			rmsg := new(dns.Msg)
-			rmsg.SetQuestion(cname.Target, q.Qtype)
-			alog := h.handleQuery(rmsg)
+			newr := r.NewWithQuestion(cname.Target, r.QType())
+			alog := h.handleQuery(rmsg, newr)
 			if len(rmsg.Answer) != 0 {
 				log.Println(alog)
 				m.Answer = append(m.Answer, rmsg.Answer...)
@@ -80,18 +80,15 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, q dns.Question) string
 	return logMsg
 }
 
-func (h *Handler) handleQuery(m *dns.Msg) string {
+func (h *Handler) handleQuery(m *dns.Msg, r *pigdns.Request) string {
 	records := ZoneFileInst().GetRecords()
 
 	logMsg := ""
-	for _, q := range m.Question {
-		logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, q.String())
-		for _, record := range records {
-
-			rlog := ""
-			rlog = h.handleRecord(m, record, q)
-			logMsg = fmt.Sprintf("%s%s", logMsg, rlog)
-		}
+	logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, r.Name())
+	for _, record := range records {
+		rlog := ""
+		rlog = h.handleRecord(m, record, r)
+		logMsg = fmt.Sprintf("%s%s", logMsg, rlog)
 	}
 	if len(m.Answer) == 0 {
 		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
@@ -100,24 +97,25 @@ func (h *Handler) handleQuery(m *dns.Msg) string {
 	return logMsg
 }
 
-func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
+func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
-	m.SetReply(r)
+	// m.SetReply(r.Msg)
 	m.Authoritative = true
 
 	logMsg := ""
 
-	switch r.Opcode {
+	switch r.Msg.Opcode {
 	case dns.OpcodeQuery:
-		logMsg = h.handleQuery(m)
+		logMsg = h.handleQuery(m, r)
 	}
 
 	log.Println(logMsg)
 	if len(m.Answer) != 0 {
 		m.Rcode = dns.RcodeSuccess
-		w.WriteMsg(m)
+		// r.ResponseWriter.WriteMsg(m)
+		r.Reply(m)
 		return
 	}
 
-	h.Next.ServeDNS(c, w, r)
+	h.Next.ServeDNS(c, r)
 }

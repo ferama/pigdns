@@ -29,7 +29,7 @@ func createTempFile(t *testing.T, content string) string {
 }
 
 func startServer(zoneFile string) *dns.Server {
-	n := pigdns.HandlerFunc(func(c context.Context, w dns.ResponseWriter, m *dns.Msg) {})
+	n := pigdns.HandlerFunc(func(c context.Context, r *pigdns.Request) {})
 	zone := New(n)
 	pigdns.Handle("pig.io.", zone)
 

@@ -6,24 +6,21 @@ import (
 	"log"
 
 	"github.com/ferama/pigdns/pkg/handlers/zone"
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
 
 type Handler struct {
 }
 
-func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) {
-	logMsg := ""
+func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
-	m.SetReply(r)
 	m.Authoritative = true
 	m.Rcode = dns.RcodeSuccess
 
-	for _, q := range m.Question {
-		logMsg = fmt.Sprintf("%s[root] query=%s", logMsg, q.String())
-	}
+	logMsg := fmt.Sprintf("[root] query=%s", r.Name())
 
-	if r.Opcode != dns.OpcodeQuery {
+	if r.Msg.Opcode != dns.OpcodeQuery {
 		return
 	}
 
@@ -33,5 +30,5 @@ func (h *Handler) ServeDNS(c context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	logMsg = fmt.Sprintf("%s answer=%s", logMsg, rr)
 	log.Println(logMsg)
 
-	w.WriteMsg(m)
+	r.Reply(m)
 }
