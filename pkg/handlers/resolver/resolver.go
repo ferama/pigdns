@@ -24,10 +24,10 @@ type handler struct {
 	cache *cache
 }
 
-func NewResolver(next pigdns.Handler) *handler {
+func NewResolver(next pigdns.Handler, datadir string) *handler {
 	h := &handler{
 		Next:  next,
-		cache: newCache(),
+		cache: newCache(datadir),
 	}
 	return h
 }

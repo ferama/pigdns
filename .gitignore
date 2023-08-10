@@ -1,3 +1,4 @@
-bin
+/bin
 *.pem
 __debug_bin
+/pig.cache

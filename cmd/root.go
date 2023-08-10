@@ -118,7 +118,7 @@ var rootCmd = &cobra.Command{
 			go ws.Run()
 		}
 
-		s := server.NewServer(port, domain, resolverEnable)
+		s := server.NewServer(port, domain, resolverEnable, datadir)
 		s.Start()
 	},
 }

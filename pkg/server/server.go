@@ -22,7 +22,7 @@ type Server struct {
 	domain string
 }
 
-func NewServer(port int, domain string, enableResolver bool) *Server {
+func NewServer(port int, domain string, enableResolver bool, datadir string) *Server {
 	s := &Server{
 		port:   port,
 		domain: domain,
@@ -32,13 +32,13 @@ func NewServer(port int, domain string, enableResolver bool) *Server {
 		s.setupDomainHandler()
 	}
 	if enableResolver {
-		s.setupResolverHandler()
+		s.setupResolverHandler(datadir)
 	}
 	return s
 }
 
-func (s *Server) setupResolverHandler() {
-	resolver := resolver.NewResolver(&root.Handler{})
+func (s *Server) setupResolverHandler(datadir string) {
+	resolver := resolver.NewResolver(&root.Handler{}, datadir)
 	pigdns.Handle(".", resolver)
 }
 

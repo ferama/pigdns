@@ -1,9 +1,13 @@
 package resolver
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -17,24 +21,62 @@ const (
 )
 
 type item struct {
-	// when the item expires
-	expires time.Time
+	// when the item Expires
+	Expires time.Time
 
-	msg []byte
+	Msg []byte
 }
 
 type cache struct {
-	data map[string]item
+	data    map[string]item
+	datadir string
 
 	mu sync.RWMutex
 }
 
-func newCache() *cache {
+func newCache(datadir string) *cache {
 	c := &cache{
-		data: make(map[string]item),
+		data:    make(map[string]item),
+		datadir: datadir,
 	}
+	c.load()
 	go c.checkExpired()
 	return c
+}
+
+func (c *cache) dump() {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(c.data)
+	if err != nil {
+		log.Println("[cache] cannot dump cache", err)
+		return
+	}
+
+	path := filepath.Join(c.datadir, "pig.cache")
+	fi, err := os.Create(path)
+	if err != nil {
+		log.Println("[cache] cannot store cache", err)
+		return
+	}
+	defer fi.Close()
+	fi.Write(buf.Bytes())
+}
+
+func (c *cache) load() {
+	path := filepath.Join(c.datadir, "pig.cache")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		log.Println("[cache] cannot read cache file", err)
+		return
+	}
+
+	d := gob.NewDecoder(bytes.NewBuffer(b))
+	err = d.Decode(&c.data)
+	if err != nil {
+		log.Println("[cache] cannot load cache", err)
+	}
+	log.Printf("[cache] loaded items %d/%d", len(c.data), cacheMaxItems)
 }
 
 func (c *cache) checkExpired() {
@@ -47,14 +89,14 @@ func (c *cache) checkExpired() {
 
 		c.mu.Lock()
 		for k, v := range c.data {
-			if time.Now().After(v.expires) {
+			if time.Now().After(v.Expires) {
 				log.Println("[cache] expired", k)
 				delete(c.data, k)
 			}
 			s = append(s, struct {
 				k string
 				t time.Time
-			}{k: k, t: v.expires})
+			}{k: k, t: v.Expires})
 		}
 		c.mu.Unlock()
 
@@ -73,6 +115,10 @@ func (c *cache) checkExpired() {
 			}
 			c.mu.Unlock()
 		}
+
+		c.mu.Lock()
+		c.dump()
+		c.mu.Unlock()
 		log.Printf("[cache] total items %d/%d", len(c.data), cacheMaxItems)
 
 		time.Sleep(cacheExpiredCheckInterval)
@@ -104,8 +150,8 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 	key := c.buildKey(q)
 
 	c.data[key] = item{
-		expires: expireTime,
-		msg:     packed,
+		Expires: expireTime,
+		Msg:     packed,
 	}
 	return nil
 }
@@ -117,12 +163,12 @@ func (c *cache) get(q dns.Question) (*dns.Msg, error) {
 	key := c.buildKey(q)
 	if val, ok := c.data[key]; ok {
 		msg := new(dns.Msg)
-		err := msg.Unpack(val.msg)
+		err := msg.Unpack(val.Msg)
 		if err != nil {
 			return nil, err
 		}
 		for _, a := range msg.Answer {
-			a.Header().Ttl = uint32(time.Until(val.expires).Seconds())
+			a.Header().Ttl = uint32(time.Until(val.Expires).Seconds())
 		}
 		return msg, nil
 	}
