@@ -4,13 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
-const expiredCheckInterval = 2 * time.Second
+const (
+	cacheExpiredCheckInterval = 10 * time.Second
+	cacheMaxItems             = 5000
+)
 
 type item struct {
 	// when the item expires
@@ -22,7 +26,7 @@ type item struct {
 type cache struct {
 	data map[string]item
 
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 func newCache() *cache {
@@ -36,16 +40,42 @@ func newCache() *cache {
 func (c *cache) checkExpired() {
 	for {
 
+		s := make([]struct {
+			k string
+			t time.Time
+		}, 0)
+
 		c.mu.Lock()
 		for k, v := range c.data {
 			if time.Now().After(v.expires) {
 				log.Println("[cache] expired", k)
 				delete(c.data, k)
 			}
+			s = append(s, struct {
+				k string
+				t time.Time
+			}{k: k, t: v.expires})
 		}
 		c.mu.Unlock()
 
-		time.Sleep(expiredCheckInterval)
+		if len(c.data) > cacheMaxItems {
+			sort.Slice(s, func(i, j int) bool {
+				t1 := s[i].t
+				t2 := s[j].t
+				return t2.After(t1)
+			})
+
+			ei := len(s) - cacheMaxItems
+			c.mu.Lock()
+			for _, i := range s[:ei] {
+				log.Println("[cache] evicted", i.k)
+				delete(c.data, i.k)
+			}
+			c.mu.Unlock()
+		}
+		log.Printf("[cache] total items %d/%d", len(c.data), cacheMaxItems)
+
+		time.Sleep(cacheExpiredCheckInterval)
 	}
 }
 
@@ -81,8 +111,8 @@ func (c *cache) set(q dns.Question, m *dns.Msg) error {
 }
 
 func (c *cache) get(q dns.Question) (*dns.Msg, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	key := c.buildKey(q)
 	if val, ok := c.data[key]; ok {

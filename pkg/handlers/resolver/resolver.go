@@ -30,7 +30,6 @@ func NewResolver(next pigdns.Handler) *handler {
 	return h
 }
 
-// TODO: handle ipv6
 func (h *handler) resolveNS(resp *dns.Msg, clientIsIPv6 bool) string {
 	n := rand.Intn(len(resp.Ns))
 	rr := resp.Ns[n]
