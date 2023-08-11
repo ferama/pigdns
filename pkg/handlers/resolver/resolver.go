@@ -223,6 +223,8 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		r.Reply(m)
 		return
 	}
+	logMsg = fmt.Sprintf("%s %s", logMsg, "answer=no-answer")
+	log.Println(logMsg)
 
 	h.Next.ServeDNS(c, r)
 }

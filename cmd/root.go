@@ -101,6 +101,11 @@ var rootCmd = &cobra.Command{
 
 		resolverEnable := viper.GetBool(utils.ResolverEnableFlag)
 
+		if !domainEnable && !resolverEnable {
+			cmd.Help()
+			os.Exit(1)
+		}
+
 		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
 		if certmanEnable && !domainEnable {
 			failWithHelp(cmd, "cannot enable certman without a domain. please set the 'domain' flag")
