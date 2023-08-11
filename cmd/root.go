@@ -9,11 +9,15 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/regexip/web"
 	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 func init() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	// this two lines enables set config through env vars.
@@ -25,6 +29,8 @@ func init() {
 	viper.SetEnvPrefix("pigdns")
 
 	// common
+	rootCmd.Flags().Bool(utils.Debug, false, "enable debug")
+	viper.BindPFlag(utils.Debug, rootCmd.Flags().Lookup(utils.Debug))
 	rootCmd.Flags().StringP(utils.DatadirFlag, "a", ".", "data dir where pigdns data will be stored")
 	viper.BindPFlag(utils.DatadirFlag, rootCmd.Flags().Lookup(utils.DatadirFlag))
 
@@ -86,6 +92,13 @@ var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
 	Run: func(cmd *cobra.Command, args []string) {
+		debug := viper.GetBool(utils.Debug)
+
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		if debug {
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
+
 		domain := viper.GetString(utils.DomainFlag)
 
 		domainEnable := domain != ""

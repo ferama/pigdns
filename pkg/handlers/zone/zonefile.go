@@ -2,13 +2,13 @@ package zone
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -73,7 +73,7 @@ func (z *zoneFile) checkConfigFile() {
 	}
 	stat, err := os.Stat(z.filePath)
 	if err != nil {
-		log.Println("[zone] failed checking key file modification time:", err)
+		log.Printf("[zone] failed checking key file modification time: %s", err)
 	} else {
 		if stat.ModTime().After(z.cachedZoneFileModTime) {
 			z.loadZonefile()
@@ -115,7 +115,7 @@ func (z *zoneFile) loadZonefile() {
 
 	f, err := os.Open(z.filePath)
 	if err != nil {
-		log.Fatalf("cannot read file: %s", err)
+		log.Fatal().Msgf("cannot read file: %s", err)
 	}
 	defer f.Close()
 	log.Printf("[zone] reading file '%s'", z.filePath)
@@ -125,7 +125,7 @@ func (z *zoneFile) loadZonefile() {
 		rr, ok := zp.Next()
 		if !ok {
 			for _, r := range z.records {
-				log.Println("[zone]", r)
+				log.Printf("[zone] %s", r)
 			}
 			break
 		}

@@ -3,8 +3,9 @@ package acmec
 import (
 	"context"
 	"fmt"
-	"log"
 	"regexp"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -41,7 +42,7 @@ func (h *Handler) parseQuery(m *dns.Msg, r *pigdns.Request) {
 	if err == nil {
 		m.Answer = append(m.Answer, rr)
 	} else {
-		log.Println(err)
+		log.Printf("%s", err)
 	}
 }
 

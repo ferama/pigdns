@@ -2,6 +2,7 @@ package utils
 
 const (
 	// common
+	Debug        = "debug"
 	DatadirFlag  = "datadir"
 	DomainFlag   = "domain"
 	PortFlag     = "port"

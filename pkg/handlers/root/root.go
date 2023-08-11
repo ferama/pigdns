@@ -3,11 +3,11 @@ package root
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 )
 
 type Handler struct {
@@ -27,8 +27,7 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	rr := zone.GetSOArecord()
 	m.Answer = append(m.Answer, rr)
 
-	logMsg = fmt.Sprintf("%s answer=%s", logMsg, rr)
-	log.Println(logMsg)
+	log.Printf("%s answer=%s", logMsg, rr)
 
 	r.Reply(m)
 }

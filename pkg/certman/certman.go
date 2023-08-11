@@ -8,12 +8,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/mholt/acmez/acme"
 )
@@ -40,13 +41,13 @@ func writeFile(datadir string, name string, content []byte) {
 
 	f, err := os.Create(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Msg(err.Error())
 	}
 	defer f.Close()
 
 	_, err = f.Write(content)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Msg(err.Error())
 	}
 }
 
@@ -70,9 +71,9 @@ func New(domain string, datadir string, email string, useStaging bool) *Certman 
 		},
 	}
 	if c.useStaging {
-		log.Println("[certman] using STAGING le api")
+		log.Print("[certman] using STAGING le api")
 	} else {
-		log.Println("[certman] using PRODUCTION le api")
+		log.Print("[certman] using PRODUCTION le api")
 	}
 
 	return c
@@ -99,7 +100,7 @@ func (c *Certman) needsRenew() bool {
 		crt, _ := x509.ParseCertificate(block.Bytes)
 		diff := time.Until(crt.NotAfter)
 		expiresInDays := int(math.Round(diff.Hours() / 24))
-		log.Printf(
+		log.Info().Msgf(
 			"[certman] cert -> Expires in: %d days, NotBefore: %s, NotAfter: %s",
 			expiresInDays,
 			crt.NotBefore,
@@ -119,7 +120,7 @@ func (c *Certman) Run() {
 		if c.needsRenew() {
 			err := c.renew()
 			if err != nil {
-				log.Println(err)
+				log.Print(err)
 			}
 		}
 		CertmanMU.Unlock()

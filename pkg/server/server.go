@@ -1,11 +1,12 @@
 package server
 
 import (
-	"log"
+	"fmt"
 	"strconv"
 	"sync"
 
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/regexip"
 	"github.com/ferama/pigdns/pkg/handlers/resolver"
 	"github.com/ferama/pigdns/pkg/handlers/root"
@@ -13,6 +14,7 @@ import (
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -37,8 +39,13 @@ func NewServer(port int, domain string, enableResolver bool, datadir string) *Se
 }
 
 func (s *Server) setupResolverHandler(datadir string) {
-	resolver := resolver.NewResolver(&root.Handler{}, datadir)
-	pigdns.Handle(".", resolver)
+	var chain pigdns.Handler
+
+	chain = &root.Handler{}
+	chain = resolver.NewResolver(chain, datadir)
+	chain = &collector.Handler{Next: chain}
+
+	pigdns.Handle(".", chain)
 }
 
 func (s *Server) setupDomainHandler() {
@@ -61,6 +68,7 @@ func (s *Server) setupDomainHandler() {
 		chain = &acmec.Handler{Next: chain}
 	}
 
+	chain = &collector.Handler{Next: chain}
 	pigdns.Handle(dns.Fqdn(s.domain), chain)
 }
 
@@ -73,7 +81,7 @@ func (s *Server) run(net string) {
 	err := server.ListenAndServe()
 	defer server.Shutdown()
 	if err != nil {
-		log.Fatalf("failed to start server: %s\n ", err.Error())
+		log.Fatal().Msg(fmt.Sprintf("failed to start server: %s\n ", err.Error()))
 	}
 }
 
@@ -91,7 +99,7 @@ func (s *Server) Start() {
 		wg.Done()
 	}()
 
-	log.Printf("listening on ':%d'", s.port)
+	log.Info().Msgf("listening on ':%d'", s.port)
 
 	wg.Wait()
 }

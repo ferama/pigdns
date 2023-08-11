@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -49,14 +49,14 @@ func (c *FileCache) dump() {
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(c.data)
 	if err != nil {
-		log.Println("[cache] cannot dump cache", err)
+		log.Printf("[cache] cannot dump cache %s", err)
 		return
 	}
 
 	path := filepath.Join(c.datadir, "pig.cache")
 	fi, err := os.Create(path)
 	if err != nil {
-		log.Println("[cache] cannot store cache", err)
+		log.Printf("[cache] cannot store cache %s", err)
 		return
 	}
 	defer fi.Close()
@@ -67,14 +67,14 @@ func (c *FileCache) load() {
 	path := filepath.Join(c.datadir, "pig.cache")
 	b, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("[cache] cannot read cache file", err)
+		log.Printf("[cache] cannot read cache file %s", err)
 		return
 	}
 
 	d := gob.NewDecoder(bytes.NewBuffer(b))
 	err = d.Decode(&c.data)
 	if err != nil {
-		log.Println("[cache] cannot load cache", err)
+		log.Printf("[cache] cannot load cache %s", err)
 	}
 	log.Printf("[cache] loaded items %d/%d", len(c.data), cacheMaxItems)
 }
@@ -90,7 +90,7 @@ func (c *FileCache) checkExpired() {
 		c.mu.Lock()
 		for k, v := range c.data {
 			if time.Now().After(v.Expires) {
-				log.Println("[cache] expired", k)
+				log.Printf("[cache] expired %s", k)
 				delete(c.data, k)
 			}
 			s = append(s, struct {
@@ -110,7 +110,7 @@ func (c *FileCache) checkExpired() {
 			ei := len(s) - cacheMaxItems
 			c.mu.Lock()
 			for _, i := range s[:ei] {
-				log.Println("[cache] evicted", i.k)
+				log.Printf("[cache] evicted %s", i.k)
 				delete(c.data, i.k)
 			}
 			c.mu.Unlock()

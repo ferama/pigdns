@@ -3,7 +3,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -13,6 +12,7 @@ import (
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
 )
@@ -147,8 +147,8 @@ func (h *handler) getAnswer(r *pigdns.Request, m *dns.Msg, network string, nsadd
 		m.Extra = append(m.Extra, cachedMsg.Extra...)
 		m.Ns = append(m.Ns, cachedMsg.Ns...)
 
-		logMsg := fmt.Sprintf("[resolver] query=%s cached-response", r.Name())
-		log.Println(logMsg)
+		// logMsg := fmt.Sprintf("[resolver] query=%s cached-response", r.Name())
+		// log.Println(logMsg)
 		return nil
 	}
 
@@ -189,7 +189,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	allowedNets := viper.GetStringSlice(utils.ResolverAllowNetworks)
 	allowed, err := utils.IsClientAllowed(r.ResponseWriter.RemoteAddr(), allowedNets)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 	if !allowed {
 		log.Printf("[resolver] client '%s' is not allowed", r.ResponseWriter.RemoteAddr())
@@ -200,7 +200,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
 	m.Authoritative = false
 
-	logMsg := fmt.Sprintf("[resolver] query=%s type=%s", r.Name(), r.Type())
+	// logMsg := fmt.Sprintf("[resolver] query=%s type=%s", r.Name(), r.Type())
 
 	var nsaddr string
 	if r.FamilyIsIPv6() {
@@ -211,21 +211,21 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	err = h.getAnswer(r, m, "udp", nsaddr)
 	if err != nil {
-		logMsg = fmt.Sprintf("%s %s", logMsg, err)
-		log.Println(logMsg)
+		// logMsg = fmt.Sprintf("%s %s", logMsg, err)
+		// log.Println(logMsg)
 		h.Next.ServeDNS(c, r)
 		return
 	}
 
 	if len(m.Answer) != 0 {
-		log.Println(logMsg)
+		// log.Println(logMsg)
 		m.Rcode = dns.RcodeSuccess
 		r.Reply(m)
 		return
 	}
 
-	logMsg = fmt.Sprintf("%s %s", logMsg, "answer=no-answer")
-	log.Println(logMsg)
+	// logMsg = fmt.Sprintf("%s %s", logMsg, "answer=no-answer")
+	// log.Println(logMsg)
 
 	h.Next.ServeDNS(c, r)
 }

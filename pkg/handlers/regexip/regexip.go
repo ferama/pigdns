@@ -3,10 +3,11 @@ package regexip
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
@@ -92,7 +93,6 @@ func (h *Handler) parseQuery(m *dns.Msg, r *pigdns.Request) string {
 	} else {
 		logMsg = fmt.Sprintf("%s answer=no-answer", logMsg)
 	}
-	// }
 	if len(m.Answer) == 0 {
 		return logMsg
 	}
@@ -113,7 +113,7 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	logMsg = h.parseQuery(m, r)
 
-	log.Println(logMsg)
+	log.Print(logMsg)
 	if len(m.Answer) != 0 {
 		m.Rcode = dns.RcodeSuccess
 		r.ResponseWriter.WriteMsg(m)
