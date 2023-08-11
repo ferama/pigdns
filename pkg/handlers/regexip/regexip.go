@@ -9,9 +9,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
+
+const handlerName = "regexip"
 
 var (
 	// 192-168-10-1.pigdns.io
@@ -115,6 +118,8 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	log.Print(logMsg)
 	if len(m.Answer) != 0 {
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.AnweredBy = handlerName
 		m.Rcode = dns.RcodeSuccess
 		r.ResponseWriter.WriteMsg(m)
 		return

@@ -31,7 +31,9 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 		Str("type", r.Type()).
 		Float64("latency", totalLatency.Seconds()).
 		Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
-		Str("protocol", r.Proto())
+		Str("protocol", r.Proto()).
+		Bool("cached", cc.IsCached).
+		Str("answer-from", cc.AnweredBy)
 
 	event.Send()
 

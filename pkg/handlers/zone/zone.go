@@ -3,14 +3,18 @@ package zone
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 )
+
+const handlerName = "zone"
 
 type Handler struct {
 	Next pigdns.Handler
@@ -62,7 +66,7 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, r *pigdns.Request) str
 			newr := r.NewWithQuestion(cname.Target, r.QType())
 			alog := h.handleQuery(rmsg, newr)
 			if len(rmsg.Answer) != 0 {
-				log.Println(alog)
+				log.Print(alog)
 				m.Answer = append(m.Answer, rmsg.Answer...)
 			}
 
@@ -109,8 +113,10 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		logMsg = h.handleQuery(m, r)
 	}
 
-	log.Println(logMsg)
+	log.Print(logMsg)
 	if len(m.Answer) != 0 {
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.AnweredBy = handlerName
 		m.Rcode = dns.RcodeSuccess
 		// r.ResponseWriter.WriteMsg(m)
 		r.Reply(m)

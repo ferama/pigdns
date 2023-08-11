@@ -8,9 +8,12 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
+
+const handlerName = "acmec"
 
 var (
 	dns01ChallengeRE = regexp.MustCompile(`(?i)_acme-challenge\.`)
@@ -56,6 +59,8 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	if len(m.Answer) != 0 {
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.AnweredBy = handlerName
 		m.Rcode = dns.RcodeSuccess
 		r.Reply(m)
 		return

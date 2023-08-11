@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 )
+
+const handlerName = "root"
 
 type Handler struct {
 }
@@ -26,6 +29,8 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	rr := zone.GetSOArecord()
 	m.Answer = append(m.Answer, rr)
+	cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+	cc.AnweredBy = handlerName
 
 	log.Printf("%s answer=%s", logMsg, rr)
 

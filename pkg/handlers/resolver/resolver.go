@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
+	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
@@ -17,7 +18,10 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const dialTimeout = 10 * time.Second
+const (
+	dialTimeout = 10 * time.Second
+	handlerName = "resolver"
+)
 
 type handler struct {
 	Next pigdns.Handler
@@ -33,7 +37,7 @@ func NewResolver(next pigdns.Handler, datadir string) *handler {
 	return h
 }
 
-func (h *handler) resolveNS(r *pigdns.Request, resp *dns.Msg) string {
+func (h *handler) resolveNS(c context.Context, r *pigdns.Request, resp *dns.Msg) string {
 	n := rand.Intn(len(resp.Ns))
 	rr := resp.Ns[n]
 	ns := rr.(*dns.NS)
@@ -110,7 +114,7 @@ func (h *handler) resolveNS(r *pigdns.Request, resp *dns.Msg) string {
 			newReq = r.NewWithQuestion(ns.Ns, dns.TypeA)
 		}
 
-		h.getAnswer(newReq, m, "udp", rootNS)
+		h.getAnswer(c, newReq, m, "udp", rootNS)
 
 		var ipv4 net.IP
 		var ipv6 net.IP
@@ -135,7 +139,7 @@ func (h *handler) resolveNS(r *pigdns.Request, resp *dns.Msg) string {
 	return fmt.Sprintf("%s:53", ipv4)
 }
 
-func (h *handler) getAnswer(r *pigdns.Request, m *dns.Msg, network string, nsaddr string) error {
+func (h *handler) getAnswer(c context.Context, r *pigdns.Request, m *dns.Msg, network string, nsaddr string) error {
 
 	q, err := r.Question()
 	if err != nil {
@@ -147,6 +151,8 @@ func (h *handler) getAnswer(r *pigdns.Request, m *dns.Msg, network string, nsadd
 		m.Extra = append(m.Extra, cachedMsg.Extra...)
 		m.Ns = append(m.Ns, cachedMsg.Ns...)
 
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.IsCached = true
 		// logMsg := fmt.Sprintf("[resolver] query=%s cached-response", r.Name())
 		// log.Println(logMsg)
 		return nil
@@ -169,13 +175,13 @@ func (h *handler) getAnswer(r *pigdns.Request, m *dns.Msg, network string, nsadd
 	}
 
 	if resp.Truncated {
-		return h.getAnswer(r, m, "tcp", nsaddr)
+		return h.getAnswer(c, r, m, "tcp", nsaddr)
 	}
 
 	if !resp.Authoritative && len(resp.Ns) > 0 {
 		// find the authoritative ns
-		addr := h.resolveNS(r, resp)
-		return h.getAnswer(r, m, network, addr)
+		addr := h.resolveNS(c, r, resp)
+		return h.getAnswer(c, r, m, network, addr)
 	}
 
 	m.Answer = append(m.Answer, resp.Answer...)
@@ -209,7 +215,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
 	}
 
-	err = h.getAnswer(r, m, "udp", nsaddr)
+	err = h.getAnswer(c, r, m, "udp", nsaddr)
 	if err != nil {
 		// logMsg = fmt.Sprintf("%s %s", logMsg, err)
 		// log.Println(logMsg)
@@ -218,6 +224,8 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	if len(m.Answer) != 0 {
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.AnweredBy = handlerName
 		// log.Println(logMsg)
 		m.Rcode = dns.RcodeSuccess
 		r.Reply(m)
