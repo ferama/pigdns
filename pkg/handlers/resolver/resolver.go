@@ -103,7 +103,7 @@ func (h *handler) resolveNS(r *pigdns.Request, resp *dns.Msg) string {
 		var rootNS string
 		var newReq *pigdns.Request
 		if r.FamilyIsIPv6() {
-			rootNS = fmt.Sprintf("%s:53", getRootNSIPv6())
+			rootNS = fmt.Sprintf("[%s]:53", getRootNSIPv6())
 			newReq = r.NewWithQuestion(ns.Ns, dns.TypeAAAA)
 		} else {
 			rootNS = fmt.Sprintf("%s:53", getRootNSIPv4())
@@ -200,7 +200,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
 	m.Authoritative = false
 
-	logMsg := fmt.Sprintf("[resolver] query=%s", r.Name())
+	logMsg := fmt.Sprintf("[resolver] query=%s type=%s", r.Name(), r.Type())
 
 	var nsaddr string
 	if r.FamilyIsIPv6() {
@@ -223,6 +223,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		r.Reply(m)
 		return
 	}
+
 	logMsg = fmt.Sprintf("%s %s", logMsg, "answer=no-answer")
 	log.Println(logMsg)
 

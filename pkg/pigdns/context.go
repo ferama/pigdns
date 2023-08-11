@@ -8,6 +8,10 @@ import (
 
 type ContextKey int
 
+const (
+	RetriesContextKey ContextKey = iota
+)
+
 type PigContext context.Context
 
 func newContext(w dns.ResponseWriter, m *dns.Msg) PigContext {
