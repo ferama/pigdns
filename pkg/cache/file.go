@@ -116,9 +116,9 @@ func (c *FileCache) checkExpired() {
 			c.mu.Unlock()
 		}
 
-		c.mu.Lock()
+		c.mu.RLock()
 		c.dump()
-		c.mu.Unlock()
+		c.mu.RUnlock()
 		log.Printf("[cache] total items %d/%d", len(c.data), cacheMaxItems)
 
 		time.Sleep(cacheExpiredCheckInterval)
