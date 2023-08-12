@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
+
+	"github.com/miekg/dns"
 )
 
 const (
 	cacheExpiredCheckInterval = 10 * time.Second
-	cacheMaxItems             = 10000
-	cacheFileName             = "pig.cache"
+	cacheMaxItemsPerBucket    = 10000
 )
 
 type item struct {
@@ -28,33 +28,66 @@ type item struct {
 	Msg []byte
 }
 
-type FileCache struct {
-	data    map[string]item
-	datadir string
+type bucket struct {
+	data map[string]item
+	idx  rune
+	mu   sync.RWMutex
+}
 
-	mu sync.RWMutex
+type FileCache struct {
+	buckets map[rune]*bucket
+	datadir string
 }
 
 func NewFileCache(datadir string) *FileCache {
-	c := &FileCache{
-		data:    make(map[string]item),
+	cache := &FileCache{
+		buckets: make(map[rune]*bucket),
 		datadir: datadir,
 	}
-	c.load()
-	go c.checkExpired()
-	return c
+
+	bucketIdx := make([]rune, 0)
+	for r := '0'; r <= '9'; r++ {
+		bucketIdx = append(bucketIdx, r)
+		cache.buckets[r] = &bucket{
+			data: make(map[string]item),
+			idx:  r,
+		}
+	}
+
+	for r := 'a'; r <= 'z'; r++ {
+		bucketIdx = append(bucketIdx, r)
+		cache.buckets[r] = &bucket{
+			data: make(map[string]item),
+			idx:  r,
+		}
+	}
+
+	for _, i := range bucketIdx {
+		cache.load(i)
+	}
+	for _, i := range bucketIdx {
+		go cache.checkExpired(i)
+	}
+	return cache
 }
 
-func (c *FileCache) dump() {
+func (c *FileCache) dump(bucket *bucket) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(c.data)
+	err := enc.Encode(bucket.data)
 	if err != nil {
 		log.Printf("[cache] cannot dump cache %s", err)
 		return
 	}
 
-	path := filepath.Join(c.datadir, cacheFileName)
+	dir := filepath.Join(c.datadir, "cache")
+	err = os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		log.Printf("[cache] cannot store cache %s", err)
+		return
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%c.bin", bucket.idx))
+
 	fi, err := os.Create(path)
 	if err != nil {
 		log.Printf("[cache] cannot store cache %s", err)
@@ -64,8 +97,8 @@ func (c *FileCache) dump() {
 	fi.Write(buf.Bytes())
 }
 
-func (c *FileCache) load() {
-	path := filepath.Join(c.datadir, "pig.cache")
+func (c *FileCache) load(bucketIdx rune) {
+	path := filepath.Join(c.datadir, "cache", fmt.Sprintf("%c.bin", bucketIdx))
 	b, err := os.ReadFile(path)
 	if err != nil {
 		log.Printf("[cache] cannot read cache file %s", err)
@@ -73,14 +106,15 @@ func (c *FileCache) load() {
 	}
 
 	d := gob.NewDecoder(bytes.NewBuffer(b))
-	err = d.Decode(&c.data)
+	err = d.Decode(&c.buckets[bucketIdx].data)
 	if err != nil {
 		log.Printf("[cache] cannot load cache %s", err)
 	}
-	log.Printf("[cache] loaded items %d/%d", len(c.data), cacheMaxItems)
+	log.Printf("[cache] bucket '%c' loaded items %d/%d",
+		bucketIdx, len(c.buckets[bucketIdx].data), cacheMaxItemsPerBucket)
 }
 
-func (c *FileCache) checkExpired() {
+func (c *FileCache) checkExpired(bucketIdx rune) {
 	for {
 
 		s := make([]struct {
@@ -88,39 +122,39 @@ func (c *FileCache) checkExpired() {
 			t time.Time
 		}, 0)
 
-		c.mu.Lock()
-		for k, v := range c.data {
+		bucket := c.buckets[bucketIdx]
+		bucket.mu.Lock()
+		for k, v := range bucket.data {
 			if time.Now().After(v.Expires) {
 				log.Printf("[cache] expired %s", k)
-				delete(c.data, k)
+				delete(bucket.data, k)
 			}
 			s = append(s, struct {
 				k string
 				t time.Time
 			}{k: k, t: v.Expires})
 		}
-		c.mu.Unlock()
+		bucket.mu.Unlock()
 
-		if len(c.data) > cacheMaxItems {
+		if len(bucket.data) > cacheMaxItemsPerBucket {
 			sort.Slice(s, func(i, j int) bool {
 				t1 := s[i].t
 				t2 := s[j].t
 				return t2.After(t1)
 			})
 
-			ei := len(s) - cacheMaxItems
-			c.mu.Lock()
+			ei := len(s) - cacheMaxItemsPerBucket
+			bucket.mu.Lock()
 			for _, i := range s[:ei] {
 				log.Printf("[cache] evicted %s", i.k)
-				delete(c.data, i.k)
+				delete(bucket.data, i.k)
 			}
-			c.mu.Unlock()
+			bucket.mu.Unlock()
 		}
 
-		c.mu.RLock()
-		c.dump()
-		c.mu.RUnlock()
-		log.Printf("[cache] total items %d/%d", len(c.data), cacheMaxItems)
+		bucket.mu.RLock()
+		c.dump(bucket)
+		bucket.mu.RUnlock()
 
 		time.Sleep(cacheExpiredCheckInterval)
 	}
@@ -130,9 +164,22 @@ func (c *FileCache) buildKey(q dns.Question) string {
 	return fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 }
 
+func (c *FileCache) getBucket(q dns.Question) *bucket {
+	runes := []rune(q.Name)
+	if len(runes) == 0 {
+		return nil
+	}
+	idx := runes[0]
+	return c.buckets[idx]
+}
+
 func (c *FileCache) Set(q dns.Question, m *dns.Msg) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	key := c.buildKey(q)
+	bucket := c.getBucket(q)
+	if bucket == nil {
+		return fmt.Errorf("no bucket exists for %s", q.Name)
+	}
+	log.Printf("set value on bucket %c", bucket.idx)
 
 	packed, err := m.Pack()
 	if err != nil {
@@ -148,9 +195,11 @@ func (c *FileCache) Set(q dns.Question, m *dns.Msg) error {
 		}
 	}
 	expireTime := time.Now().Add(time.Duration(minTTL) * time.Second)
-	key := c.buildKey(q)
 
-	c.data[key] = item{
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
+
+	bucket.data[key] = item{
 		Expires: expireTime,
 		Msg:     packed,
 	}
@@ -158,11 +207,19 @@ func (c *FileCache) Set(q dns.Question, m *dns.Msg) error {
 }
 
 func (c *FileCache) Get(q dns.Question) (*dns.Msg, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	key := c.buildKey(q)
-	if val, ok := c.data[key]; ok {
+	bucket := c.getBucket(q)
+
+	if bucket == nil {
+		return nil, fmt.Errorf("no bucket exists for %s", q.Name)
+	}
+
+	log.Printf("get value from bucket %c", bucket.idx)
+
+	bucket.mu.RLock()
+	defer bucket.mu.RUnlock()
+
+	if val, ok := bucket.data[key]; ok {
 		msg := new(dns.Msg)
 		err := msg.Unpack(val.Msg)
 		if err != nil {
