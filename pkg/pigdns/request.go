@@ -20,6 +20,11 @@ type Request struct {
 	name   string // lowercase qname.
 	family int8   // transport's family.
 	ip     string // client's ip.
+
+	// Cache size after first call to Size or Do. If size is zero nothing has been cached yet.
+	// Both Size and Do set these values (and cache them).
+	size uint16 // UDP buffer size, or 64K in case of TCP.
+	do   bool   // DNSSEC OK value
 }
 
 func (r *Request) NewWithQuestion(name string, typ uint16) *Request {

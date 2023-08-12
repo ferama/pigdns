@@ -17,7 +17,8 @@ import (
 
 const (
 	cacheExpiredCheckInterval = 10 * time.Second
-	cacheMaxItems             = 5000
+	cacheMaxItems             = 10000
+	cacheFileName             = "pig.cache"
 )
 
 type item struct {
@@ -53,7 +54,7 @@ func (c *FileCache) dump() {
 		return
 	}
 
-	path := filepath.Join(c.datadir, "pig.cache")
+	path := filepath.Join(c.datadir, cacheFileName)
 	fi, err := os.Create(path)
 	if err != nil {
 		log.Printf("[cache] cannot store cache %s", err)
