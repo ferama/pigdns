@@ -19,7 +19,11 @@ import (
 )
 
 const (
-	dialTimeout = 5 * time.Second
+	// timeout until error
+	dialTimeout       = 3 * time.Second
+	maxRetriesOnError = 5
+
+	// for logging
 	handlerName = "resolver"
 )
 
@@ -216,13 +220,22 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
 	}
 
-	err = h.getAnswer(c, r, m, "udp", nsaddr)
-	if err != nil {
+	retries := maxRetriesOnError
+	for {
+		err = h.getAnswer(c, r, m, "udp", nsaddr)
+		if err == nil {
+			break
+		}
+		retries--
+
 		log.Err(err).
 			Str("query", r.Name()).
+			Int("retriesLeft", retries).
 			Msg("error on getAnswer")
-		h.Next.ServeDNS(c, r)
-		return
+		if retries == 0 {
+			h.Next.ServeDNS(c, r)
+			return
+		}
 	}
 
 	if len(m.Answer) != 0 {
