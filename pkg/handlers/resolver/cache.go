@@ -1,0 +1,65 @@
+package resolver
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/ferama/pigdns/pkg/cache"
+	"github.com/miekg/dns"
+)
+
+type resolverCache struct {
+	cache *cache.FileCache
+}
+
+func newResolverCache(datadir string) *resolverCache {
+	rc := &resolverCache{
+		cache: cache.NewFileCache(datadir),
+	}
+
+	return rc
+}
+
+func (c *resolverCache) buildKey(q dns.Question) string {
+	return fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+}
+
+func (c *resolverCache) Set(q dns.Question, m *dns.Msg) error {
+	key := c.buildKey(q)
+	packed, err := m.Pack()
+	if err != nil {
+		return err
+	}
+
+	var minTTL uint32
+	minTTL = 0
+	for _, a := range m.Answer {
+		ttl := a.Header().Ttl
+		if minTTL == 0 || ttl < minTTL {
+			minTTL = ttl
+		}
+	}
+
+	i := &cache.Item{
+		Data: packed,
+	}
+	i.SetTTL(time.Duration(minTTL) * time.Second)
+	return c.cache.Set(key, i)
+}
+
+func (c *resolverCache) Get(q dns.Question) (*dns.Msg, error) {
+	key := c.buildKey(q)
+	item, err := c.cache.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	msg := new(dns.Msg)
+	err = msg.Unpack(item.Data)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range msg.Answer {
+		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+	}
+	return msg, nil
+}

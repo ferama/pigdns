@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
@@ -30,13 +29,13 @@ const (
 type handler struct {
 	Next pigdns.Handler
 
-	cache cache.Cache
+	cache *resolverCache
 }
 
 func NewResolver(next pigdns.Handler, datadir string) *handler {
 	h := &handler{
 		Next:  next,
-		cache: cache.NewFileCache(datadir),
+		cache: newResolverCache(datadir),
 	}
 	return h
 }

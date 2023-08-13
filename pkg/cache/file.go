@@ -14,25 +14,17 @@ import (
 	"github.com/cespare/xxhash/v2"
 
 	"github.com/rs/zerolog/log"
-
-	"github.com/miekg/dns"
 )
 
 const (
 	cacheExpiredCheckInterval = 10 * time.Second
 	cacheMaxItemsPerBucket    = 10000
 	cacheNumBuckets           = 256
+	cacheSubDir               = "cache"
 )
 
-type item struct {
-	// when the item Expires
-	Expires time.Time
-
-	Msg []byte
-}
-
 type bucket struct {
-	data map[string]item
+	data map[string]*Item
 
 	idx uint64
 	mu  sync.RWMutex
@@ -52,7 +44,7 @@ func NewFileCache(datadir string) *FileCache {
 	var i uint64
 	for i = 0; i <= cacheNumBuckets; i++ {
 		cache.buckets[i] = &bucket{
-			data: make(map[string]item),
+			data: make(map[string]*Item),
 			idx:  i,
 		}
 		cache.load(i)
@@ -73,7 +65,7 @@ func (c *FileCache) dump(bucket *bucket) {
 		return
 	}
 
-	dir := filepath.Join(c.datadir, "cache")
+	dir := filepath.Join(c.datadir, cacheSubDir)
 	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		log.Printf("[cache] cannot store cache %s", err)
@@ -91,7 +83,7 @@ func (c *FileCache) dump(bucket *bucket) {
 }
 
 func (c *FileCache) load(bucketIdx uint64) {
-	path := filepath.Join(c.datadir, "cache", fmt.Sprintf("%d.bin", bucketIdx))
+	path := filepath.Join(c.datadir, cacheSubDir, fmt.Sprintf("%d.bin", bucketIdx))
 	b, err := os.ReadFile(path)
 	if err != nil {
 		log.Printf("[cache] cannot read cache file %s", err)
@@ -152,55 +144,30 @@ func (c *FileCache) checkExpired(bucketIdx uint64) {
 	}
 }
 
-func (c *FileCache) buildKey(q dns.Question) string {
-	return fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
-}
-
-func (c *FileCache) getBucket(q dns.Question) *bucket {
-	h := xxhash.Sum64String(q.Name)
+func (c *FileCache) getBucket(key string) *bucket {
+	h := xxhash.Sum64String(key)
 	bucketID := h % cacheNumBuckets
 	return c.buckets[bucketID]
 }
 
-func (c *FileCache) Set(q dns.Question, m *dns.Msg) error {
-	key := c.buildKey(q)
-	bucket := c.getBucket(q)
+func (c *FileCache) Set(key string, value *Item) error {
+	bucket := c.getBucket(key)
 	if bucket == nil {
-		return fmt.Errorf("no bucket exists for %s", q.Name)
+		return fmt.Errorf("no bucket exists for %s", key)
 	}
 	log.Printf("[cache] set value on bucket %d", bucket.idx)
 
-	packed, err := m.Pack()
-	if err != nil {
-		return err
-	}
-
-	var minTTL uint32
-	minTTL = 0
-	for _, a := range m.Answer {
-		ttl := a.Header().Ttl
-		if minTTL == 0 || ttl < minTTL {
-			minTTL = ttl
-		}
-	}
-	expireTime := time.Now().Add(time.Duration(minTTL) * time.Second)
-
 	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
+	bucket.data[key] = value
+	bucket.mu.Unlock()
 
-	bucket.data[key] = item{
-		Expires: expireTime,
-		Msg:     packed,
-	}
 	return nil
 }
 
-func (c *FileCache) Get(q dns.Question) (*dns.Msg, error) {
-	key := c.buildKey(q)
-	bucket := c.getBucket(q)
-
+func (c *FileCache) Get(key string) (*Item, error) {
+	bucket := c.getBucket(key)
 	if bucket == nil {
-		return nil, fmt.Errorf("no bucket exists for %s", q.Name)
+		return nil, fmt.Errorf("no bucket exists for %s", key)
 	}
 
 	log.Printf("[cache] get value from bucket %d", bucket.idx)
@@ -209,15 +176,7 @@ func (c *FileCache) Get(q dns.Question) (*dns.Msg, error) {
 	defer bucket.mu.RUnlock()
 
 	if val, ok := bucket.data[key]; ok {
-		msg := new(dns.Msg)
-		err := msg.Unpack(val.Msg)
-		if err != nil {
-			return nil, err
-		}
-		for _, a := range msg.Answer {
-			a.Header().Ttl = uint32(time.Until(val.Expires).Seconds())
-		}
-		return msg, nil
+		return val, nil
 	}
 	return nil, errors.New("item not found")
 }

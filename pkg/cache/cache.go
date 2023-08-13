@@ -1,11 +1,24 @@
 package cache
 
-import "github.com/miekg/dns"
+import (
+	"time"
+)
+
+type Item struct {
+	// when the item Expires
+	Expires time.Time
+	Data    []byte
+}
+
+// Sets the Expires field more conveniently
+func (i *Item) SetTTL(ttl time.Duration) {
+	i.Expires = time.Now().Add(ttl)
+}
 
 type Cache interface {
 	// Get item from cache
-	Get(q dns.Question) (*dns.Msg, error)
+	Get(key string) (*Item, error)
 
 	// Set item to cache
-	Set(q dns.Question, m *dns.Msg) error
+	Set(key string, value *Item, ttl time.Duration) error
 }
