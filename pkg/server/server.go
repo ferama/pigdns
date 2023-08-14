@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -41,7 +42,17 @@ func NewServer(port int, domain string, enableResolver bool, datadir string) *Se
 func (s *Server) setupResolverHandler(datadir string) {
 	var chain pigdns.Handler
 
-	chain = &root.Handler{}
+	// chain = &root.Handler{}
+	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
+		m := new(dns.Msg)
+		m.Authoritative = false
+		m.Rcode = dns.RcodeServerFailure
+		if ctx.Value(collector.CollectorContextKey) != nil {
+			cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+			cc.AnweredBy = "failure"
+		}
+		r.Reply(m)
+	})
 	chain = resolver.NewResolver(chain, datadir)
 	chain = &collector.Handler{Next: chain}
 

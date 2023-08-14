@@ -149,37 +149,41 @@ func (c *FileCache) load(bucketIdx uint64) {
 }
 
 func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
+	// temp struct to hold key, expires couples
 	s := make([]struct {
-		k string
-		t time.Time
+		key     string
+		expires time.Time
 	}, 0)
 
 	bucket := c.buckets[bucketIdx]
 	bucket.mu.Lock()
 	for k, v := range bucket.data {
+		// log.Printf("[cache item] %s, ttl: %fs", k, time.Until(v.Expires).Seconds())
 		if time.Now().After(v.Expires) {
 			log.Printf("[cache] expired %s", k)
 			delete(bucket.data, k)
 		}
 		s = append(s, struct {
-			k string
-			t time.Time
-		}{k: k, t: v.Expires})
+			key     string
+			expires time.Time
+		}{key: k, expires: v.Expires})
 	}
 	bucket.mu.Unlock()
 
+	// if bucket overflows evict items that are closer to their
+	// expire time
 	if len(bucket.data) > cacheMaxItemsPerBucket {
 		sort.Slice(s, func(i, j int) bool {
-			t1 := s[i].t
-			t2 := s[j].t
+			t1 := s[i].expires
+			t2 := s[j].expires
 			return t2.After(t1)
 		})
 
 		ei := len(s) - cacheMaxItemsPerBucket
 		bucket.mu.Lock()
 		for _, i := range s[:ei] {
-			log.Printf("[cache] evicted %s", i.k)
-			delete(bucket.data, i.k)
+			log.Printf("[cache] evicted %s", i.key)
+			delete(bucket.data, i.key)
 		}
 		bucket.mu.Unlock()
 	}
