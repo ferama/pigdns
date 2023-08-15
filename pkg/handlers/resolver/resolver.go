@@ -159,15 +159,17 @@ func (h *handler) resolveNS(c context.Context, r *pigdns.Request, resp *dns.Msg)
 	return fmt.Sprintf("%s:53", ipv4), nil
 }
 
-func (h *handler) getAnswer(c context.Context, r *pigdns.Request, m *dns.Msg, network string, nsaddr string) error {
-	q, err := r.Question()
+func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, m *dns.Msg, network string, nsaddr string) error {
+	q, err := req.Question()
 	if err != nil {
 		return err
 	}
 
-	resp, cacheErr := h.cache.Get(q, nsaddr)
+	// try to get the answer from cache.
+	// if no cached answer is present, do the recursive query
+	ans, cacheErr := h.cache.Get(q, nsaddr)
 	if cacheErr == nil {
-		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.IsCached = true
 	} else {
 		client := &dns.Client{
@@ -180,37 +182,39 @@ func (h *handler) getAnswer(c context.Context, r *pigdns.Request, m *dns.Msg, ne
 			return fmt.Errorf("%s. nsaddr: %s", err, nsaddr)
 		}
 		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-			log.Printf("[resolver] quering ROOT ns %s query=%s", tmp, r.Name())
+			log.Printf("[resolver] quering ROOT ns %s query=%s", tmp, req.Name())
 		} else {
-			log.Printf("[resolver] quering ns %s, query=%s", nsaddr, r.Name())
+			log.Printf("[resolver] quering ns %s, query=%s", nsaddr, req.Name())
 		}
-		resp, _, err = client.Exchange(r.Msg, nsaddr)
+		ans, _, err = client.Exchange(req.Msg, nsaddr)
 		if err != nil {
 			return err
 		}
 	}
 
-	if resp.Truncated {
-		return h.getAnswer(c, r, m, "tcp", nsaddr)
+	if ans.Truncated {
+		return h.getAnswer(ctx, req, m, "tcp", nsaddr)
 	}
 
-	if !resp.Authoritative && len(resp.Ns) > 0 {
-		if cacheErr != nil {
-			h.cache.Set(q, nsaddr, resp)
-		}
+	if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the authoritative ns
-		addr, err := h.resolveNS(c, r, resp)
+		addr, err := h.resolveNS(ctx, req, ans)
 		if err != nil {
 			return err
 		}
-		return h.getAnswer(c, r, m, network, addr)
+		// call getAnswer recursively
+		err = h.getAnswer(ctx, req, m, network, addr)
+		if cacheErr != nil {
+			h.cache.Set(q, nsaddr, ans)
+		}
+		return err
 	}
 
-	m.Answer = append(m.Answer, resp.Answer...)
-	m.Extra = append(m.Extra, resp.Extra...)
-	m.Ns = append(m.Ns, resp.Ns...)
+	m.Answer = append(m.Answer, ans.Answer...)
+	m.Extra = append(m.Extra, ans.Extra...)
+	m.Ns = append(m.Ns, ans.Ns...)
 	if cacheErr != nil {
-		h.cache.Set(q, nsaddr, m)
+		h.cache.Set(q, nsaddr, ans)
 	}
 	return nil
 }
