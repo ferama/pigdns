@@ -267,6 +267,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
 		m.Rcode = dns.RcodeSuccess
+		m.RecursionAvailable = true
 		r.Reply(m)
 		return
 	}
