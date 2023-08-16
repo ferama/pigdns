@@ -109,7 +109,7 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 		n := rand.Intn(len(resp.Ns))
 		ns := resp.Ns[n].(*dns.NS)
 
-		m := new(dns.Msg)
+		// m := new(dns.Msg)
 		var rootNS string
 		var newReq *pigdns.Request
 		if r.FamilyIsIPv6() {
@@ -125,14 +125,15 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 
 		retryForIPv4 := 1
 		for ipv4 == nil && ipv6 == nil && retryForIPv4 >= 0 {
-			err := h.getAnswer(ctx, newReq, m, rootNS)
+			ans, err := h.getAnswer(ctx, newReq, rootNS)
 			if err != nil {
 				log.Err(err).
 					Str("query", r.Name()).
 					Msg("error on resolveNS")
+				continue
 			}
 
-			for _, e := range m.Answer {
+			for _, e := range ans.Answer {
 				switch e.Header().Rrtype {
 				case dns.TypeA:
 					a := e.(*dns.A)
@@ -188,10 +189,10 @@ func (h *handler) queryNS(reqMsg *dns.Msg, nsaddr string) (*dns.Msg, error) {
 	}
 }
 
-func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, m *dns.Msg, nsaddr string) error {
+func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr string) (*dns.Msg, error) {
 	q, err := req.Question()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// try to get the answer from cache.
@@ -203,7 +204,7 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, m *dns.Msg
 	} else {
 		ans, err = h.queryNS(req.Msg, nsaddr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -211,23 +212,19 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, m *dns.Msg
 		// find the authoritative ns
 		addr, err := h.resolveNS(ctx, req, ans)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// call getAnswer recursively
-		err = h.getAnswer(ctx, req, m, addr)
-		if cacheErr != nil {
-			h.cache.Set(q, nsaddr, m)
+		ans, err = h.getAnswer(ctx, req, addr)
+		if err != nil {
+			return nil, err
 		}
-		return err
 	}
 
-	m.Answer = append(m.Answer, ans.Answer...)
-	m.Extra = append(m.Extra, ans.Extra...)
-	m.Ns = append(m.Ns, ans.Ns...)
 	if cacheErr != nil {
 		h.cache.Set(q, nsaddr, ans)
 	}
-	return nil
+	return ans, nil
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
@@ -243,7 +240,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	m := new(dns.Msg)
-	m.Authoritative = false
+	// m.Authoritative = false
 
 	retries := maxRetriesOnError
 	for {
@@ -253,7 +250,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		} else {
 			nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
 		}
-		err = h.getAnswer(c, r, m, nsaddr)
+		m, err = h.getAnswer(c, r, nsaddr)
 		if err == nil {
 			break
 		}
