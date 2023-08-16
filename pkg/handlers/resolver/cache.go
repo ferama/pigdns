@@ -26,10 +26,6 @@ func (c *resolverCache) buildKey(q dns.Question, nsaddr string) string {
 
 func (c *resolverCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 	key := c.buildKey(q, nsaddr)
-	packed, err := m.Pack()
-	if err != nil {
-		return err
-	}
 
 	var minTTL uint32
 	minTTL = 0
@@ -50,6 +46,11 @@ func (c *resolverCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 		if minTTL == 0 || ttl < minTTL {
 			minTTL = ttl
 		}
+	}
+
+	packed, err := m.Pack()
+	if err != nil {
+		return err
 	}
 
 	i := &cache.Item{
@@ -73,6 +74,12 @@ func (c *resolverCache) Get(q dns.Question, nsaddr string) (*dns.Msg, error) {
 		return nil, err
 	}
 	for _, a := range msg.Answer {
+		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+	}
+	for _, a := range msg.Extra {
+		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+	}
+	for _, a := range msg.Ns {
 		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
 	}
 	return msg, nil

@@ -240,8 +240,6 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	m := new(dns.Msg)
-	// m.Authoritative = false
-
 	retries := maxRetriesOnError
 	for {
 		var nsaddr string
@@ -265,7 +263,6 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			return
 		}
 	}
-
 	if len(m.Answer) != 0 {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
