@@ -73,14 +73,23 @@ func (c *resolverCache) Get(q dns.Question, nsaddr string) (*dns.Msg, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	ts := time.Until(item.Expires).Seconds()
+	// if item is still not deleted from cache (the go routine
+	// runs once each cacheExpiredCheckInterval seconds)
+	// ts could be negative.
+	if ts < 0 {
+		ts = 0
+	}
+	ttl := uint32(ts)
 	for _, a := range msg.Answer {
-		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+		a.Header().Ttl = ttl
 	}
 	for _, a := range msg.Extra {
-		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+		a.Header().Ttl = ttl
 	}
 	for _, a := range msg.Ns {
-		a.Header().Ttl = uint32(time.Until(item.Expires).Seconds())
+		a.Header().Ttl = ttl
 	}
 	return msg, nil
 }
