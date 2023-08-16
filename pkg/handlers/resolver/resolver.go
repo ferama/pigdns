@@ -109,6 +109,7 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 		n := rand.Intn(len(resp.Ns))
 		ns := resp.Ns[n].(*dns.NS)
 
+		m := new(dns.Msg)
 		var rootNS string
 		var newReq *pigdns.Request
 		if r.FamilyIsIPv6() {
@@ -124,14 +125,14 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 
 		retryForIPv4 := 1
 		for ipv4 == nil && ipv6 == nil && retryForIPv4 >= 0 {
-			ans, err := h.getAnswer(ctx, newReq, rootNS)
+			err := h.getAnswer(ctx, newReq, m, rootNS)
 			if err != nil {
 				log.Err(err).
 					Str("query", r.Name()).
 					Msg("error on resolveNS")
 			}
 
-			for _, e := range ans.Answer {
+			for _, e := range m.Answer {
 				switch e.Header().Rrtype {
 				case dns.TypeA:
 					a := e.(*dns.A)
@@ -187,10 +188,10 @@ func (h *handler) queryNS(reqMsg *dns.Msg, nsaddr string) (*dns.Msg, error) {
 	}
 }
 
-func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr string) (*dns.Msg, error) {
+func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, m *dns.Msg, nsaddr string) error {
 	q, err := req.Question()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// try to get the answer from cache.
@@ -202,7 +203,7 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 	} else {
 		ans, err = h.queryNS(req.Msg, nsaddr)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -210,18 +211,23 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		// find the authoritative ns
 		addr, err := h.resolveNS(ctx, req, ans)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		ans, err = h.queryNS(req.Msg, addr)
-		if err != nil {
-			return nil, err
+		// call getAnswer recursively
+		err = h.getAnswer(ctx, req, m, addr)
+		if cacheErr != nil {
+			h.cache.Set(q, nsaddr, m)
 		}
+		return err
 	}
 
+	m.Answer = append(m.Answer, ans.Answer...)
+	m.Extra = append(m.Extra, ans.Extra...)
+	m.Ns = append(m.Ns, ans.Ns...)
 	if cacheErr != nil {
 		h.cache.Set(q, nsaddr, ans)
 	}
-	return ans, nil
+	return nil
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
@@ -236,8 +242,10 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		return
 	}
 
+	m := new(dns.Msg)
+	m.Authoritative = false
+
 	retries := maxRetriesOnError
-	var ans *dns.Msg
 	for {
 		var nsaddr string
 		if r.FamilyIsIPv6() {
@@ -245,7 +253,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		} else {
 			nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
 		}
-		ans, err = h.getAnswer(c, r, nsaddr)
+		err = h.getAnswer(c, r, m, nsaddr)
 		if err == nil {
 			break
 		}
@@ -261,11 +269,11 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		}
 	}
 
-	if len(ans.Answer) != 0 {
+	if len(m.Answer) != 0 {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
-		ans.Rcode = dns.RcodeSuccess
-		r.Reply(ans)
+		m.Rcode = dns.RcodeSuccess
+		r.Reply(m)
 		return
 	}
 
