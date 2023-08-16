@@ -254,11 +254,11 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		}
 		retries--
 
-		log.Err(err).
-			Str("query", r.Name()).
-			Int("retriesLeft", retries).
-			Msg("error on getAnswer")
 		if retries == 0 {
+			log.Err(err).
+				Str("query", r.Name()).
+				Msg("error on getAnswer")
+
 			h.Next.ServeDNS(c, r)
 			return
 		}
