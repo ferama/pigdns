@@ -118,8 +118,10 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	log.Print(logMsg)
 	if len(m.Answer) != 0 {
-		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
-		cc.AnweredBy = handlerName
+		if c.Value(collector.CollectorContextKey) != nil {
+			cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+			cc.AnweredBy = handlerName
+		}
 		m.Rcode = dns.RcodeSuccess
 		r.ResponseWriter.WriteMsg(m)
 		return
