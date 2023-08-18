@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -17,10 +18,23 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type contextKey string
+
+const ResolverContextKey contextKey = "resolver-middleware-context"
+
+type ResolverContext struct {
+	RecursionCount int
+}
+
 const (
 	// timeout until error
 	dialTimeout       = 3 * time.Second
 	maxRetriesOnError = 5
+
+	// how deeply we will search for cnames
+	cnameChainMaxDeep = 16
+
+	recursionMaxLevel = 32
 
 	// for logging
 	handlerName = "resolver"
@@ -127,10 +141,11 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 		for ipv4 == nil && ipv6 == nil && retryForIPv4 >= 0 {
 			ans, err := h.getAnswer(ctx, newReq, rootNS)
 			if err != nil {
-				log.Err(err).
-					Str("query", r.Name()).
-					Msg("error on resolveNS")
-				continue
+				return "", err
+				// log.Err(err).
+				// 	Str("query", r.Name()).
+				// 	Msg("error on resolveNS")
+				// continue
 			}
 
 			for _, e := range ans.Answer {
@@ -190,6 +205,13 @@ func (h *handler) queryNS(reqMsg *dns.Msg, nsaddr string) (*dns.Msg, error) {
 }
 
 func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr string) (*dns.Msg, error) {
+	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
+	rc.RecursionCount++
+	if rc.RecursionCount >= recursionMaxLevel {
+		return nil, errors.New("getAnswer: recursionMaxLevel reached")
+	}
+	ctx = context.WithValue(ctx, ResolverContextKey, rc)
+
 	q, err := req.Question()
 	if err != nil {
 		return nil, err
@@ -210,14 +232,55 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the authoritative ns
-		addr, err := h.resolveNS(ctx, req, ans)
+		authNS, err := h.resolveNS(ctx, req, ans)
 		if err != nil {
 			return nil, err
 		}
 		// call getAnswer recursively
-		ans, err = h.getAnswer(ctx, req, addr)
+		ans, err = h.getAnswer(ctx, req, authNS)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	maxLoop := cnameChainMaxDeep
+	for {
+		haveAnswer := false
+		switch q.Qtype {
+		case dns.TypeA:
+			haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeA) != nil
+		case dns.TypeAAAA:
+			haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeAAAA) != nil
+		}
+
+		if haveAnswer {
+			break
+		}
+		// TODO (fails)
+		//  dig @127.0.0.1 video.twimg.com
+		// 	dig @127.0.0.1 cs296.wpc.edgecastcdn.net a
+		rr := utils.MsgGetAnswerByType(ans, dns.TypeCNAME)
+		if rr != nil {
+			cname := rr.(*dns.CNAME)
+			newReq := req.NewWithQuestion(cname.Target, q.Qtype)
+			var nsaddr string
+			if req.FamilyIsIPv6() {
+				nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
+			} else {
+				nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
+			}
+			ans, err = h.getAnswer(ctx, newReq, nsaddr)
+			if err != nil {
+				return nil, err
+			}
+			ans.Answer = append(ans.Answer, cname)
+			// if err == nil {
+			break
+			// }
+		}
+		maxLoop--
+		if maxLoop == 0 {
+			break
 		}
 	}
 
@@ -238,6 +301,11 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		h.Next.ServeDNS(c, r)
 		return
 	}
+
+	cc := &ResolverContext{
+		RecursionCount: 0,
+	}
+	c = context.WithValue(c, ResolverContextKey, cc)
 
 	m := new(dns.Msg)
 	retries := maxRetriesOnError
