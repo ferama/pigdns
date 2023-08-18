@@ -34,7 +34,7 @@ const (
 	// how deeply we will search for cnames
 	cnameChainMaxDeep = 16
 
-	recursionMaxLevel = 32
+	recursionMaxLevel = 64
 
 	// for logging
 	handlerName = "resolver"
@@ -237,38 +237,42 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		}
 	}
 
-	// handle CNAME loop
-	maxLoop := cnameChainMaxDeep
-	for {
-		haveAnswer := false
-		switch q.Qtype {
-		case dns.TypeA:
-			haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeA) != nil
-		case dns.TypeAAAA:
-			haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeAAAA) != nil
-		}
+	if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA || q.Qtype == dns.TypeCNAME {
 
-		if haveAnswer {
-			break
-		}
+		// handle CNAME loop
+		maxLoop := cnameChainMaxDeep
+		for {
 
-		rr := utils.MsgGetAnswerByType(ans, dns.TypeCNAME)
-		if rr != nil {
-			cname := rr.(*dns.CNAME)
-			newReq := req.NewWithQuestion(cname.Target, q.Qtype)
-			nsaddr := h.getRootNS(req)
-			ans, err = h.getAnswer(ctx, newReq, nsaddr)
-			if err != nil {
-				return nil, err
+			haveAnswer := false
+			switch q.Qtype {
+			case dns.TypeA:
+				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeA) != nil
+			case dns.TypeAAAA:
+				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeAAAA) != nil
+			case dns.TypeCNAME:
+				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeCNAME) != nil
 			}
-			ans.Answer = append(ans.Answer, cname)
-			// if err == nil {
-			break
-			// }
-		}
-		maxLoop--
-		if maxLoop == 0 {
-			break
+
+			if haveAnswer {
+				break
+			}
+
+			rr := utils.MsgGetAnswerByType(ans, dns.TypeCNAME)
+			if rr != nil {
+				cname := rr.(*dns.CNAME)
+				newReq := req.NewWithQuestion(cname.Target, q.Qtype)
+				nsaddr := h.getRootNS(req)
+				ans, err = h.getAnswer(ctx, newReq, nsaddr)
+				if err != nil {
+					return nil, err
+				}
+				ans.Answer = append(ans.Answer, cname)
+				break
+			}
+			maxLoop--
+			if maxLoop == 0 {
+				break
+			}
 		}
 	}
 
