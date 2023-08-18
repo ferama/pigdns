@@ -123,14 +123,12 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 		n := rand.Intn(len(resp.Ns))
 		ns := resp.Ns[n].(*dns.NS)
 
-		// m := new(dns.Msg)
-		var rootNS string
+		rootNS := h.getRootNS(r)
+
 		var newReq *pigdns.Request
 		if r.FamilyIsIPv6() {
-			rootNS = fmt.Sprintf("[%s]:53", getRootNSIPv6())
 			newReq = r.NewWithQuestion(ns.Ns, dns.TypeAAAA)
 		} else {
-			rootNS = fmt.Sprintf("%s:53", getRootNSIPv4())
 			newReq = r.NewWithQuestion(ns.Ns, dns.TypeA)
 		}
 
@@ -142,10 +140,6 @@ func (h *handler) resolveNS(ctx context.Context, r *pigdns.Request, resp *dns.Ms
 			ans, err := h.getAnswer(ctx, newReq, rootNS)
 			if err != nil {
 				return "", err
-				// log.Err(err).
-				// 	Str("query", r.Name()).
-				// 	Msg("error on resolveNS")
-				// continue
 			}
 
 			for _, e := range ans.Answer {
@@ -243,6 +237,7 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		}
 	}
 
+	// handle CNAME loop
 	maxLoop := cnameChainMaxDeep
 	for {
 		haveAnswer := false
@@ -256,19 +251,12 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		if haveAnswer {
 			break
 		}
-		// TODO (fails)
-		//  dig @127.0.0.1 video.twimg.com
-		// 	dig @127.0.0.1 cs296.wpc.edgecastcdn.net a
+
 		rr := utils.MsgGetAnswerByType(ans, dns.TypeCNAME)
 		if rr != nil {
 			cname := rr.(*dns.CNAME)
 			newReq := req.NewWithQuestion(cname.Target, q.Qtype)
-			var nsaddr string
-			if req.FamilyIsIPv6() {
-				nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
-			} else {
-				nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
-			}
+			nsaddr := h.getRootNS(req)
 			ans, err = h.getAnswer(ctx, newReq, nsaddr)
 			if err != nil {
 				return nil, err
@@ -288,6 +276,17 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		h.cache.Set(q, nsaddr, ans)
 	}
 	return ans, nil
+}
+
+func (h *handler) getRootNS(r *pigdns.Request) string {
+	var nsaddr string
+	if r.FamilyIsIPv6() {
+		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
+	} else {
+		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
+	}
+
+	return nsaddr
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
@@ -310,12 +309,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m := new(dns.Msg)
 	retries := maxRetriesOnError
 	for {
-		var nsaddr string
-		if r.FamilyIsIPv6() {
-			nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
-		} else {
-			nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
-		}
+		nsaddr := h.getRootNS(r)
 		m, err = h.getAnswer(c, r, nsaddr)
 		if err == nil {
 			break
