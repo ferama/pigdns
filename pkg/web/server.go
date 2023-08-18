@@ -60,9 +60,11 @@ func (s *webServer) setupRoutes() {
 		})
 	})
 
-	// if doh is enabled...
+	// install doh routes
 	s.router.GET("/dns-query", routes.DohHandler())
+	// the RFC8484 indicates this path for post requests
 	s.router.POST("/dns-query", routes.DohHandler())
+	// chrome seems to make query to the root path instead...
 	s.router.POST("/", routes.DohHandler())
 
 	// web ui
