@@ -7,44 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type rootGroup struct {
-	domain      string
-	subdomain   string
-	keyRequired bool
-	isHTTPS     bool
-}
+func RootHandler(domain string, subdomain string, keyRequired bool, isHTTPS bool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		protocol := "http"
+		if isHTTPS {
+			protocol = "https"
+		}
 
-func RootRoutes(
-	domain string,
-	subdomain string,
-	keyRequired bool,
-	isHTTPS bool, router *gin.RouterGroup) {
+		sub := ""
+		if subdomain != "" {
+			sub = fmt.Sprintf("%s.", subdomain)
+		}
 
-	r := &rootGroup{
-		domain:      domain,
-		subdomain:   subdomain,
-		keyRequired: keyRequired,
-		isHTTPS:     isHTTPS,
+		ctx.HTML(http.StatusOK, "index.html", gin.H{
+			"protocol":    protocol,
+			"domain":      domain,
+			"subdomain":   sub,
+			"keyRequired": keyRequired,
+		})
 	}
-
-	router.GET("", r.root)
-}
-
-func (r *rootGroup) root(c *gin.Context) {
-	protocol := "http"
-	if r.isHTTPS {
-		protocol = "https"
-	}
-
-	sub := ""
-	if r.subdomain != "" {
-		sub = fmt.Sprintf("%s.", r.subdomain)
-	}
-
-	c.HTML(http.StatusOK, "index.html", gin.H{
-		"protocol":    protocol,
-		"domain":      r.domain,
-		"subdomain":   sub,
-		"keyRequired": r.keyRequired,
-	})
 }

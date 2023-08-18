@@ -62,6 +62,11 @@ func (s *webServer) setupRoutes() {
 
 	// if doh is enabled...
 	s.router.GET("/dns-query", routes.DohHandler())
+	s.router.POST("/dns-query", routes.DohHandler())
+	s.router.POST("/", routes.DohHandler())
+
+	// web ui
+	s.router.GET("/", routes.RootHandler(s.domain, s.subdomain, s.apikey != "", s.useHTTPS))
 
 	//
 	certsGroup := s.router.Group("/certs")
@@ -69,13 +74,6 @@ func (s *webServer) setupRoutes() {
 		certsGroup.Use(authMiddleware(s.apikey))
 	}
 	routes.CertRoutes(s.datadir, certsGroup)
-
-	routes.RootRoutes(
-		s.domain,
-		s.subdomain,
-		s.apikey != "",
-		s.useHTTPS,
-		s.router.Group("/"))
 }
 
 func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, error) {

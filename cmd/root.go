@@ -70,7 +70,7 @@ certificate`)
 	viper.BindPFlag(utils.CertmanEnableFlag, rootCmd.Flags().Lookup(utils.CertmanEnableFlag))
 
 	// web
-	rootCmd.Flags().BoolP(utils.WebEnableFlag, "w", false, "if to enable web ui")
+	rootCmd.Flags().BoolP(utils.WebEnableFlag, "w", false, "if to enable web server (for certs and doh)")
 	viper.BindPFlag(utils.WebEnableFlag, rootCmd.Flags().Lookup(utils.WebEnableFlag))
 
 	rootCmd.Flags().StringP(utils.WebApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
