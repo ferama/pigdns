@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/handlers/regexip/web"
 	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
+	"github.com/ferama/pigdns/pkg/web"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

@@ -31,15 +31,18 @@ func NewServer(port int, domain string, enableResolver bool, datadir string) *Se
 	}
 
 	if domain != "" {
-		s.setupDomainHandler()
+		h := s.buildDomainHandler()
+		pigdns.Handle(dns.Fqdn(s.domain), h)
 	}
 	if enableResolver {
-		s.setupResolverHandler(datadir)
+		h := s.buildResolverHandler(datadir)
+		pigdns.Handle(".", h)
 	}
+
 	return s
 }
 
-func (s *Server) setupResolverHandler(datadir string) {
+func (s *Server) buildResolverHandler(datadir string) pigdns.Handler {
 	var chain pigdns.Handler
 
 	// chain = &root.Handler{}
@@ -56,10 +59,10 @@ func (s *Server) setupResolverHandler(datadir string) {
 	chain = resolver.NewResolver(chain, datadir)
 	chain = &collector.Handler{Next: chain}
 
-	pigdns.Handle(".", chain)
+	return chain
 }
 
-func (s *Server) setupDomainHandler() {
+func (s *Server) buildDomainHandler() pigdns.Handler {
 	// the first handler that write back to the client calling
 	// w.WriteMsg(m) win. No other handler can write back anymore
 	// Chain rings are called in reverse order
@@ -80,7 +83,7 @@ func (s *Server) setupDomainHandler() {
 	}
 
 	chain = &collector.Handler{Next: chain}
-	pigdns.Handle(dns.Fqdn(s.domain), chain)
+	return chain
 }
 
 func (s *Server) run(net string) {

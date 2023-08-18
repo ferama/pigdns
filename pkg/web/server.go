@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
-	"github.com/ferama/pigdns/pkg/handlers/regexip/web/routes"
+	"github.com/ferama/pigdns/pkg/web/routes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,6 +60,10 @@ func (s *webServer) setupRoutes() {
 		})
 	})
 
+	// if doh is enabled...
+	s.router.GET("/dns-query", routes.DohHandler())
+
+	//
 	certsGroup := s.router.Group("/certs")
 	if s.apikey != "" {
 		certsGroup.Use(authMiddleware(s.apikey))
