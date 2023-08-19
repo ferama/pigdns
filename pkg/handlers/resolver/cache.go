@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 )
 
@@ -27,26 +28,7 @@ func (c *resolverCache) buildKey(q dns.Question, nsaddr string) string {
 func (c *resolverCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 	key := c.buildKey(q, nsaddr)
 
-	var minTTL uint32
-	minTTL = 0
-	for _, a := range m.Answer {
-		ttl := a.Header().Ttl
-		if ttl == 0 {
-			continue
-		}
-		if minTTL == 0 || ttl < minTTL {
-			minTTL = ttl
-		}
-	}
-	for _, a := range m.Extra {
-		ttl := a.Header().Ttl
-		if ttl == 0 {
-			continue
-		}
-		if minTTL == 0 || ttl < minTTL {
-			minTTL = ttl
-		}
-	}
+	minTTL := utils.MsgGetMinTTL(m)
 
 	packed, err := m.Pack()
 	if err != nil {

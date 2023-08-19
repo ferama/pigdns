@@ -28,3 +28,28 @@ func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
 
 	return nil
 }
+
+func MsgGetMinTTL(m *dns.Msg) uint32 {
+	var minTTL uint32
+	minTTL = 0
+	for _, a := range m.Answer {
+		ttl := a.Header().Ttl
+		if ttl == 0 {
+			continue
+		}
+		if minTTL == 0 || ttl < minTTL {
+			minTTL = ttl
+		}
+	}
+	for _, a := range m.Extra {
+		ttl := a.Header().Ttl
+		if ttl == 0 {
+			continue
+		}
+		if minTTL == 0 || ttl < minTTL {
+			minTTL = ttl
+		}
+	}
+
+	return minTTL
+}

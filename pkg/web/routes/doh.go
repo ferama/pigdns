@@ -3,12 +3,14 @@ package routes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 
 	"github.com/ferama/pigdns/pkg/doh"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/miekg/dns"
 )
@@ -36,8 +38,7 @@ func DohHandler() gin.HandlerFunc {
 			Req:   r,
 		}
 
-		// We just call the normal chain handler - all error handling is done there.
-		// We should expect a packet to be returned that we can send to the client.
+		// build the request object and call the chain handler
 		req := &pigdns.Request{
 			Msg:            msg,
 			ResponseWriter: dw,
@@ -52,9 +53,11 @@ func DohHandler() gin.HandlerFunc {
 			return
 		}
 
+		minTTL := utils.MsgGetMinTTL(dw.Msg)
+
 		buf, _ := dw.Msg.Pack()
 		c.Header("Content-Type", doh.MimeType)
-		// w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%f", age.Seconds()))
+		c.Header("Cache-Control", fmt.Sprintf("max-age=%d", minTTL))
 		c.Header("Content-Length", strconv.Itoa(len(buf)))
 		c.Writer.WriteHeader(http.StatusOK)
 		c.Writer.Write(buf)
