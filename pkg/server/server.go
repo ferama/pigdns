@@ -112,7 +112,7 @@ func (s *Server) Start() {
 		wg.Done()
 	}()
 
-	log.Info().Msgf("listening on ':%d'", s.listenAddress)
+	log.Info().Msgf("listening on '%s'", s.listenAddress)
 
 	wg.Wait()
 }
