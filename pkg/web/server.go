@@ -59,7 +59,7 @@ func (s *webServer) setupRoutes() {
 	s.router.GET("/dns-query", routes.DohHandler())
 	// the RFC8484 indicates this path for post requests
 	s.router.POST("/dns-query", routes.DohHandler())
-	// chrome seems to make query to the root path instead...
+	// chrome seems to query to the root path instead... I'm missing something?
 	s.router.POST("/", routes.DohHandler())
 
 	// web ui

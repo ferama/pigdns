@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
+	"github.com/miekg/dns"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -130,7 +132,16 @@ var rootCmd = &cobra.Command{
 			go ws.Run()
 		}
 
-		s := server.NewServer(listenAddress, domain, resolverEnable, datadir)
+		if domainEnable {
+			h := server.BuildDomainHandler()
+			pigdns.Handle(dns.Fqdn(domain), h)
+		}
+		if resolverEnable {
+			h := server.BuildResolverHandler(datadir)
+			pigdns.Handle(".", h)
+		}
+
+		s := server.NewServer(listenAddress)
 		s.Start()
 	},
 }
