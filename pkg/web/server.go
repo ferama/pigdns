@@ -92,7 +92,7 @@ func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, e
 	return s.cachedCert, nil
 }
 
-func (s *webServer) Run() {
+func (s *webServer) Start() {
 	log.Printf("web listening on ':443'")
 	go http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)

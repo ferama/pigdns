@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -127,10 +128,6 @@ var rootCmd = &cobra.Command{
 		if webEnable && !domainEnable {
 			failWithHelp(cmd, "cannot enable web without a domain. please set the 'domain' flag")
 		}
-		if webEnable {
-			ws := web.NewWebServer(datadir, domain, webApikey)
-			go ws.Run()
-		}
 
 		if domainEnable {
 			h := server.BuildDomainHandler()
@@ -141,8 +138,24 @@ var rootCmd = &cobra.Command{
 			pigdns.Handle(".", h)
 		}
 
+		var wg sync.WaitGroup
+		if webEnable {
+			ws := web.NewWebServer(datadir, domain, webApikey)
+			wg.Add(1)
+			go func() {
+				ws.Start()
+				wg.Done()
+			}()
+		}
+
 		s := server.NewServer(listenAddress)
-		s.Start()
+		wg.Add(1)
+		go func() {
+			s.Start()
+			wg.Done()
+		}()
+
+		wg.Wait()
 	},
 }
 

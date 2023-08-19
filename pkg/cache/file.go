@@ -157,6 +157,8 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 
 	bucket := c.buckets[bucketIdx]
 	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
+
 	for k, v := range bucket.data {
 		// log.Printf("[cache item] %s, ttl: %fs", k, time.Until(v.Expires).Seconds())
 		if time.Now().After(v.Expires) {
@@ -168,7 +170,6 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 			expires time.Time
 		}{key: k, expires: v.Expires})
 	}
-	bucket.mu.Unlock()
 
 	// if bucket overflows evict items that are closer to their
 	// expire time
@@ -180,12 +181,10 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 		})
 
 		ei := len(s) - cacheMaxItemsPerBucket
-		bucket.mu.Lock()
 		for _, i := range s[:ei] {
 			log.Printf("[cache] evicted %s", i.key)
 			delete(bucket.data, i.key)
 		}
-		bucket.mu.Unlock()
 	}
 }
 
