@@ -213,15 +213,17 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 
 	// try to get the answer from cache.
 	// if no cached answer is present, do the recursive query
+	cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 	ans, cacheErr := h.cache.Get(q, nsaddr)
 	if cacheErr == nil {
-		cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
-		cc.IsCached = true
+		cc.CacheHits += 1
 	} else {
 		ans, err = h.queryNS(req.Msg, nsaddr)
 		if err != nil {
 			return nil, err
 		}
+		cq, _ := req.Question()
+		h.cache.Set(cq, nsaddr, ans)
 	}
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
@@ -234,6 +236,10 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		ans, err = h.getAnswer(ctx, req, authNS)
 		if err != nil {
 			return nil, err
+		}
+		if cacheErr != nil {
+			cq, _ := req.Question()
+			h.cache.Set(cq, nsaddr, ans)
 		}
 	}
 
@@ -267,6 +273,10 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 					return nil, err
 				}
 				ans.Answer = append(ans.Answer, cname)
+				if cacheErr != nil {
+					cq, _ := newReq.Question()
+					h.cache.Set(cq, nsaddr, ans)
+				}
 				break
 			}
 			maxLoop--
@@ -276,9 +286,6 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		}
 	}
 
-	if cacheErr != nil {
-		h.cache.Set(q, nsaddr, ans)
-	}
 	return ans, nil
 }
 

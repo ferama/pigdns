@@ -15,7 +15,7 @@ const CollectorContextKey contextKey = "collector-middleware-context"
 type CollectorContext struct {
 	StartTime time.Time
 	AnweredBy string
-	IsCached  bool
+	CacheHits int
 }
 
 type Handler struct {
@@ -32,7 +32,7 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 		Float64("latency", totalLatency.Seconds()).
 		Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 		Str("protocol", r.Proto()).
-		Bool("cached", cc.IsCached).
+		Int("cacheHits", cc.CacheHits).
 		Str("answerFrom", cc.AnweredBy).
 		Str("client", r.IP())
 
