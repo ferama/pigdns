@@ -2,11 +2,11 @@ package utils
 
 const (
 	// common
-	Debug        = "debug"
-	DatadirFlag  = "datadir"
-	DomainFlag   = "domain"
-	PortFlag     = "port"
-	ZoneFileFlag = "zone-file"
+	Debug             = "debug"
+	DatadirFlag       = "datadir"
+	DomainFlag        = "domain"
+	ListenAddressFlag = "listen-address"
+	ZoneFileFlag      = "zone-file"
 
 	// resolver
 	ResolverEnableFlag    = "resolver-enable"

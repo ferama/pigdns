@@ -38,8 +38,8 @@ func init() {
 	rootCmd.Flags().StringP(utils.DomainFlag, "d", "", "the pigdns domain")
 	viper.BindPFlag(utils.DomainFlag, rootCmd.Flags().Lookup(utils.DomainFlag))
 
-	rootCmd.Flags().IntP(utils.PortFlag, "p", 53, "listen port")
-	viper.BindPFlag(utils.PortFlag, rootCmd.Flags().Lookup(utils.PortFlag))
+	rootCmd.Flags().StringP(utils.ListenAddressFlag, "p", ":53", "dns listen address")
+	viper.BindPFlag(utils.ListenAddressFlag, rootCmd.Flags().Lookup(utils.ListenAddressFlag))
 
 	rootCmd.Flags().StringP(utils.ZoneFileFlag, "z", "", "zone file")
 	viper.BindPFlag(utils.ZoneFileFlag, rootCmd.Flags().Lookup(utils.ZoneFileFlag))
@@ -100,7 +100,7 @@ var rootCmd = &cobra.Command{
 
 		email := viper.GetString(utils.CertmanEmailFlag)
 		datadir := viper.GetString(utils.DatadirFlag)
-		port := viper.GetInt(utils.PortFlag)
+		listenAddress := viper.GetString(utils.ListenAddressFlag)
 
 		webEnable := viper.GetBool(utils.WebEnableFlag)
 		webApikey := viper.GetString(utils.WebApiKeyFlag)
@@ -130,7 +130,7 @@ var rootCmd = &cobra.Command{
 			go ws.Run()
 		}
 
-		s := server.NewServer(port, domain, resolverEnable, datadir)
+		s := server.NewServer(listenAddress, domain, resolverEnable, datadir)
 		s.Start()
 	},
 }

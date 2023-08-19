@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
@@ -20,14 +19,14 @@ import (
 )
 
 type Server struct {
-	port   int
-	domain string
+	listenAddress string
+	domain        string
 }
 
-func NewServer(port int, domain string, enableResolver bool, datadir string) *Server {
+func NewServer(listenAddress string, domain string, enableResolver bool, datadir string) *Server {
 	s := &Server{
-		port:   port,
-		domain: domain,
+		listenAddress: listenAddress,
+		domain:        domain,
 	}
 
 	if domain != "" {
@@ -88,7 +87,7 @@ func (s *Server) buildDomainHandler() pigdns.Handler {
 
 func (s *Server) run(net string) {
 	server := &dns.Server{
-		Addr: ":" + strconv.Itoa(s.port),
+		Addr: s.listenAddress,
 		Net:  net,
 	}
 
@@ -113,7 +112,7 @@ func (s *Server) Start() {
 		wg.Done()
 	}()
 
-	log.Info().Msgf("listening on ':%d'", s.port)
+	log.Info().Msgf("listening on ':%d'", s.listenAddress)
 
 	wg.Wait()
 }
