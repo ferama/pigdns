@@ -20,8 +20,6 @@ type Request struct {
 	name   string // lowercase qname.
 	family int8   // transport's family.
 	ip     string // client's ip.
-
-	do bool // DNSSEC OK value
 }
 
 func (r *Request) NewWithQuestion(name string, typ uint16) *Request {

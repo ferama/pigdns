@@ -10,19 +10,22 @@ import (
 
 type Server struct {
 	listenAddress string
+	mux           *dns.ServeMux
 }
 
-func NewServer(listenAddress string) *Server {
+func NewServer(listenAddress string, mux *dns.ServeMux) *Server {
 	s := &Server{
 		listenAddress: listenAddress,
+		mux:           mux,
 	}
 	return s
 }
 
 func (s *Server) run(net string) {
 	server := &dns.Server{
-		Addr: s.listenAddress,
-		Net:  net,
+		Addr:    s.listenAddress,
+		Net:     net,
+		Handler: s.mux,
 	}
 
 	err := server.ListenAndServe()

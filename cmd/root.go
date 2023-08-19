@@ -148,7 +148,7 @@ var rootCmd = &cobra.Command{
 			}()
 		}
 
-		s := server.NewServer(listenAddress)
+		s := server.NewServer(listenAddress, dns.DefaultServeMux)
 		wg.Add(1)
 		go func() {
 			s.Start()
