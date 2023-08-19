@@ -13,7 +13,7 @@ build() {
 }
 
 go clean -testcache
-go test ./... -v -cover -race || exit 1
+go test ./...  -cover -race || exit 1
 
 ### multi arch binary build
 GOOS=linux GOARCH=arm64 build

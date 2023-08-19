@@ -75,11 +75,6 @@ certificate`)
 
 	rootCmd.Flags().StringP(utils.WebApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
 	viper.BindPFlag(utils.WebApiKeyFlag, rootCmd.Flags().Lookup(utils.WebApiKeyFlag))
-
-	rootCmd.Flags().StringP(utils.WebSubdomainFlag, "b", "",
-		`use a dubdomain to enable https (we have valid certs for subdomains only). You should
-enable the zone file too (--zone-file flag) and register the subdomain. usually 'www' is used`)
-	viper.BindPFlag(utils.WebSubdomainFlag, rootCmd.Flags().Lookup(utils.WebSubdomainFlag))
 }
 
 func failWithHelp(cmd *cobra.Command, msg string) {
@@ -108,7 +103,6 @@ var rootCmd = &cobra.Command{
 		port := viper.GetInt(utils.PortFlag)
 
 		webEnable := viper.GetBool(utils.WebEnableFlag)
-		webSubdomain := viper.GetString(utils.WebSubdomainFlag)
 		webApikey := viper.GetString(utils.WebApiKeyFlag)
 		certmanUseStaging := viper.GetBool(utils.CertmanUseStagingFlag)
 
@@ -132,7 +126,7 @@ var rootCmd = &cobra.Command{
 			failWithHelp(cmd, "cannot enable web without a domain. please set the 'domain' flag")
 		}
 		if webEnable {
-			ws := web.NewWebServer(datadir, domain, webSubdomain, webApikey)
+			ws := web.NewWebServer(datadir, domain, webApikey)
 			go ws.Run()
 		}
 

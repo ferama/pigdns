@@ -18,7 +18,6 @@ const (
 	CertmanEnableFlag     = "certman-enable"
 
 	// web
-	WebEnableFlag    = "web-enable"
-	WebApiKeyFlag    = "web-api-key"
-	WebSubdomainFlag = "web-subdomain"
+	WebEnableFlag = "web-enable"
+	WebApiKeyFlag = "web-api-key"
 )

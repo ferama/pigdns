@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
@@ -23,17 +22,15 @@ var f embed.FS
 type webServer struct {
 	router *gin.Engine
 
-	datadir   string
-	domain    string
-	subdomain string
-	apikey    string
-	useHTTPS  bool
+	datadir string
+	domain  string
+	apikey  string
 
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
 }
 
-func NewWebServer(datadir string, domain string, subdomain string, apikey string) *webServer {
+func NewWebServer(datadir string, domain string, apikey string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -41,12 +38,10 @@ func NewWebServer(datadir string, domain string, subdomain string, apikey string
 	router.SetHTMLTemplate(templ)
 
 	s := &webServer{
-		router:    router,
-		datadir:   datadir,
-		domain:    domain,
-		apikey:    apikey,
-		useHTTPS:  subdomain != "",
-		subdomain: subdomain,
+		router:  router,
+		datadir: datadir,
+		domain:  domain,
+		apikey:  apikey,
 	}
 	s.setupRoutes()
 	return s
@@ -68,7 +63,7 @@ func (s *webServer) setupRoutes() {
 	s.router.POST("/", routes.DohHandler())
 
 	// web ui
-	s.router.GET("/", routes.RootHandler(s.domain, s.subdomain, s.apikey != "", s.useHTTPS))
+	s.router.GET("/", routes.RootHandler(s.domain, s.apikey != ""))
 
 	//
 	certsGroup := s.router.Group("/certs")
@@ -98,42 +93,14 @@ func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, e
 }
 
 func (s *webServer) Run() {
-	if !s.useHTTPS {
-		log.Printf("web listening on ':80'")
-		srv := http.Server{
-			Addr:    ":80",
-			Handler: s.router,
-		}
-		srv.ListenAndServe()
-	}
-
 	log.Printf("web listening on ':443'")
 	go http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.subdomain != "" {
-			if !strings.HasPrefix(r.Host, s.subdomain+".") {
-				u := *r.URL
-				u.Host = fmt.Sprintf("%s.%s", s.subdomain, r.Host)
-				u.Scheme = "https"
-				http.Redirect(w, r, u.String(), http.StatusFound)
-				return
-			}
-		}
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
 	}))
 
 	srv := http.Server{
 		Addr: ":443",
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if s.subdomain != "" {
-				if !strings.HasPrefix(r.Host, s.subdomain+".") {
-					u := *r.URL
-					u.Host = fmt.Sprintf("%s.%s", s.subdomain, r.Host)
-					u.Scheme = "https"
-					http.Redirect(w, r, u.String(), http.StatusFound)
-					return
-				}
-			}
-
 			s.router.ServeHTTP(w, r)
 		}),
 	}

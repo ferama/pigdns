@@ -1,13 +1,13 @@
 # pigdns
 
-🐷 PigDNS is a DNS server that mimic the behaviour of services like:
+🐷 PigDNS is a DNS server with Let's Encrypt integration
 
-* nip.io
-* sslip.io
+## Features
 
-It also includes:
-
-* Automagic Let's Encrypt certificate management for the handled domain (using the DNS01 challenge)
+* Mimic behaviour of services like `nip.io` and `sslip.io`
+* DOH (DNS over HTTPS) support
+* Full recursive mode resolver
+* Automagic Let's Encrypt certificate management for the handled domain and DOH (using the DNS01 challenge)
 * A friendly page to get always fresh certificates
 * Special cases handling using a standard zone file
 
@@ -95,13 +95,8 @@ Enable web page:
 $ pigdns \
     --domain pig.yourdomain.io \
     -z ./zone.conf \
-    -w -b www \
+    -w \
     -k <your complex api key here>
 ```
-
-The `-b www` option, tells pigdns to serve the webpage under the www subdomain. This allows
-pigdns to use valid (self managed) https certificates. You must configure the `zone.conf` 
-accordingly to support the www subdomain.
-
 You are strongly adviced to use an api key to serve the certifcates if pigdns http/https ports
 are exposed to the internet.
