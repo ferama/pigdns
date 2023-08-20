@@ -83,6 +83,8 @@ certificate`)
 
 	rootCmd.Flags().BoolP(WebDohEnableFlag, "o", false, "if to enable web server for doh")
 	viper.BindPFlag(WebDohEnableFlag, rootCmd.Flags().Lookup(WebDohEnableFlag))
+	rootCmd.Flags().Bool(WebHTTPSDisableFlag, false, "you should always use https. this flag is usefull if you want to use external https termination")
+	viper.BindPFlag(WebHTTPSDisableFlag, rootCmd.Flags().Lookup(WebHTTPSDisableFlag))
 }
 
 func failWithHelp(cmd *cobra.Command, msg string) {
@@ -117,6 +119,7 @@ var rootCmd = &cobra.Command{
 
 		resolverEnable := viper.GetBool(ResolverEnableFlag)
 		dnsEnable := viper.GetBool(DnsEnable)
+		webHTTPSDisable := viper.GetBool(WebHTTPSDisableFlag)
 
 		if !domainEnable && !resolverEnable {
 			failWithHelp(cmd, "you need to enable at least one of domain related functionalities (domanin flag) or recursor")
@@ -156,6 +159,7 @@ var rootCmd = &cobra.Command{
 				webCertsEnable,
 				webCertsApikey,
 				webDohEnable,
+				!webHTTPSDisable,
 			)
 			wg.Add(1)
 			go func() {

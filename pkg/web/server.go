@@ -26,6 +26,8 @@ type webServer struct {
 	domain  string
 	apikey  string
 
+	useHTTPS bool
+
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
 }
@@ -34,7 +36,8 @@ func NewWebServer(datadir string,
 	domain string,
 	webCertsEnable bool,
 	webCertsApikey string,
-	webDohEnable bool) *webServer {
+	webDohEnable bool,
+	useHTTPS bool) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -42,10 +45,11 @@ func NewWebServer(datadir string,
 	router.SetHTMLTemplate(templ)
 
 	s := &webServer{
-		router:  router,
-		datadir: datadir,
-		domain:  domain,
-		apikey:  webCertsApikey,
+		router:   router,
+		datadir:  datadir,
+		domain:   domain,
+		apikey:   webCertsApikey,
+		useHTTPS: useHTTPS,
 	}
 	s.setupRoutes(webCertsEnable, webDohEnable)
 	return s
@@ -100,6 +104,15 @@ func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, e
 }
 
 func (s *webServer) Start() {
+	if !s.useHTTPS {
+		log.Info().Msg("web listening on ':80'")
+		srv := http.Server{
+			Addr:    ":80",
+			Handler: s.router,
+		}
+		srv.ListenAndServe()
+	}
+
 	log.Info().Msg("web listening on ':443'")
 	go http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
