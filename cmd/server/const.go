@@ -1,4 +1,4 @@
-package servercmd
+package main
 
 const (
 	// common

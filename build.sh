@@ -4,19 +4,30 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR
 
 build() {
+    local cmdname=$1; shift
+    local cmdpath=$1; shift
     EXT=""
     [[ $GOOS = "windows" ]] && EXT=".exe"
     echo "Building ${GOOS} ${GOARCH}"
     CGO_ENABLED=0 go build \
         -trimpath \
-        -o ./bin/pigdns-${GOOS}-${GOARCH}${EXT} .
+        -o ./bin/$cmdname-${GOOS}-${GOARCH}${EXT} $cmdpath
 }
 
 go clean -testcache
 go test ./...  -cover -race || exit 1
 
-### multi arch binary build
-GOOS=linux GOARCH=arm64 build
-GOOS=linux GOARCH=amd64 build
+COMMANDS="
+pigdns ./cmd/server
+doh ./cmd/client
+"
 
-GOOS=darwin GOARCH=arm64 build
+### pigdns
+GOOS=linux GOARCH=arm64 build pigdns ./cmd/server
+GOOS=linux GOARCH=amd64 build pigdns ./cmd/server
+GOOS=darwin GOARCH=arm64 build pigdns ./cmd/server
+
+### doh
+GOOS=linux GOARCH=arm64 build doh ./cmd/dohcli
+GOOS=linux GOARCH=amd64 build doh ./cmd/dohcli
+GOOS=darwin GOARCH=arm64 build doh ./cmd/dohcli

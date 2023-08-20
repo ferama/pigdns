@@ -1,4 +1,4 @@
-package servercmd
+package main
 
 import (
 	"fmt"
@@ -193,7 +193,6 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute executes the root command
-func Execute() error {
-	return rootCmd.Execute()
+func main() {
+	rootCmd.Execute()
 }
