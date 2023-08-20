@@ -153,15 +153,15 @@ var rootCmd = &cobra.Command{
 				domain,
 				viper.GetBool(CertmanEnableFlag),
 			)
-			pigdns.HandleMux(dns.Fqdn(domain), h, dnsMux)
-			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux)
+			pigdns.HandleMux(dns.Fqdn(domain), h, dnsMux, false)
+			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux, true)
 		}
 		if resolverEnable {
 			h := server.BuildResolverHandler(datadir, viper.GetStringSlice(ResolverAllowNetworks))
 			if dnsServeResolverEnable {
-				pigdns.HandleMux(".", h, dnsMux)
+				pigdns.HandleMux(".", h, dnsMux, false)
 			}
-			pigdns.HandleMux(".", h, dohMux)
+			pigdns.HandleMux(".", h, dohMux, true)
 		}
 
 		var wg sync.WaitGroup

@@ -26,12 +26,21 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	cc := c.Value(CollectorContextKey).(*CollectorContext)
 	totalLatency := time.Since(cc.StartTime)
 
+	isDOH := false
+	if c.Value(pigdns.PigContextKey) != nil {
+		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+		if pc.IsDOH {
+			isDOH = true
+		}
+	}
+
 	event := log.Info().
 		Str("query", r.Name()).
 		Str("type", r.Type()).
 		Float64("latency", totalLatency.Seconds()).
 		Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 		Str("protocol", r.Proto()).
+		Bool("isDOH", isDOH).
 		Int("cacheHits", cc.CacheHits).
 		Str("answerFrom", cc.AnweredBy).
 		Str("client", r.IP())

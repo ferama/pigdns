@@ -6,10 +6,18 @@ import (
 	"github.com/miekg/dns"
 )
 
-type PigContext context.Context
+type contextKey string
 
-func newContext(w dns.ResponseWriter, m *dns.Msg) PigContext {
-	ctx := context.Background()
+const PigContextKey contextKey = "pig-context"
+
+type PigContext struct {
+	IsDOH bool
+}
+
+func newContext(w dns.ResponseWriter, m *dns.Msg, isDOH bool) context.Context {
+	ctx := context.WithValue(context.Background(), PigContextKey, &PigContext{
+		IsDOH: isDOH,
+	})
 
 	return ctx
 }
