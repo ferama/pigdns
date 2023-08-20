@@ -8,8 +8,9 @@ const (
 	ListenAddressFlag = "listen-address"
 	ZoneFileFlag      = "zone-file"
 
-	// Standard DNS server (udp and tcp)
-	DnsEnable = "dns-enable"
+	// Standard DNS server. If true and the resolver is enabled
+	// the standard (tcp and udp) dns server, will handle it
+	DnsServeResolverEnable = "dns-serve-resolver"
 
 	// resolver
 	ResolverEnableFlag    = "resolver-enable"

@@ -13,7 +13,7 @@ type Server struct {
 	mux           *dns.ServeMux
 }
 
-func NewServer(listenAddress string, mux *dns.ServeMux) *Server {
+func NewServer(mux *dns.ServeMux, listenAddress string) *Server {
 	s := &Server{
 		listenAddress: listenAddress,
 		mux:           mux,

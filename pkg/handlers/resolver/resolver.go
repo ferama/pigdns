@@ -35,7 +35,7 @@ const (
 
 	// getAnswer will be called recursively. the recustion
 	// count cannot be greater than recursionMaxLevel
-	recursionMaxLevel = 64
+	recursionMaxLevel = 128
 
 	// for logging
 	handlerName = "resolver"

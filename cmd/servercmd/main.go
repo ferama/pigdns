@@ -37,8 +37,9 @@ func init() {
 	viper.BindPFlag(DatadirFlag, rootCmd.Flags().Lookup(DatadirFlag))
 
 	// dns server
-	rootCmd.Flags().BoolP(DnsEnable, "n", false, "if true enable the standard dns server (tcp and udp)")
-	viper.BindPFlag(DnsEnable, rootCmd.Flags().Lookup(DnsEnable))
+	rootCmd.Flags().Bool(DnsServeResolverEnable, false, `if true and resolver is enabled, enable the standard dns server (tcp and udp) 
+to serve the resolver requests. By default they are enabled in the DOH server only`)
+	viper.BindPFlag(DnsServeResolverEnable, rootCmd.Flags().Lookup(DnsServeResolverEnable))
 
 	rootCmd.Flags().StringP(DomainFlag, "d", "", "the pigdns domain")
 	viper.BindPFlag(DomainFlag, rootCmd.Flags().Lookup(DomainFlag))
@@ -50,7 +51,7 @@ func init() {
 	viper.BindPFlag(ZoneFileFlag, rootCmd.Flags().Lookup(ZoneFileFlag))
 
 	// resolver
-	rootCmd.Flags().BoolP(ResolverEnableFlag, "r", false, "if true, resolve not managed zones starting from root ns")
+	rootCmd.Flags().BoolP(ResolverEnableFlag, "r", false, "if true, enable recursive resolver for not managed zones starting from root nameservers")
 	viper.BindPFlag(ResolverEnableFlag, rootCmd.Flags().Lookup(ResolverEnableFlag))
 	rootCmd.Flags().StringArray(ResolverAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
 The list can be set using env var or multiple flags.
@@ -71,7 +72,8 @@ certificate`)
 	rootCmd.Flags().BoolP(CertmanUseStagingFlag, "s", false, "use staging let's encrypt api")
 	viper.BindPFlag(CertmanUseStagingFlag, rootCmd.Flags().Lookup(CertmanUseStagingFlag))
 
-	rootCmd.Flags().BoolP(CertmanEnableFlag, "c", false, "enable certmanager. to make it works pigdns must listen on port 53 and reachable from the internet")
+	rootCmd.Flags().BoolP(CertmanEnableFlag, "c", false, `enable certmanager. to make it works pigdns tcp/udp server must listen on port 53 
+and be reachable from the internet`)
 	viper.BindPFlag(CertmanEnableFlag, rootCmd.Flags().Lookup(CertmanEnableFlag))
 
 	// web
@@ -81,9 +83,9 @@ certificate`)
 	rootCmd.Flags().StringP(WebCertsApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
 	viper.BindPFlag(WebCertsApiKeyFlag, rootCmd.Flags().Lookup(WebCertsApiKeyFlag))
 
-	rootCmd.Flags().BoolP(WebDohEnableFlag, "o", false, "if to enable web server for doh")
+	rootCmd.Flags().BoolP(WebDohEnableFlag, "o", false, "if to enable web server for DNS over HTTPS (doh)")
 	viper.BindPFlag(WebDohEnableFlag, rootCmd.Flags().Lookup(WebDohEnableFlag))
-	rootCmd.Flags().Bool(WebHTTPSDisableFlag, false, "you should always use https. this flag is usefull if you want to use external https termination")
+	rootCmd.Flags().Bool(WebHTTPSDisableFlag, false, "you should always use https. this flag is useful if you want to use external https termination")
 	viper.BindPFlag(WebHTTPSDisableFlag, rootCmd.Flags().Lookup(WebHTTPSDisableFlag))
 }
 
@@ -118,8 +120,8 @@ var rootCmd = &cobra.Command{
 		certmanUseStaging := viper.GetBool(CertmanUseStagingFlag)
 
 		resolverEnable := viper.GetBool(ResolverEnableFlag)
-		dnsEnable := viper.GetBool(DnsEnable)
 		webHTTPSDisable := viper.GetBool(WebHTTPSDisableFlag)
+		dnsServeResolverEnable := viper.GetBool(DnsServeResolverEnable)
 
 		if !domainEnable && !resolverEnable {
 			failWithHelp(cmd, "you need to enable at least one of domain related functionalities (domanin flag) or recursor")
@@ -143,23 +145,29 @@ var rootCmd = &cobra.Command{
 		// The dns server should not use the resolver handler (is very dangerous) unless
 		// it is forced too with an optional flag
 		// The doh mux instead could use it more safely
+		dnsMux := dns.NewServeMux()
+		dohMux := dns.NewServeMux()
 		if domainEnable {
 			h := server.BuildDomainHandler(
 				viper.GetString(ZoneFileFlag),
 				domain,
 				viper.GetBool(CertmanEnableFlag),
 			)
-			pigdns.Handle(dns.Fqdn(domain), h)
+			pigdns.HandleMux(dns.Fqdn(domain), h, dnsMux)
+			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux)
 		}
 		if resolverEnable {
 			h := server.BuildResolverHandler(datadir, viper.GetStringSlice(ResolverAllowNetworks))
-			pigdns.Handle(".", h)
+			if dnsServeResolverEnable {
+				pigdns.HandleMux(".", h, dnsMux)
+			}
+			pigdns.HandleMux(".", h, dohMux)
 		}
 
 		var wg sync.WaitGroup
 		if webCertsEnable || webDohEnable {
 			ws := web.NewWebServer(
-				dns.DefaultServeMux,
+				dohMux,
 				datadir,
 				domain,
 				webCertsEnable,
@@ -174,14 +182,12 @@ var rootCmd = &cobra.Command{
 			}()
 		}
 
-		if dnsEnable {
-			s := server.NewServer(listenAddress, dns.DefaultServeMux)
-			wg.Add(1)
-			go func() {
-				s.Start()
-				wg.Done()
-			}()
-		}
+		s := server.NewServer(dnsMux, listenAddress)
+		wg.Add(1)
+		go func() {
+			s.Start()
+			wg.Done()
+		}()
 
 		wg.Wait()
 	},

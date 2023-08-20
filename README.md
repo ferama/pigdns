@@ -6,7 +6,7 @@
 
 * Mimic behaviour of services like `nip.io` and `sslip.io`
 * DOH (DNS over HTTPS) support
-* Full recursive mode resolver
+* Full recursive mode resolver (with in memory cache)
 * Automagic Let's Encrypt certificate management for the handled domain and DOH (using the DNS01 challenge)
 * A friendly page to get always fresh certificates
 * Special cases handling using a standard zone file
