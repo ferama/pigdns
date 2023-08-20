@@ -73,11 +73,14 @@ certificate`)
 	viper.BindPFlag(utils.CertmanEnableFlag, rootCmd.Flags().Lookup(utils.CertmanEnableFlag))
 
 	// web
-	rootCmd.Flags().BoolP(utils.WebEnableFlag, "w", false, "if to enable web server (for certs and doh)")
-	viper.BindPFlag(utils.WebEnableFlag, rootCmd.Flags().Lookup(utils.WebEnableFlag))
+	rootCmd.Flags().BoolP(utils.WebCertsEnableFlag, "w", false, "if to enable web server for certs serving")
+	viper.BindPFlag(utils.WebCertsEnableFlag, rootCmd.Flags().Lookup(utils.WebCertsEnableFlag))
 
-	rootCmd.Flags().StringP(utils.WebApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
-	viper.BindPFlag(utils.WebApiKeyFlag, rootCmd.Flags().Lookup(utils.WebApiKeyFlag))
+	rootCmd.Flags().StringP(utils.WebCertsApiKeyFlag, "k", "", "use an api key to download certs. if empty no protection will be enabled")
+	viper.BindPFlag(utils.WebCertsApiKeyFlag, rootCmd.Flags().Lookup(utils.WebCertsApiKeyFlag))
+
+	rootCmd.Flags().BoolP(utils.WebDohEnableFlag, "o", false, "if to enable web server for doh")
+	viper.BindPFlag(utils.WebDohEnableFlag, rootCmd.Flags().Lookup(utils.WebDohEnableFlag))
 }
 
 func failWithHelp(cmd *cobra.Command, msg string) {
@@ -105,15 +108,15 @@ var rootCmd = &cobra.Command{
 		datadir := viper.GetString(utils.DatadirFlag)
 		listenAddress := viper.GetString(utils.ListenAddressFlag)
 
-		webEnable := viper.GetBool(utils.WebEnableFlag)
-		webApikey := viper.GetString(utils.WebApiKeyFlag)
+		webCertsEnable := viper.GetBool(utils.WebCertsEnableFlag)
+		webCertsApikey := viper.GetString(utils.WebCertsApiKeyFlag)
+		webDohEnable := viper.GetBool(utils.WebDohEnableFlag)
 		certmanUseStaging := viper.GetBool(utils.CertmanUseStagingFlag)
 
 		resolverEnable := viper.GetBool(utils.ResolverEnableFlag)
 
 		if !domainEnable && !resolverEnable {
-			cmd.Help()
-			os.Exit(1)
+			failWithHelp(cmd, "you need to enable at least one of domain related functionalities (domanin flag) or recursor")
 		}
 
 		certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
@@ -125,8 +128,8 @@ var rootCmd = &cobra.Command{
 			go cm.Run()
 		}
 
-		if webEnable && !domainEnable {
-			failWithHelp(cmd, "cannot enable web without a domain. please set the 'domain' flag")
+		if webCertsEnable && !domainEnable {
+			failWithHelp(cmd, "cannot enable web certs without a domain. please set the 'domain' flag")
 		}
 
 		if domainEnable {
@@ -139,8 +142,14 @@ var rootCmd = &cobra.Command{
 		}
 
 		var wg sync.WaitGroup
-		if webEnable {
-			ws := web.NewWebServer(datadir, domain, webApikey)
+		if webCertsEnable || webDohEnable {
+			ws := web.NewWebServer(
+				datadir,
+				domain,
+				webCertsEnable,
+				webCertsApikey,
+				webDohEnable,
+			)
 			wg.Add(1)
 			go func() {
 				ws.Start()

@@ -30,7 +30,11 @@ type webServer struct {
 	cachedCertModTime time.Time
 }
 
-func NewWebServer(datadir string, domain string, apikey string) *webServer {
+func NewWebServer(datadir string,
+	domain string,
+	webCertsEnable bool,
+	webCertsApikey string,
+	webDohEnable bool) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -41,13 +45,13 @@ func NewWebServer(datadir string, domain string, apikey string) *webServer {
 		router:  router,
 		datadir: datadir,
 		domain:  domain,
-		apikey:  apikey,
+		apikey:  webCertsApikey,
 	}
-	s.setupRoutes()
+	s.setupRoutes(webCertsEnable, webDohEnable)
 	return s
 }
 
-func (s *webServer) setupRoutes() {
+func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool) {
 	// setup health endpoint
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -55,22 +59,25 @@ func (s *webServer) setupRoutes() {
 		})
 	})
 
-	// install doh routes
-	s.router.GET("/dns-query", routes.DohHandler())
-	// the RFC8484 indicates this path for post requests
-	s.router.POST("/dns-query", routes.DohHandler())
-	// chrome seems to query to the root path instead... I'm missing something?
-	s.router.POST("/", routes.DohHandler())
-
-	// web ui
-	s.router.GET("/", routes.RootHandler(s.domain, s.apikey != ""))
-
-	//
-	certsGroup := s.router.Group("/certs")
-	if s.apikey != "" {
-		certsGroup.Use(authMiddleware(s.apikey))
+	if webDohEnable {
+		// install doh routes
+		s.router.GET("/dns-query", routes.DohHandler())
+		// the RFC8484 indicates this path for post requests
+		s.router.POST("/dns-query", routes.DohHandler())
+		// chrome seems to query to the root path instead... I'm missing something?
+		s.router.POST("/", routes.DohHandler())
 	}
-	routes.CertRoutes(s.datadir, certsGroup)
+
+	if webCertsEnable {
+		// web ui
+		s.router.GET("/", routes.RootHandler(s.domain, s.apikey != ""))
+		certsGroup := s.router.Group("/certs")
+		if s.apikey != "" {
+			certsGroup.Use(authMiddleware(s.apikey))
+		}
+		routes.CertRoutes(s.datadir, certsGroup)
+	}
+
 }
 
 func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, error) {

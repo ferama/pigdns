@@ -18,6 +18,7 @@ const (
 	CertmanEnableFlag     = "certman-enable"
 
 	// web
-	WebEnableFlag = "web-enable"
-	WebApiKeyFlag = "web-api-key"
+	WebCertsEnableFlag = "web-certs-enable"
+	WebCertsApiKeyFlag = "web-certs-api-key"
+	WebDohEnableFlag   = "web-doh-enable"
 )
