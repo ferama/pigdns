@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
-	"github.com/spf13/viper"
 )
 
-func GetSOArecord() dns.RR {
-	domain := viper.GetString(utils.DomainFlag)
+func GetSOArecord(domain string, zoneFile string) dns.RR {
 	currentTime := time.Now().Format("20060102")
 
 	// fallback to domain (not correct but we could not have a better answer)
@@ -18,7 +15,7 @@ func GetSOArecord() dns.RR {
 
 	// if we have a nameserver defined in our zone file, use it as the right
 	// answer
-	nameservers := ZoneFileInst().GetNS()
+	nameservers := ZoneFileInst(zoneFile, domain).GetNS()
 	if len(nameservers) > 0 {
 		ns = nameservers[0].Ns
 	}

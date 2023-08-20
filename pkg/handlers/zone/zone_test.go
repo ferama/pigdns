@@ -30,7 +30,7 @@ func createTempFile(t *testing.T, content string) string {
 
 func startServer(zoneFile string) *dns.Server {
 	n := pigdns.HandlerFunc(func(c context.Context, r *pigdns.Request) {})
-	zone := New(n)
+	zone := New(n, "pig.io", zoneFile)
 	pigdns.Handle("pig.io.", zone)
 
 	server := &dns.Server{
@@ -64,8 +64,6 @@ a		   	IN  A       192.168.200.202
 
 	server := startServer(zoneFile)
 	defer server.Shutdown()
-
-	ZoneFileInst().setZoneFile(zoneFile)
 
 	time.Sleep(1 * time.Second)
 
@@ -115,7 +113,7 @@ e			IN 	CNAME 	d
 	server := startServer(zoneFile)
 	defer server.Shutdown()
 
-	ZoneFileInst().setZoneFile(zoneFile)
+	ZoneFileInst(zoneFile, "pig.io").setZoneFile(zoneFile)
 
 	time.Sleep(1 * time.Second)
 
@@ -151,7 +149,7 @@ e			IN 	CNAME 	d
 	server := startServer(zoneFile)
 	defer server.Shutdown()
 
-	ZoneFileInst().setZoneFile(zoneFile)
+	ZoneFileInst(zoneFile, "pig.io").setZoneFile(zoneFile)
 
 	time.Sleep(1 * time.Second)
 

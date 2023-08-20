@@ -9,9 +9,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
-	"github.com/spf13/viper"
 )
 
 const handlerName = "zone"
@@ -19,17 +17,17 @@ const handlerName = "zone"
 type Handler struct {
 	Next pigdns.Handler
 
-	domain string
-	origin string
+	domain   string
+	zoneFile string
+	origin   string
 }
 
-func New(next pigdns.Handler) pigdns.Handler {
-	domain := viper.GetString(utils.DomainFlag)
-
+func New(next pigdns.Handler, domain string, zoneFile string) pigdns.Handler {
 	h := &Handler{
-		Next:   next,
-		domain: domain,
-		origin: fmt.Sprintf("%s.", domain),
+		Next:     next,
+		domain:   domain,
+		zoneFile: zoneFile,
+		origin:   fmt.Sprintf("%s.", domain),
 	}
 
 	return h
@@ -85,7 +83,7 @@ func (h *Handler) handleRecord(m *dns.Msg, record dns.RR, r *pigdns.Request) str
 }
 
 func (h *Handler) handleQuery(m *dns.Msg, r *pigdns.Request) string {
-	records := ZoneFileInst().GetRecords()
+	records := ZoneFileInst(h.zoneFile, h.domain).GetRecords()
 
 	logMsg := ""
 	logMsg = fmt.Sprintf("%s[zone] query=%s", logMsg, r.Name())

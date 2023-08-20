@@ -1,6 +1,6 @@
 package main
 
-import "github.com/ferama/pigdns/cmd"
+import cmd "github.com/ferama/pigdns/cmd/servercmd"
 
 func main() {
 	cmd.Execute()

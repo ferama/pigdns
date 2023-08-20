@@ -1,4 +1,4 @@
-package utils
+package servercmd
 
 const (
 	// common
@@ -7,6 +7,9 @@ const (
 	DomainFlag        = "domain"
 	ListenAddressFlag = "listen-address"
 	ZoneFileFlag      = "zone-file"
+
+	// Standard DNS server (udp and tcp)
+	DnsEnable = "dns-enable"
 
 	// resolver
 	ResolverEnableFlag    = "resolver-enable"

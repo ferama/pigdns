@@ -14,6 +14,8 @@ import (
 const handlerName = "root"
 
 type Handler struct {
+	Domain   string
+	ZoneFile string
 }
 
 func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
@@ -27,7 +29,7 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		return
 	}
 
-	rr := zone.GetSOArecord()
+	rr := zone.GetSOArecord(h.Domain, h.ZoneFile)
 	m.Answer = append(m.Answer, rr)
 	cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 	cc.AnweredBy = handlerName

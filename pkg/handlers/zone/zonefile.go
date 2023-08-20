@@ -6,10 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 )
 
 const confPollInterval = 5 * time.Second
@@ -37,13 +35,10 @@ type zoneFile struct {
 	zfmu sync.Mutex
 }
 
-func ZoneFileInst() *zoneFile {
+func ZoneFileInst(zoneFilePath string, domain string) *zoneFile {
 	once.Do(func() {
-		path := viper.GetString(utils.ZoneFileFlag)
-		domain := viper.GetString(utils.DomainFlag)
-
 		instance = &zoneFile{
-			filePath: path,
+			filePath: zoneFilePath,
 			origin:   fmt.Sprintf("%s.", domain),
 			ns:       make([]*dns.NS, 0),
 			records:  make([]dns.RR, 0),

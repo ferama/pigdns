@@ -14,7 +14,6 @@ import (
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
 )
 
@@ -45,13 +44,15 @@ const (
 type handler struct {
 	Next pigdns.Handler
 
-	cache *resolverCache
+	cache       *resolverCache
+	allowedNets []string
 }
 
-func NewResolver(next pigdns.Handler, datadir string) *handler {
+func NewResolver(next pigdns.Handler, datadir string, allowedNets []string) *handler {
 	h := &handler{
-		Next:  next,
-		cache: newResolverCache(datadir),
+		Next:        next,
+		cache:       newResolverCache(datadir),
+		allowedNets: allowedNets,
 	}
 	return h
 }
@@ -304,8 +305,7 @@ func (h *handler) getRootNS(r *pigdns.Request) string {
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
-	allowedNets := viper.GetStringSlice(utils.ResolverAllowNetworks)
-	allowed, err := utils.IsClientAllowed(r.ResponseWriter.RemoteAddr(), allowedNets)
+	allowed, err := utils.IsClientAllowed(r.ResponseWriter.RemoteAddr(), h.allowedNets)
 	if err != nil {
 		log.Fatal().Err(err)
 	}

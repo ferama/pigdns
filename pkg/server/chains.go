@@ -10,13 +10,11 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/root"
 	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
-	"github.com/ferama/pigdns/pkg/utils"
-	"github.com/spf13/viper"
 )
 
 // BuildResolverHandler creates an handler that resolves recursively
 // starting from root NS
-func BuildResolverHandler(datadir string) pigdns.Handler {
+func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
 	var chain pigdns.Handler
 
 	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
@@ -26,29 +24,29 @@ func BuildResolverHandler(datadir string) pigdns.Handler {
 			cc.AnweredBy = "failure"
 		}
 	})
-	chain = resolver.NewResolver(chain, datadir)
+	chain = resolver.NewResolver(chain, datadir, allowedNets)
 	chain = &collector.Handler{Next: chain}
 
 	return chain
 }
 
 // BuildDomainHandler craetes an handler that resolves custom zone
-func BuildDomainHandler() pigdns.Handler {
+func BuildDomainHandler(zoneFilePath string, domain string, certmanEnable bool) pigdns.Handler {
 	// the first handler that write back to the client calling
 	// w.WriteMsg(m) win. No other handler can write back anymore
 	// Chain rings are called in reverse order
 	var chain pigdns.Handler
 
-	zoneFilePath := viper.GetString(utils.ZoneFileFlag)
-
 	// leaf handler (is the latest one)
-	chain = &root.Handler{}
+	chain = &root.Handler{
+		Domain:   domain,
+		ZoneFile: zoneFilePath,
+	}
 
 	chain = &regexip.Handler{Next: chain}
 	if zoneFilePath != "" {
-		chain = zone.New(chain)
+		chain = zone.New(chain, domain, zoneFilePath)
 	}
-	certmanEnable := viper.GetBool(utils.CertmanEnableFlag)
 	if certmanEnable {
 		chain = &acmec.Handler{Next: chain}
 	}
