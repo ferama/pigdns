@@ -13,6 +13,7 @@ import (
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/web/routes"
 	"github.com/gin-gonic/gin"
+	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,7 +33,9 @@ type webServer struct {
 	cachedCertModTime time.Time
 }
 
-func NewWebServer(datadir string,
+func NewWebServer(
+	dnsMux *dns.ServeMux,
+	datadir string,
 	domain string,
 	webCertsEnable bool,
 	webCertsApikey string,
@@ -51,11 +54,11 @@ func NewWebServer(datadir string,
 		apikey:   webCertsApikey,
 		useHTTPS: useHTTPS,
 	}
-	s.setupRoutes(webCertsEnable, webDohEnable)
+	s.setupRoutes(webCertsEnable, webDohEnable, dnsMux)
 	return s
 }
 
-func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool) {
+func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool, dnsMux *dns.ServeMux) {
 	// setup health endpoint
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -65,11 +68,11 @@ func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool) {
 
 	if webDohEnable {
 		// install doh routes
-		s.router.GET("/dns-query", routes.DohHandler())
+		s.router.GET("/dns-query", routes.DohHandler(dnsMux))
 		// the RFC8484 indicates this path for post requests
-		s.router.POST("/dns-query", routes.DohHandler())
+		s.router.POST("/dns-query", routes.DohHandler(dnsMux))
 		// chrome seems to query to the root path instead... I'm missing something?
-		s.router.POST("/", routes.DohHandler())
+		s.router.POST("/", routes.DohHandler(dnsMux))
 	}
 
 	if webCertsEnable {

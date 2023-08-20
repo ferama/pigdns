@@ -154,6 +154,7 @@ var rootCmd = &cobra.Command{
 		var wg sync.WaitGroup
 		if webCertsEnable || webDohEnable {
 			ws := web.NewWebServer(
+				dns.DefaultServeMux,
 				datadir,
 				domain,
 				webCertsEnable,

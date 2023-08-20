@@ -15,10 +15,10 @@ import (
 	"github.com/miekg/dns"
 )
 
-func DohHandler() gin.HandlerFunc {
+func DohHandler(mux *dns.ServeMux) gin.HandlerFunc {
 
 	dnsHandler := pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
-		dns.DefaultServeMux.ServeDNS(r.ResponseWriter, r.Msg)
+		mux.ServeDNS(r.ResponseWriter, r.Msg)
 	})
 
 	return func(c *gin.Context) {
