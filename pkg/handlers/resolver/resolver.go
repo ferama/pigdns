@@ -34,6 +34,8 @@ const (
 	// how deeply we will search for cnames
 	cnameChainMaxDeep = 16
 
+	// getAnswer will be called recursively. the recustion
+	// count cannot be greater than recursionMaxLevel
 	recursionMaxLevel = 64
 
 	// for logging
@@ -239,8 +241,9 @@ func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr str
 		}
 		if cacheErr != nil {
 			cq, _ := req.Question()
-			h.cache.Set(cq, nsaddr, ans)
+			h.cache.Set(cq, authNS, ans)
 		}
+
 	}
 
 	if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA || q.Qtype == dns.TypeCNAME {

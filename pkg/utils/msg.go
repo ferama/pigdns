@@ -2,6 +2,8 @@ package utils
 
 import "github.com/miekg/dns"
 
+const MaxTTL = 60 * 60 * 48 // 172800
+
 // MsgGetAnswerByType detects if an answer contains a message type
 // Usage: MsgGetAnswerByType(m, dns.TypeA)
 func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
@@ -31,24 +33,20 @@ func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
 
 func MsgGetMinTTL(m *dns.Msg) uint32 {
 	var minTTL uint32
-	minTTL = 0
+	minTTL = MaxTTL
 	for _, a := range m.Answer {
 		ttl := a.Header().Ttl
 		if ttl == 0 {
 			continue
 		}
-		if minTTL == 0 || ttl < minTTL {
-			minTTL = ttl
-		}
+		minTTL = min(minTTL, ttl)
 	}
 	for _, a := range m.Extra {
 		ttl := a.Header().Ttl
 		if ttl == 0 {
 			continue
 		}
-		if minTTL == 0 || ttl < minTTL {
-			minTTL = ttl
-		}
+		minTTL = min(minTTL, ttl)
 	}
 
 	return minTTL
