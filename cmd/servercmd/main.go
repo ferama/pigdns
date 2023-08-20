@@ -138,6 +138,11 @@ var rootCmd = &cobra.Command{
 			failWithHelp(cmd, "cannot enable web certs without a domain. please set the 'domain' flag")
 		}
 
+		// TODO:
+		// dns server and doh server should use different dnsMux
+		// The dns server should not use the resolver handler (is very dangerous) unless
+		// it is forced too with an optional flag
+		// The doh mux instead could use it more safely
 		if domainEnable {
 			h := server.BuildDomainHandler(
 				viper.GetString(ZoneFileFlag),
