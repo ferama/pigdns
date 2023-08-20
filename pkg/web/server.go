@@ -43,7 +43,11 @@ func NewWebServer(
 	useHTTPS bool) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
+
+	router := gin.New()
+	router.Use(gin.Recovery())
+
+	// router := gin.Default()
 	templ := template.Must(template.New("").ParseFS(f, "templates/*.html"))
 	router.SetHTMLTemplate(templ)
 
