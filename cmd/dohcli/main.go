@@ -5,22 +5,28 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 const (
-	ServerFlag = "server"
+	ServerFlag     = "server"
+	ServerAddrFlag = "server-addr"
 )
 
 func init() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("doh")
 
-	mainCmd.PersistentFlags().StringP(ServerFlag, "s", "", "the https doh server")
+	mainCmd.PersistentFlags().StringP(ServerFlag, "s", "", "the https doh server name (Ex. doh.example.net)")
 	viper.BindPFlag(ServerFlag, mainCmd.PersistentFlags().Lookup(ServerFlag))
 }
 

@@ -22,6 +22,7 @@ var qCmd = &cobra.Command{
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		server := viper.GetString(ServerFlag)
+		serverAddr := fmt.Sprintf("https://%s", server)
 
 		if server == "" {
 			cmd.Help()
@@ -36,7 +37,7 @@ var qCmd = &cobra.Command{
 
 		m := new(dns.Msg)
 		m.SetQuestion(dns.Fqdn(query), qtype)
-		req, err := doh.NewRequest("POST", server, m)
+		req, err := doh.NewRequest("POST", serverAddr, m)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
