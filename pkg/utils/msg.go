@@ -4,7 +4,8 @@ import "github.com/miekg/dns"
 
 const MaxTTL = 60 * 60 * 48 // 172800
 
-// MsgGetAnswerByType detects if an answer contains a message type
+// MsgGetAnswerByType detects if an answer contains a message type.
+// If yes returns it, else returns nil
 // Usage: MsgGetAnswerByType(m, dns.TypeA)
 func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
 	if len(msg.Answer) == 0 {

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net"
 	"os"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/recursor"
 	"github.com/ferama/pigdns/pkg/server"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -33,12 +36,22 @@ var proxyCmd = &cobra.Command{
 		}
 
 		if dohServerAddr == "" {
-			ips, err := net.LookupIP(dohServerName)
+			r := recursor.New(".")
+			m := new(dns.Msg)
+			m.SetQuestion(dns.Fqdn(dohServerName), dns.TypeA)
+			resp, err := r.Query(context.Background(), m, false)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
-			dohServerAddr = ips[0].String()
+			ans := utils.MsgGetAnswerByType(resp, dns.TypeA)
+			if ans == nil {
+				fmt.Println("cannot resolve server name")
+				os.Exit(1)
+			}
+			ra, _ := ans.(*dns.A)
+			dohServerAddr = ra.A.String()
+			log.Info().Msgf("%s resoved to %s", dohServerName, dohServerAddr)
 		}
 
 		pigdns.Handle(".", server.BuildDOHProxyHandler(dohServerName, dohServerAddr))

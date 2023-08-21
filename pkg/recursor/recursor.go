@@ -231,10 +231,13 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 	var err error
 	// try to get the answer from cache.
 	// if no cached answer is present, do the recursive query
-	cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+
 	ans, cacheErr := r.cache.Get(q, nsaddr)
 	if cacheErr == nil {
-		cc.CacheHits += 1
+		if ctx.Value(collector.CollectorContextKey) != nil {
+			cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+			cc.CacheHits += 1
+		}
 	} else {
 		ans, err = r.queryNS(req, nsaddr)
 		if err != nil {
