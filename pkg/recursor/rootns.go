@@ -1,4 +1,4 @@
-package resolver
+package recursor
 
 import (
 	"math/rand"

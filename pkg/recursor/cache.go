@@ -1,4 +1,4 @@
-package resolver
+package recursor
 
 import (
 	"fmt"
@@ -10,23 +10,23 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type resolverCache struct {
+type recursorCache struct {
 	cache *cache.FileCache
 }
 
-func newResolverCache(datadir string) *resolverCache {
-	rc := &resolverCache{
+func newRecursorCache(datadir string) *recursorCache {
+	rc := &recursorCache{
 		cache: cache.NewFileCache(datadir),
 	}
 
 	return rc
 }
 
-func (c *resolverCache) buildKey(q dns.Question, nsaddr string) string {
+func (c *recursorCache) buildKey(q dns.Question, nsaddr string) string {
 	return fmt.Sprintf("%s_%s_%d_%d", nsaddr, q.Name, q.Qtype, q.Qclass)
 }
 
-func (c *resolverCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
+func (c *recursorCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 	key := c.buildKey(q, nsaddr)
 
 	minTTL := utils.MsgGetMinTTL(m)
@@ -46,7 +46,7 @@ func (c *resolverCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 	return c.cache.Set(key, i)
 }
 
-func (c *resolverCache) Get(q dns.Question, nsaddr string) (*dns.Msg, error) {
+func (c *recursorCache) Get(q dns.Question, nsaddr string) (*dns.Msg, error) {
 	key := c.buildKey(q, nsaddr)
 	item, err := c.cache.Get(key)
 	if err != nil {
