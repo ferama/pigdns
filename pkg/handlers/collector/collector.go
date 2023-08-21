@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -34,16 +35,28 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 		}
 	}
 
-	event := log.Info().
-		Str("query", r.Name()).
-		Str("type", r.Type()).
-		Float64("latency", totalLatency.Seconds()).
-		Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
-		Str("protocol", r.Proto()).
-		Bool("isDOH", isDOH).
-		Int("cacheHits", cc.CacheHits).
-		Str("answerFrom", cc.AnweredBy).
-		Str("client", r.IP())
+	isDOHproxy := cc.AnweredBy == "doh-proxy"
+
+	var event *zerolog.Event
+
+	if isDOHproxy {
+		event = log.Info().
+			Str("query", r.Name()).
+			Str("type", r.Type()).
+			Str("latency", totalLatency.Round(1*time.Millisecond).String()).
+			Str("protocol", r.Proto())
+	} else {
+		event = log.Info().
+			Str("query", r.Name()).
+			Str("type", r.Type()).
+			Float64("latency", totalLatency.Seconds()).
+			Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
+			Str("protocol", r.Proto()).
+			Bool("isDOH", isDOH).
+			Int("cacheHits", cc.CacheHits).
+			Str("answerFrom", cc.AnweredBy).
+			Str("client", r.IP())
+	}
 
 	event.Send()
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
+	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
 	"github.com/ferama/pigdns/pkg/handlers/regexip"
 	"github.com/ferama/pigdns/pkg/handlers/resolver"
 	"github.com/ferama/pigdns/pkg/handlers/root"
@@ -12,6 +13,15 @@ import (
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
+
+func BuildDOHProxyHandler(serverURI string, serverAddr string) pigdns.Handler {
+	var chain pigdns.Handler
+
+	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {})
+	chain = dohproxy.NewDohProxy(serverURI, serverAddr, chain)
+	chain = &collector.Handler{Next: chain}
+	return chain
+}
 
 // BuildResolverHandler creates an handler that resolves recursively
 // starting from root NS
