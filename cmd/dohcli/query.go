@@ -17,9 +17,10 @@ func init() {
 }
 
 var qCmd = &cobra.Command{
-	Use:  "q",
-	Long: "query doh server",
-	Args: cobra.MinimumNArgs(1),
+	Use:   "q",
+	Short: "Query a doh server",
+	Long:  "Query a doh server",
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		server := viper.GetString(ServerNameFlag)
 		serverAddr := fmt.Sprintf("https://%s", server)

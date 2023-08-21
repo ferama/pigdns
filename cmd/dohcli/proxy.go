@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -14,22 +15,25 @@ func init() {
 	mainCmd.AddCommand(proxyCmd)
 
 	proxyCmd.Flags().StringP(ServerAddrFlag, "a", "", "the https doh server ip address")
-	viper.BindPFlag(ServerNameFlag, proxyCmd.Flags().Lookup(ServerAddrFlag))
+	viper.BindPFlag(ServerAddrFlag, proxyCmd.Flags().Lookup(ServerAddrFlag))
 }
 
 var proxyCmd = &cobra.Command{
-	Use:  "proxy",
-	Long: "start a local dns proxy against the doh server",
+	Use:   "proxy",
+	Short: "Start a local dns proxy against a doh server",
+	Long:  "Start a local dns proxy against a doh server",
 	Run: func(cmd *cobra.Command, args []string) {
 		dohServerName := viper.GetString(ServerNameFlag)
-		dohSserverAddr := viper.GetString(ServerAddrFlag)
+		dohServerAddr := viper.GetString(ServerAddrFlag)
 
-		if dohServerName == "" || dohSserverAddr == "" {
+		log.Println(dohServerName)
+		log.Println(dohServerAddr)
+		if dohServerName == "" || dohServerAddr == "" {
 			cmd.Help()
 			os.Exit(1)
 		}
 
-		pigdns.Handle(".", server.BuildDOHProxyHandler(dohServerName, dohSserverAddr))
+		pigdns.Handle(".", server.BuildDOHProxyHandler(dohServerName, dohServerAddr))
 
 		dnsServer := server.NewServer(dns.DefaultServeMux, ":53")
 		dnsServer.Start()
