@@ -1,7 +1,8 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"net"
 	"os"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -26,11 +27,18 @@ var proxyCmd = &cobra.Command{
 		dohServerName := viper.GetString(ServerNameFlag)
 		dohServerAddr := viper.GetString(ServerAddrFlag)
 
-		log.Println(dohServerName)
-		log.Println(dohServerAddr)
-		if dohServerName == "" || dohServerAddr == "" {
+		if dohServerName == "" {
 			cmd.Help()
 			os.Exit(1)
+		}
+
+		if dohServerAddr == "" {
+			ips, err := net.LookupIP(dohServerName)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			dohServerAddr = ips[0].String()
 		}
 
 		pigdns.Handle(".", server.BuildDOHProxyHandler(dohServerName, dohServerAddr))
