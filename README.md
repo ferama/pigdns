@@ -59,8 +59,9 @@ $ pigdns --domain pig.yourdomain.io -z ./zone.conf
 
 The `zone.conf` file:
 ```ini
-$TTL    30M
-            IN  NS      pigdns.io.
+$TTL        30M
+            IN  NS      pigdns.yourdomain.io.
+; pig.yourdomain.io A record
             IN  A       192.168.200.200
 
 www         IN  A       127.0.0.1

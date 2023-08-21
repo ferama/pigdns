@@ -202,6 +202,8 @@ func (h *handler) queryNS(reqMsg *dns.Msg, nsaddr string) (*dns.Msg, error) {
 }
 
 func (h *handler) getAnswer(ctx context.Context, req *pigdns.Request, nsaddr string) (*dns.Msg, error) {
+	req.Msg.RecursionDesired = true
+
 	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
 	rc.RecursionCount++
 	if rc.RecursionCount >= recursionMaxLevel {
