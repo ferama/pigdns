@@ -21,7 +21,7 @@ var qCmd = &cobra.Command{
 	Long: "query doh server",
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		server := viper.GetString(ServerFlag)
+		server := viper.GetString(ServerNameFlag)
 		serverAddr := fmt.Sprintf("https://%s", server)
 
 		if server == "" {

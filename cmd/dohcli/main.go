@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ServerFlag     = "server"
+	ServerNameFlag = "server-name"
 	ServerAddrFlag = "server-addr"
 )
 
@@ -26,8 +26,8 @@ func init() {
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("doh")
 
-	mainCmd.PersistentFlags().StringP(ServerFlag, "s", "", "the https doh server name (Ex. doh.example.net)")
-	viper.BindPFlag(ServerFlag, mainCmd.PersistentFlags().Lookup(ServerFlag))
+	mainCmd.PersistentFlags().StringP(ServerNameFlag, "s", "", "the https doh server name (Ex. doh.example.net)")
+	viper.BindPFlag(ServerNameFlag, mainCmd.PersistentFlags().Lookup(ServerNameFlag))
 }
 
 var mainCmd = &cobra.Command{

@@ -14,14 +14,14 @@ func init() {
 	mainCmd.AddCommand(proxyCmd)
 
 	proxyCmd.Flags().StringP(ServerAddrFlag, "a", "", "the https doh server ip address")
-	viper.BindPFlag(ServerFlag, proxyCmd.Flags().Lookup(ServerAddrFlag))
+	viper.BindPFlag(ServerNameFlag, proxyCmd.Flags().Lookup(ServerAddrFlag))
 }
 
 var proxyCmd = &cobra.Command{
 	Use:  "proxy",
 	Long: "start a local dns proxy against the doh server",
 	Run: func(cmd *cobra.Command, args []string) {
-		dohServerName := viper.GetString(ServerFlag)
+		dohServerName := viper.GetString(ServerNameFlag)
 		dohSserverAddr := viper.GetString(ServerAddrFlag)
 
 		if dohServerName == "" || dohSserverAddr == "" {
