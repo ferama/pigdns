@@ -13,7 +13,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const handlerName = "doh-proxy"
+const (
+	handlerName = "doh-proxy"
+
+	maxMsgSize = 512
+)
 
 type handler struct {
 	serverURI  string
@@ -71,7 +75,17 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		h.Next.ServeDNS(c, r)
 		return
 	}
-	r.Reply(respMsg)
 
+	if respMsg.IsEdns0() == nil {
+		respMsg.SetEdns0(maxMsgSize, false)
+	} else {
+		respMsg.IsEdns0().SetUDPSize(maxMsgSize)
+	}
+
+	if respMsg.Len() > maxMsgSize {
+		respMsg.Compress = true
+	}
+
+	r.Reply(respMsg)
 	h.Next.ServeDNS(c, r)
 }
