@@ -31,8 +31,8 @@ func init() {
 	viper.SetEnvPrefix("pigdns")
 
 	// common
-	rootCmd.Flags().Bool(Debug, false, "enable debug")
-	viper.BindPFlag(Debug, rootCmd.Flags().Lookup(Debug))
+	rootCmd.Flags().Bool(DebugFlag, false, "enable debug")
+	viper.BindPFlag(DebugFlag, rootCmd.Flags().Lookup(DebugFlag))
 	rootCmd.Flags().StringP(DatadirFlag, "a", ".", "data dir where pigdns data will be stored")
 	viper.BindPFlag(DatadirFlag, rootCmd.Flags().Lookup(DatadirFlag))
 
@@ -99,7 +99,7 @@ var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
 	Run: func(cmd *cobra.Command, args []string) {
-		debug := viper.GetBool(Debug)
+		debug := viper.GetBool(DebugFlag)
 
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		if debug {

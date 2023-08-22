@@ -2,7 +2,7 @@ package main
 
 const (
 	// common
-	Debug             = "debug"
+	DebugFlag         = "debug"
 	DatadirFlag       = "datadir"
 	DomainFlag        = "domain"
 	ListenAddressFlag = "listen-address"

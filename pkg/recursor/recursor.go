@@ -41,8 +41,10 @@ type Recursor struct {
 }
 
 func New(datadir string) *Recursor {
-	r := &Recursor{
-		cache: newRecursorCache(datadir),
+	r := &Recursor{}
+	if datadir != "" {
+		log.Printf("[recursor] enabling file based cache")
+		r.cache = newRecursorCache(datadir)
 	}
 	return r
 }
@@ -229,21 +231,31 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 	q := req.Question[0]
 
 	var err error
+
 	// try to get the answer from cache.
 	// if no cached answer is present, do the recursive query
-
-	ans, cacheErr := r.cache.Get(q, nsaddr)
-	if cacheErr == nil {
-		if ctx.Value(collector.CollectorContextKey) != nil {
-			cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
-			cc.CacheHits += 1
+	var cacheErr error
+	var ans *dns.Msg
+	isCached := false
+	haveCache := r.cache != nil
+	if haveCache {
+		ans, cacheErr = r.cache.Get(q, nsaddr)
+		if cacheErr == nil {
+			isCached = true
+			if ctx.Value(collector.CollectorContextKey) != nil {
+				cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+				cc.CacheHits += 1
+			}
 		}
-	} else {
+	}
+	if !isCached {
 		ans, err = r.queryNS(req, nsaddr)
 		if err != nil {
 			return nil, err
 		}
-		r.cache.Set(q, nsaddr, ans)
+		if haveCache {
+			r.cache.Set(q, nsaddr, ans)
+		}
 	}
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
@@ -257,7 +269,7 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 		if err != nil {
 			return nil, err
 		}
-		if cacheErr != nil {
+		if haveCache && !isCached {
 			r.cache.Set(q, authNS, ans)
 		}
 
@@ -295,7 +307,7 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 					return nil, err
 				}
 				ans.Answer = append(ans.Answer, cname)
-				if cacheErr != nil {
+				if haveCache && !isCached {
 					cq := newReq.Question[0]
 					r.cache.Set(cq, nsaddr, ans)
 				}
