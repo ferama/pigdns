@@ -33,7 +33,7 @@ const (
 
 	// getAnswer will be called recursively. the recustion
 	// count cannot be greater than recursionMaxLevel
-	recursionMaxLevel = 128
+	recursionMaxLevel = 512
 )
 
 type Recursor struct {
