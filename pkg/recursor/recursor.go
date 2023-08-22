@@ -34,6 +34,8 @@ const (
 	// getAnswer will be called recursively. the recustion
 	// count cannot be greater than recursionMaxLevel
 	recursionMaxLevel = 512
+
+	maxMsgSize = 512
 )
 
 type Recursor struct {
@@ -49,6 +51,38 @@ func New(datadir string) *Recursor {
 	return r
 }
 
+func (r *Recursor) sortAnswerRecords(ans *dns.Msg) {
+	cnames := make([]dns.RR, 0)
+	a := make([]dns.RR, 0)
+	aaaa := make([]dns.RR, 0)
+	others := make([]dns.RR, 0)
+
+	res := make([]dns.RR, 0)
+	for _, rr := range ans.Answer {
+		switch rr.Header().Rrtype {
+		case dns.TypeA:
+			if _, ok := rr.(*dns.A); ok {
+				a = append(a, rr)
+			}
+		case dns.TypeAAAA:
+			if _, ok := rr.(*dns.AAAA); ok {
+				aaaa = append(aaaa, rr)
+			}
+		case dns.TypeCNAME:
+			if _, ok := rr.(*dns.CNAME); ok {
+				cnames = append(cnames, rr)
+			}
+		default:
+			others = append(others, rr)
+		}
+	}
+	res = append(res, others...)
+	res = append(res, cnames...)
+	res = append(res, aaaa...)
+	res = append(res, a...)
+	ans.Answer = res
+}
+
 // Query start the recursive query resolution process
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	cc := &ResolverContext{
@@ -57,7 +91,26 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
 	nsaddr := r.getRootNS(isIPV6)
-	return r.getAnswer(ctx, req, nsaddr, isIPV6)
+	ans, err := r.getAnswer(ctx, req, nsaddr, isIPV6)
+	if err != nil {
+		return ans, err
+	}
+
+	r.sortAnswerRecords(ans)
+
+	if ans.IsEdns0() == nil {
+		ans.SetEdns0(maxMsgSize, false)
+	} else {
+		ans.IsEdns0().SetUDPSize(maxMsgSize)
+	}
+
+	if ans.Len() > maxMsgSize {
+		ans.Compress = true
+	}
+
+	// our answer will never be authoritative
+	ans.Authoritative = false
+	return ans, err
 }
 
 func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
@@ -82,6 +135,8 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		if err != nil {
 			return nil, err
 		}
+		// ans.SetEdns0(4096, false)
+
 		if !ans.Truncated {
 			return ans, nil
 		}
@@ -218,7 +273,6 @@ func (r *Recursor) getRootNS(isIPV6 bool) string {
 	return nsaddr
 }
 
-// TODO: fails to dig @127.0.0.1 app-future.netsuite.com.edgekey.net
 func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, isIPV6 bool) (*dns.Msg, error) {
 	req.RecursionDesired = true
 
