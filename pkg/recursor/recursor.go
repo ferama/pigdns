@@ -85,6 +85,9 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		if !ans.Truncated {
 			return ans, nil
 		}
+		if network == "tcp" {
+			return nil, errors.New("cannot get a non truncated answer")
+		}
 		network = "tcp"
 	}
 }
@@ -215,6 +218,7 @@ func (r *Recursor) getRootNS(isIPV6 bool) string {
 	return nsaddr
 }
 
+// TODO: fails to dig @127.0.0.1 app-future.netsuite.com.edgekey.net
 func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, isIPV6 bool) (*dns.Msg, error) {
 	req.RecursionDesired = true
 
@@ -302,7 +306,7 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
 				nsaddr := r.getRootNS(false)
-				ans, err := r.getAnswer(ctx, newReq, nsaddr, isIPV6)
+				ans, err = r.getAnswer(ctx, newReq, nsaddr, isIPV6)
 				if err != nil {
 					return nil, err
 				}

@@ -7,7 +7,6 @@ import (
 	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
-	"github.com/rs/zerolog/log"
 )
 
 type recursorCache struct {
@@ -40,7 +39,7 @@ func (c *recursorCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 		Data: packed,
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
-	log.Printf("[cache set] %s, ttl:%fs, minTTL: %d", key, time.Until(i.Expires).Seconds(), minTTL)
+	// log.Printf("[cache set] %s, ttl:%fs, minTTL: %d", key, time.Until(i.Expires).Seconds(), minTTL)
 	// log.Printf("[cache set] %s, ttl:%fs, minTTL: %d, ans: %s, extra: %s", key, time.Until(i.Expires).Seconds(), minTTL, m.Answer, m.Extra)
 	// log.Printf("msg: %s", m)
 	return c.cache.Set(key, i)
