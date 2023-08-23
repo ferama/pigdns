@@ -34,8 +34,6 @@ const (
 	// getAnswer will be called recursively. the recustion
 	// count cannot be greater than recursionMaxLevel
 	recursionMaxLevel = 512
-
-	maxMsgSize = 512
 )
 
 type Recursor struct {
@@ -98,15 +96,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 	r.sortAnswerRecords(ans)
 
-	if ans.IsEdns0() == nil {
-		ans.SetEdns0(maxMsgSize, false)
-	} else {
-		ans.IsEdns0().SetUDPSize(maxMsgSize)
-	}
-
-	if ans.Len() > maxMsgSize {
-		ans.Compress = true
-	}
+	utils.MsgSetupEdns(ans)
 
 	// our answer will never be authoritative
 	ans.Authoritative = false

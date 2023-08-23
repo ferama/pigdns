@@ -10,13 +10,12 @@ import (
 	"github.com/ferama/pigdns/pkg/doh"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
 const (
 	handlerName = "doh-proxy"
-
-	maxMsgSize = 512
 )
 
 type handler struct {
@@ -76,15 +75,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		return
 	}
 
-	if respMsg.IsEdns0() == nil {
-		respMsg.SetEdns0(maxMsgSize, false)
-	} else {
-		respMsg.IsEdns0().SetUDPSize(maxMsgSize)
-	}
-
-	if respMsg.Len() > maxMsgSize {
-		respMsg.Compress = true
-	}
+	utils.MsgSetupEdns(respMsg)
 
 	r.Reply(respMsg)
 	h.Next.ServeDNS(c, r)
