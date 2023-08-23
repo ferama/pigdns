@@ -34,6 +34,12 @@ func (r *Request) Reply(m *dns.Msg) {
 	r.ResponseWriter.WriteMsg(m)
 }
 
+func (r *Request) ReplyWithStatus(m *dns.Msg, rcode int) {
+	m.SetReply(r.Msg)
+	m.SetRcode(r.Msg, rcode)
+	r.ResponseWriter.WriteMsg(m)
+}
+
 // IP gets the (remote) IP address of the client making the request.
 func (r *Request) IP() string {
 	if r.ip != "" {

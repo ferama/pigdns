@@ -125,7 +125,6 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		if err != nil {
 			return nil, err
 		}
-		// ans.SetEdns0(4096, false)
 
 		if !ans.Truncated {
 			return ans, nil
@@ -203,8 +202,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, res *dns.Msg, is
 	// ns2.google.com. name and will recursively resolve the final A and AAAA record
 	// using the authoritative nameserver
 	if ipv4 == nil && ipv6 == nil {
-		n := rand.Intn(len(res.Ns))
-		ns := res.Ns[n].(*dns.NS)
+		// n := rand.Intn(len(res.Ns))
+		// ns := res.Ns[n].(*dns.NS)
 
 		rootNS := r.getRootNS(isIPV6)
 

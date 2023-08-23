@@ -36,12 +36,11 @@ func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
 
 		m := new(dns.Msg)
 		m.Authoritative = false
-		m.Rcode = dns.RcodeServerFailure
 		if ctx.Value(collector.CollectorContextKey) != nil {
 			cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 			cc.AnweredBy = "failure"
 		}
-		r.Reply(m)
+		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
 	chain = resolver.NewResolver(chain, datadir, allowedNets)
 	chain = &collector.Handler{Next: chain}
