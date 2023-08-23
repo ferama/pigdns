@@ -26,7 +26,7 @@ type ResolverContext struct {
 
 const (
 	// timeout until error
-	dialTimeout = 5 * time.Second
+	dialTimeout = 2 * time.Second
 
 	// how deeply we will search for cnames
 	cnameChainMaxDeep = 16
@@ -262,9 +262,30 @@ func (r *Recursor) getRootNS(isIPV6 bool) string {
 	return nsaddr
 }
 
-func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, isIPV6 bool) (*dns.Msg, error) {
-	req.RecursionDesired = true
+func (r *Recursor) resolveNSLoop(m *dns.Msg, q dns.Question) {
+	nss := []string{}
+	for _, r := range m.Ns {
+		if _, ok := r.(*dns.NS); ok {
+			rns := r.(*dns.NS)
+			nss = append(nss, rns.Ns)
+		}
+	}
 
+	if slices.Contains(nss, q.Name) {
+		for _, e := range m.Extra {
+			if e.Header().Name != q.Name {
+				continue
+			}
+
+			if e.Header().Rrtype == q.Qtype {
+				m.Answer = append(m.Answer, e)
+			}
+		}
+	}
+	m.Extra = []dns.RR{}
+}
+
+func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
 	rc.RecursionCount++
 	if rc.RecursionCount >= recursionMaxLevel {
@@ -306,20 +327,24 @@ func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, i
 	}
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
-		// find the authoritative ns
-		authNS, err := r.resolveNS(ctx, req, ans, isIPV6)
-		if err != nil {
-			return nil, err
-		}
-		// call getAnswer recursively
-		ans, err = r.getAnswer(ctx, req, authNS, isIPV6)
-		if err != nil {
-			return nil, err
-		}
-		if haveCache && !isCached {
-			r.cache.Set(q, authNS, ans)
-		}
+		// TODO: fix me
+		r.resolveNSLoop(ans, q)
 
+		if len(ans.Answer) == 0 {
+			// find the authoritative ns
+			authNS, err := r.resolveNS(ctx, req, ans, isIPV6)
+			if err != nil {
+				return nil, err
+			}
+			// call getAnswer recursively
+			ans, err = r.getAnswer(ctx, req, authNS, isIPV6)
+			if err != nil {
+				return nil, err
+			}
+			if haveCache && !isCached {
+				r.cache.Set(q, authNS, ans)
+			}
+		}
 	}
 
 	if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA || q.Qtype == dns.TypeCNAME {

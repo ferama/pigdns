@@ -20,8 +20,8 @@ type ResolverContext struct {
 }
 
 const (
-	// timeout until error
-	maxRetriesOnError = 5
+	// retries until error
+	maxRetriesOnError = 3
 
 	// for logging
 	handlerName = "resolver"
