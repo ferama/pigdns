@@ -155,7 +155,11 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 	ns := rr.(*dns.NS)
 
 	r1 := new(dns.Msg)
-	r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeA)
+	if isIPV6 {
+		r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeAAAA)
+	} else {
+		r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeA)
+	}
 
 	nsaddr := r.getRootNS(isIPV6)
 	resp, err := r.resolve(ctx, r1, isIPV6, 1, nsaddr)
@@ -192,10 +196,14 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 	ans, err := r.queryNS(r1, nsaddr)
 	if err != nil {
+		if strings.Contains(err.Error(), "connection refused") {
+			log.Printf("==== queryNS error: %s", err)
+		}
+		// log.Printf("==== queryNS error: %s", err)
 		return nil, err
 	}
 
-	log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
+	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the delegate nameserver address
