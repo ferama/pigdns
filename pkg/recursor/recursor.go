@@ -195,9 +195,9 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		return nil, err
 	}
 
-	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
+	log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
-	if !ans.Authoritative {
+	if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the delegate nameserver address
 		nsaddr, err := r.resolveNS(ctx, ans, isIPV6)
 		if err != nil {
@@ -205,10 +205,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		}
 
 		// resolve using the new addr
-		res, err := r.resolve(ctx, req, isIPV6, depth, nsaddr)
+		res, err := r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 		if err != nil {
 			// go deeper
-			res, err = r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+			res, err = r.resolve(ctx, req, isIPV6, depth, nsaddr)
 			if err != nil {
 				return nil, err
 			}
@@ -231,7 +231,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
 			if rr != nil && rr.Header().Name == q.Name {
-				log.Printf("cname found: %s", rr)
 				cname := rr.(*dns.CNAME)
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
