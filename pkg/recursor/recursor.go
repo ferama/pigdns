@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 
@@ -196,13 +197,11 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 	ans, err := r.queryNS(r1, nsaddr)
 	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
 			log.Printf("==== queryNS error: %s", err)
 		}
-		// log.Printf("==== queryNS error: %s", err)
 		return nil, err
 	}
-
 	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
 	if !ans.Authoritative && len(ans.Ns) > 0 {
@@ -271,6 +270,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 				if _, ok := rr.(*dns.SOA); ok {
 					soa := new(dns.Msg)
 					soa.Answer = append(soa.Answer, rr)
+					soa.SetRcode(ans, ans.Rcode)
 					return soa, nil
 				}
 			}
