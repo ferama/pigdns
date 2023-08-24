@@ -11,6 +11,9 @@ const (
 // If yes returns it, else returns nil
 // Usage: MsgGetAnswerByType(m, dns.TypeA)
 func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
+	if msg == nil {
+		return nil
+	}
 	if len(msg.Answer) == 0 {
 		return nil
 	}

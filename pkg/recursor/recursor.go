@@ -33,7 +33,7 @@ const (
 
 	// getAnswer will be called recursively. the recustion
 	// count cannot be greater than recursionMaxLevel
-	recursionMaxLevel = 512
+	recursionMaxLevel = 256
 )
 
 type Recursor struct {
@@ -96,19 +96,6 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 		}
 		ns := rr.(*dns.NS)
 
-		// for _, e := range ans.Answer {
-		// 	if e.Header().Name != ns.Ns {
-		// 		continue
-		// 	}
-		// 	switch e.Header().Rrtype {
-		// 	case dns.TypeA:
-		// 		a := e.(*dns.A)
-		// 		ipv4 = append(ipv4, a.A)
-		// 	case dns.TypeAAAA:
-		// 		aaaa := e.(*dns.AAAA)
-		// 		ipv6 = append(ipv6, aaaa.AAAA)
-		// 	}
-		// }
 		for _, e := range ans.Extra {
 			if e.Header().Name != ns.Ns {
 				continue
@@ -145,6 +132,9 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 	if err == nil {
 		return res, err
 	}
+	if len(ans.Ns) == 0 {
+		return "", errors.New("no NS records in answer")
+	}
 
 	n := rand.Intn(len(ans.Ns))
 	rr := ans.Ns[n]
@@ -165,6 +155,13 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 }
 
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, nsaddr string) (*dns.Msg, error) {
+	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
+	rc.RecursionCount++
+	if rc.RecursionCount >= recursionMaxLevel {
+		return nil, errors.New("resolve: recursionMaxLevel reached")
+	}
+	ctx = context.WithValue(ctx, ResolverContextKey, rc)
+
 	q := req.Question[0]
 
 	labels := dns.SplitDomainName(q.Name)
@@ -199,6 +196,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		// resolve using the new addr
 		res, err := r.resolve(ctx, req, isIPV6, depth, nsaddr)
 		if err != nil {
+			// go deeper
 			res, err = r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 			if err != nil {
 				return nil, err
@@ -207,10 +205,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		return res, err
 	}
 
-	if len(ans.Answer) == 0 {
-		// go deeper
-		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
-	}
 	haveAnswer := false
 	for _, rr := range ans.Answer {
 		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
@@ -218,8 +212,42 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		}
 	}
 
+	// deal with cnames
 	if !haveAnswer {
-		return nil, errors.New("no anwer found")
+		resp := ans.Copy()
+		maxLoop := cnameChainMaxDeep
+		for {
+
+			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
+			if rr != nil && rr.Header().Name == q.Name {
+				cname := rr.(*dns.CNAME)
+				newReq := new(dns.Msg)
+				newReq.SetQuestion(cname.Target, q.Qtype)
+
+				nsaddr := r.getRootNS(isIPV6)
+				resp, err = r.resolve(ctx, newReq, isIPV6, 1, nsaddr)
+
+				if err == nil {
+					ans.Answer = append(resp.Answer, rr)
+					for _, rr := range ans.Answer {
+						if rr.Header().Rrtype == q.Qtype {
+							haveAnswer = true
+						}
+					}
+				}
+			}
+			if haveAnswer {
+				break
+			}
+			maxLoop--
+			if maxLoop == 0 {
+				break
+			}
+		}
+	}
+
+	if !haveAnswer {
+		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 	}
 	return ans, nil
 }
