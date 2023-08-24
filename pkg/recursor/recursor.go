@@ -66,6 +66,9 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	return ans, nil
 }
 
+// given an answer msg, tries to get dns ip address.
+// if the ans is authoritative it searches into Answer message section
+// if not it tries to get it from Extra section
 func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error) {
 
 	ipv4 := []net.IP{}
@@ -93,19 +96,19 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 		}
 		ns := rr.(*dns.NS)
 
-		for _, e := range ans.Answer {
-			if e.Header().Name != ns.Ns {
-				continue
-			}
-			switch e.Header().Rrtype {
-			case dns.TypeA:
-				a := e.(*dns.A)
-				ipv4 = append(ipv4, a.A)
-			case dns.TypeAAAA:
-				aaaa := e.(*dns.AAAA)
-				ipv6 = append(ipv6, aaaa.AAAA)
-			}
-		}
+		// for _, e := range ans.Answer {
+		// 	if e.Header().Name != ns.Ns {
+		// 		continue
+		// 	}
+		// 	switch e.Header().Rrtype {
+		// 	case dns.TypeA:
+		// 		a := e.(*dns.A)
+		// 		ipv4 = append(ipv4, a.A)
+		// 	case dns.TypeAAAA:
+		// 		aaaa := e.(*dns.AAAA)
+		// 		ipv6 = append(ipv6, aaaa.AAAA)
+		// 	}
+		// }
 		for _, e := range ans.Extra {
 			if e.Header().Name != ns.Ns {
 				continue
@@ -163,8 +166,13 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, nsaddr string) (*dns.Msg, error) {
 	q := req.Question[0]
+
 	labels := dns.SplitDomainName(q.Name)
 	slices.Reverse(labels)
+
+	if depth > len(labels) {
+		return nil, errors.New("max depth reached")
+	}
 
 	l := labels[0:depth]
 
@@ -179,19 +187,27 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 		return nil, err
 	}
 
-	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans.Ns)
+	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
-	if !ans.Authoritative && len(ans.Ns) > 0 {
+	if !ans.Authoritative {
 		// find the delegate nameserver address
 		nsaddr, err := r.resolveNS(ctx, ans, isIPV6)
 		if err != nil {
 			return nil, err
 		}
+
 		// resolve using the new addr
-		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		res, err := r.resolve(ctx, req, isIPV6, depth, nsaddr)
+		if err != nil {
+			res, err = r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return res, err
 	}
 
-	if len(ans.Answer) == 0 && depth+1 <= len(labels) {
+	if len(ans.Answer) == 0 {
 		// go deeper
 		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 	}
@@ -201,6 +217,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 			haveAnswer = true
 		}
 	}
+
 	if !haveAnswer {
 		return nil, errors.New("no anwer found")
 	}
