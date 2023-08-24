@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"net"
 	"net/netip"
 	"strings"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"golang.org/x/exp/slices"
 )
@@ -52,58 +55,156 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
-	// nsaddr := r.getRootNS(isIPV6)
-
-	// labels := dns.SplitDomainName(req.Question[0].Name)
-	// root := labels[len(labels)-1]
-
-	// log.Printf("%s", root)
-	// r1 := new(dns.Msg)
-	// r1.SetQuestion(dns.Fqdn(root), dns.TypeA)
-
-	// ns, err := r.getAnswer(ctx, r1, nsaddr, false)
-	// log.Printf("root ns: %s, err: %s", ns, err)
-	return r.resolve(ctx, req, isIPV6, 0)
-}
-
-func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int) (*dns.Msg, error) {
-	labels := dns.SplitDomainName(req.Question[0].Name)
-
-	var nsaddr string
-	if depth == 0 {
-		nsaddr = r.getRootNS(isIPV6)
+	nsaddr := r.getRootNS(isIPV6)
+	ans, err := r.resolve(ctx, req, isIPV6, 1, nsaddr)
+	if err != nil {
+		return nil, err
 	}
 
-	l := labels[:len(labels)-depth]
-	fqdn := dns.Fqdn(strings.Join(l, "."))
-	log.Printf("%s", fqdn)
+	utils.MsgSetupEdns(ans)
+
+	return ans, nil
+}
+
+func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error) {
+
+	ipv4 := []net.IP{}
+	ipv6 := []net.IP{}
+
+	if ans.Authoritative {
+		for _, e := range ans.Answer {
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = append(ipv4, a.A)
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = append(ipv6, aaaa.AAAA)
+			}
+		}
+	} else {
+		if len(ans.Ns) == 0 {
+			return "", errors.New("not NS record found")
+		}
+		n := rand.Intn(len(ans.Ns))
+		rr := ans.Ns[n]
+		if _, ok := rr.(*dns.NS); !ok {
+			return "", errors.New("not a NS record")
+		}
+		ns := rr.(*dns.NS)
+
+		for _, e := range ans.Answer {
+			if e.Header().Name != ns.Ns {
+				continue
+			}
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = append(ipv4, a.A)
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = append(ipv6, aaaa.AAAA)
+			}
+		}
+		for _, e := range ans.Extra {
+			if e.Header().Name != ns.Ns {
+				continue
+			}
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = append(ipv4, a.A)
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = append(ipv6, aaaa.AAAA)
+			}
+		}
+	}
+
+	var ipv4res net.IP
+	var ipv6res net.IP
+	if len(ipv4) > 0 {
+		ipv4res = ipv4[rand.Intn(len(ipv4))]
+	}
+	if len(ipv6) > 0 {
+		ipv6res = ipv6[rand.Intn(len(ipv6))]
+	}
+	if ipv6res != nil && isIPV6 {
+		return fmt.Sprintf("[%s]:53", ipv6res), nil
+	}
+	if ipv4res != nil && !isIPV6 {
+		return fmt.Sprintf("%s:53", ipv4res), nil
+	}
+	return "", errors.New("not ns record found")
+}
+func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (string, error) {
+	res, err := r.resolveNSIPFromAns(ans, isIPV6)
+	if err == nil {
+		return res, err
+	}
+
+	n := rand.Intn(len(ans.Ns))
+	rr := ans.Ns[n]
+	if _, ok := rr.(*dns.NS); !ok {
+		return "", errors.New("is not an NS record")
+	}
+	ns := rr.(*dns.NS)
 
 	r1 := new(dns.Msg)
-	r1.SetQuestion(fqdn, dns.TypeA)
+	r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeA)
+
+	nsaddr := r.getRootNS(isIPV6)
+	resp, err := r.resolve(ctx, r1, isIPV6, 1, nsaddr)
+	if err != nil {
+		return "", err
+	}
+	return r.resolveNSIPFromAns(resp, isIPV6)
+}
+
+func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, nsaddr string) (*dns.Msg, error) {
+	q := req.Question[0]
+	labels := dns.SplitDomainName(q.Name)
+	slices.Reverse(labels)
+
+	l := labels[0:depth]
+
+	slices.Reverse(l)
+	fqdn := dns.Fqdn(strings.Join(l, "."))
+
+	r1 := new(dns.Msg)
+	r1.SetQuestion(fqdn, q.Qtype)
 
 	ans, err := r.queryNS(r1, nsaddr)
 	if err != nil {
 		return nil, err
 	}
-	ans = r.resolveAnswer(ans, dns.TypeA)
-	log.Printf("%s", ans)
 
-	return ans, nil
-}
+	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans.Ns)
 
-func (r *Recursor) resolveAnswer(ans *dns.Msg, typ uint16) *dns.Msg {
-	m := new(dns.Msg)
+	if !ans.Authoritative && len(ans.Ns) > 0 {
+		// find the delegate nameserver address
+		nsaddr, err := r.resolveNS(ctx, ans, isIPV6)
+		if err != nil {
+			return nil, err
+		}
+		// resolve using the new addr
+		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+	}
+
+	if len(ans.Answer) == 0 && depth+1 <= len(labels) {
+		// go deeper
+		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+	}
+	haveAnswer := false
 	for _, rr := range ans.Answer {
-		if rr.Header().Rrtype == typ {
-			m.Answer = append(m.Answer, rr)
+		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
+			haveAnswer = true
 		}
 	}
-	for _, rr := range ans.Extra {
-		if rr.Header().Rrtype == typ {
-			m.Answer = append(m.Answer, rr)
-		}
+	if !haveAnswer {
+		return nil, errors.New("no anwer found")
 	}
-	return m
+	return ans, nil
 }
 
 func (r *Recursor) getRootNS(isIPV6 bool) string {
