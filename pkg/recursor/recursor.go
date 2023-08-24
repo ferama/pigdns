@@ -55,6 +55,13 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
+	if r.cache != nil {
+		ans, cacheErr := r.cache.Get(req.Question[0], "-")
+		if cacheErr == nil {
+			return ans, nil
+		}
+	}
+
 	nsaddr := r.getRootNS(isIPV6)
 	ans, err := r.resolve(ctx, req, isIPV6, 1, nsaddr)
 	if err != nil {
@@ -62,6 +69,10 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	utils.MsgSetupEdns(ans)
+
+	if r.cache != nil {
+		r.cache.Set(req.Question[0], "-", ans)
+	}
 
 	return ans, nil
 }
@@ -87,7 +98,7 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 		}
 	} else {
 		if len(ans.Ns) == 0 {
-			return "", errors.New("not NS record found")
+			return "", errors.New("no NS record found")
 		}
 		n := rand.Intn(len(ans.Ns))
 		rr := ans.Ns[n]
@@ -220,6 +231,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
 			if rr != nil && rr.Header().Name == q.Name {
+				log.Printf("cname found: %s", rr)
 				cname := rr.(*dns.CNAME)
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
@@ -247,7 +259,17 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	}
 
 	if !haveAnswer {
-		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		if depth+1 > len(labels) {
+			for _, rr := range ans.Ns {
+				if _, ok := rr.(*dns.SOA); ok {
+					soa := new(dns.Msg)
+					soa.Answer = append(soa.Answer, rr)
+					return soa, nil
+				}
+			}
+		} else {
+			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		}
 	}
 	return ans, nil
 }
