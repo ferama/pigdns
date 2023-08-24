@@ -21,12 +21,12 @@ func newRecursorCache(datadir string) *recursorCache {
 	return rc
 }
 
-func (c *recursorCache) buildKey(q dns.Question, prefix string) string {
+func (c *recursorCache) BuildKey(q dns.Question, prefix string) string {
 	return fmt.Sprintf("%s_%s_%d_%d", prefix, q.Name, q.Qtype, q.Qclass)
 }
 
 func (c *recursorCache) Set(q dns.Question, prefix string, m *dns.Msg) error {
-	key := c.buildKey(q, prefix)
+	key := c.BuildKey(q, prefix)
 
 	minTTL := utils.MsgGetMinTTL(m)
 
@@ -45,7 +45,7 @@ func (c *recursorCache) Set(q dns.Question, prefix string, m *dns.Msg) error {
 }
 
 func (c *recursorCache) Get(q dns.Question, prefix string) (*dns.Msg, error) {
-	key := c.buildKey(q, prefix)
+	key := c.BuildKey(q, prefix)
 	item, err := c.cache.Get(key)
 	if err != nil {
 		return nil, err

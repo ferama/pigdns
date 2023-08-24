@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/utils"
@@ -38,10 +39,15 @@ const (
 
 type Recursor struct {
 	cache *recursorCache
+
+	mu      sync.Mutex
+	lockmap map[string]*sync.Mutex
 }
 
 func New(datadir string) *Recursor {
-	r := &Recursor{}
+	r := &Recursor{
+		lockmap: make(map[string]*sync.Mutex),
+	}
 	if datadir != "" {
 		log.Printf("[recursor] enabling file based cache")
 		r.cache = newRecursorCache(datadir)
@@ -138,6 +144,7 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 	}
 	return "", errors.New("not ns record found")
 }
+
 func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (string, error) {
 	res, err := r.resolveNSIPFromAns(ans, isIPV6)
 	if err == nil {
@@ -297,11 +304,41 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		if cacheErr == nil {
 			return ans, nil
 		}
+
+		cacheKey := r.cache.BuildKey(q, nsaddr)
+
+		var emu *sync.Mutex
+		// get or create a new mutex for the cache key in a thread
+		// safe way
+		r.mu.Lock()
+		if tmp, ok := r.lockmap[cacheKey]; ok {
+			emu = tmp
+		} else {
+			emu = new(sync.Mutex)
+			r.lockmap[cacheKey] = emu
+		}
+		r.mu.Unlock()
+
+		// no more then one concurrent request to the upstream for the given cache key, so
+		// I'm taking the lock here
+		emu.Lock()
+		// cleanup the lockmap at the end and unlock
+		defer func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+
+			delete(r.lockmap, cacheKey)
+			emu.Unlock()
+		}()
+
+		// Another coroutine (the non locked one) likely has filled the cache already
+		// so take the advantage here
+		ans, cacheErr = r.cache.Get(q, nsaddr)
+		if cacheErr == nil {
+			return ans, nil
+		}
 	}
 
-	// TODO: implement single inflight against upstream servers
-	// there should be only one request active for each cache key
-	// Waiting clients should get the answer from cache
 	network := "udp"
 	qname := req.Question[0].Name
 	for {
