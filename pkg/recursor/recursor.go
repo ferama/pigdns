@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
-	"os"
 	"strings"
 	"time"
 
@@ -197,9 +196,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 	ans, err := r.queryNS(r1, nsaddr)
 	if err != nil {
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			log.Printf("==== queryNS error: %s", err)
-		}
 		return nil, err
 	}
 	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
@@ -211,10 +207,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 			return nil, err
 		}
 
-		// resolve using the new addr
+		// go deeper
 		res, err := r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 		if err != nil {
-			// go deeper
+			// resolve using the new addr
 			res, err = r.resolve(ctx, req, isIPV6, depth, nsaddr)
 			if err != nil {
 				return nil, err
@@ -303,6 +299,9 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		}
 	}
 
+	// TODO: implement single inflight against upstream servers
+	// there should be only one request active for each cache key
+	// Waiting clients should get the answer from cache
 	network := "udp"
 	qname := req.Question[0].Name
 	for {
