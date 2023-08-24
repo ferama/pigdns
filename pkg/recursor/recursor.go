@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
 )
 
@@ -31,9 +31,9 @@ const (
 	// how deeply we will search for cnames
 	cnameChainMaxDeep = 16
 
-	// getAnswer will be called recursively. the recustion
-	// count cannot be greater than recursionMaxLevel
-	recursionMaxLevel = 256
+	// resolver will be called recursively. the recustion
+	// count cannot be greater than resolverMaxLevel
+	resolverMaxLevel = 512
 )
 
 type Recursor struct {
@@ -157,7 +157,7 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, nsaddr string) (*dns.Msg, error) {
 	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
 	rc.RecursionCount++
-	if rc.RecursionCount >= recursionMaxLevel {
+	if rc.RecursionCount >= resolverMaxLevel {
 		return nil, errors.New("resolve: recursionMaxLevel reached")
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, rc)
@@ -168,7 +168,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	slices.Reverse(labels)
 
 	if depth > len(labels) {
-		return nil, errors.New("max depth reached")
+		return nil, errors.New("no answer: max depth reached")
 	}
 
 	l := labels[0:depth]
