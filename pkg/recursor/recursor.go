@@ -7,9 +7,9 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
-	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
@@ -31,9 +31,9 @@ const (
 	// how deeply we will search for cnames
 	cnameChainMaxDeep = 16
 
-	// getAnswer will be called recursively. the recustion
-	// count cannot be greater than recursionMaxLevel
-	recursionMaxLevel = 512
+	// resolver will be called recursively. the recustion
+	// count cannot be greater than resolverMaxLevel
+	resolverMaxLevel = 512
 )
 
 type Recursor struct {
@@ -49,61 +49,259 @@ func New(datadir string) *Recursor {
 	return r
 }
 
-func (r *Recursor) sortAnswerRecords(ans *dns.Msg) {
-	cnames := make([]dns.RR, 0)
-	a := make([]dns.RR, 0)
-	aaaa := make([]dns.RR, 0)
-	others := make([]dns.RR, 0)
-
-	res := make([]dns.RR, 0)
-	for _, rr := range ans.Answer {
-		switch rr.Header().Rrtype {
-		case dns.TypeA:
-			if _, ok := rr.(*dns.A); ok {
-				a = append(a, rr)
-			}
-		case dns.TypeAAAA:
-			if _, ok := rr.(*dns.AAAA); ok {
-				aaaa = append(aaaa, rr)
-			}
-		case dns.TypeCNAME:
-			if _, ok := rr.(*dns.CNAME); ok {
-				cnames = append(cnames, rr)
-			}
-		default:
-			others = append(others, rr)
-		}
-	}
-	res = append(res, others...)
-	res = append(res, cnames...)
-	res = append(res, aaaa...)
-	res = append(res, a...)
-	ans.Answer = res
-}
-
-// Query start the recursive query resolution process
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	cc := &ResolverContext{
 		RecursionCount: 0,
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
-	nsaddr := r.getRootNS(isIPV6)
-	ans, err := r.getAnswer(ctx, req, nsaddr, isIPV6)
-	if err != nil {
-		return ans, err
+	if r.cache != nil {
+		ans, cacheErr := r.cache.Get(req.Question[0], "-")
+		if cacheErr == nil {
+			return ans, nil
+		}
 	}
 
-	r.sortAnswerRecords(ans)
+	nsaddr := r.getRootNS(isIPV6)
+	ans, err := r.resolve(ctx, req, isIPV6, 1, nsaddr)
+	if err != nil {
+		return nil, err
+	}
 
 	utils.MsgSetupEdns(ans)
 
-	// our answer will never be authoritative
-	ans.Authoritative = false
-	return ans, err
+	if r.cache != nil {
+		r.cache.Set(req.Question[0], "-", ans)
+	}
+
+	return ans, nil
+}
+
+// given an answer msg, tries to get dns ip address.
+// if the ans is authoritative it searches into Answer message section
+// if not it tries to get it from Extra section
+func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error) {
+
+	ipv4 := []net.IP{}
+	ipv6 := []net.IP{}
+
+	if ans.Authoritative {
+		for _, e := range ans.Answer {
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = append(ipv4, a.A)
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = append(ipv6, aaaa.AAAA)
+			}
+		}
+	} else {
+		if len(ans.Ns) == 0 {
+			return "", errors.New("no NS record found")
+		}
+		n := rand.Intn(len(ans.Ns))
+		rr := ans.Ns[n]
+		if _, ok := rr.(*dns.NS); !ok {
+			return "", errors.New("not a NS record")
+		}
+		ns := rr.(*dns.NS)
+
+		for _, e := range ans.Extra {
+			if e.Header().Name != ns.Ns {
+				continue
+			}
+			switch e.Header().Rrtype {
+			case dns.TypeA:
+				a := e.(*dns.A)
+				ipv4 = append(ipv4, a.A)
+			case dns.TypeAAAA:
+				aaaa := e.(*dns.AAAA)
+				ipv6 = append(ipv6, aaaa.AAAA)
+			}
+		}
+	}
+
+	var ipv4res net.IP
+	var ipv6res net.IP
+	if len(ipv4) > 0 {
+		ipv4res = ipv4[rand.Intn(len(ipv4))]
+	}
+	if len(ipv6) > 0 {
+		ipv6res = ipv6[rand.Intn(len(ipv6))]
+	}
+	if ipv6res != nil && isIPV6 {
+		return fmt.Sprintf("[%s]:53", ipv6res), nil
+	}
+	if ipv4res != nil && !isIPV6 {
+		return fmt.Sprintf("%s:53", ipv4res), nil
+	}
+	return "", errors.New("not ns record found")
+}
+func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (string, error) {
+	res, err := r.resolveNSIPFromAns(ans, isIPV6)
+	if err == nil {
+		return res, err
+	}
+	if len(ans.Ns) == 0 {
+		return "", errors.New("no NS records in answer")
+	}
+
+	n := rand.Intn(len(ans.Ns))
+	rr := ans.Ns[n]
+	if _, ok := rr.(*dns.NS); !ok {
+		return "", errors.New("is not an NS record")
+	}
+	ns := rr.(*dns.NS)
+
+	r1 := new(dns.Msg)
+	if isIPV6 {
+		r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeAAAA)
+	} else {
+		r1.SetQuestion(dns.Fqdn(ns.Ns), dns.TypeA)
+	}
+
+	nsaddr := r.getRootNS(isIPV6)
+	resp, err := r.resolve(ctx, r1, isIPV6, 1, nsaddr)
+	if err != nil {
+		return "", err
+	}
+	return r.resolveNSIPFromAns(resp, isIPV6)
+}
+
+func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, nsaddr string) (*dns.Msg, error) {
+	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
+	rc.RecursionCount++
+	if rc.RecursionCount >= resolverMaxLevel {
+		return nil, errors.New("resolve: recursionMaxLevel reached")
+	}
+	ctx = context.WithValue(ctx, ResolverContextKey, rc)
+
+	q := req.Question[0]
+
+	labels := dns.SplitDomainName(q.Name)
+	slices.Reverse(labels)
+
+	if depth > len(labels) {
+		return nil, errors.New("no answer: max depth reached")
+	}
+
+	l := labels[0:depth]
+
+	slices.Reverse(l)
+	fqdn := dns.Fqdn(strings.Join(l, "."))
+
+	r1 := new(dns.Msg)
+	r1.SetQuestion(fqdn, q.Qtype)
+
+	ans, err := r.queryNS(r1, nsaddr)
+	if err != nil {
+		return nil, err
+	}
+	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
+
+	if !ans.Authoritative && len(ans.Ns) > 0 {
+		// find the delegate nameserver address
+		nsaddr, err := r.resolveNS(ctx, ans, isIPV6)
+		if err != nil {
+			return nil, err
+		}
+
+		// go deeper
+		res, err := r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		if err != nil {
+			// resolve using the new addr
+			res, err = r.resolve(ctx, req, isIPV6, depth, nsaddr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return res, err
+	}
+
+	haveAnswer := false
+	for _, rr := range ans.Answer {
+		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
+			haveAnswer = true
+		}
+	}
+
+	// deal with cnames
+	if !haveAnswer {
+		resp := ans.Copy()
+		maxLoop := cnameChainMaxDeep
+		for {
+
+			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
+			if rr != nil && rr.Header().Name == q.Name {
+				cname := rr.(*dns.CNAME)
+				newReq := new(dns.Msg)
+				newReq.SetQuestion(cname.Target, q.Qtype)
+
+				nsaddr := r.getRootNS(isIPV6)
+				resp, err = r.resolve(ctx, newReq, isIPV6, 1, nsaddr)
+
+				if err == nil {
+					ans.Answer = append(resp.Answer, rr)
+					for _, rr := range ans.Answer {
+						if rr.Header().Rrtype == q.Qtype {
+							haveAnswer = true
+						}
+					}
+				}
+			}
+			if haveAnswer {
+				break
+			}
+			maxLoop--
+			if maxLoop == 0 {
+				break
+			}
+		}
+	}
+
+	if !haveAnswer {
+		if depth+1 > len(labels) {
+			for _, rr := range ans.Ns {
+				if _, ok := rr.(*dns.SOA); ok {
+					soa := new(dns.Msg)
+					soa.Answer = append(soa.Answer, rr)
+					soa.SetRcode(ans, ans.Rcode)
+					return soa, nil
+				}
+			}
+		} else {
+			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		}
+	}
+	return ans, nil
+}
+
+func (r *Recursor) getRootNS(isIPV6 bool) string {
+	var nsaddr string
+	if isIPV6 {
+		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
+	} else {
+		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
+	}
+
+	return nsaddr
 }
 
 func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
+	haveCache := r.cache != nil
+
+	q := req.Question[0]
+	if haveCache {
+		ans, cacheErr := r.cache.Get(q, nsaddr)
+		if cacheErr == nil {
+			return ans, nil
+		}
+	}
+
+	// TODO: implement single inflight against upstream servers
+	// there should be only one request active for each cache key
+	// Waiting clients should get the answer from cache
 	network := "udp"
 	qname := req.Question[0].Name
 	for {
@@ -127,6 +325,9 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		}
 
 		if !ans.Truncated {
+			if haveCache {
+				r.cache.Set(q, nsaddr, ans)
+			}
 			return ans, nil
 		}
 		if network == "tcp" {
@@ -134,263 +335,4 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		}
 		network = "tcp"
 	}
-}
-
-func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, res *dns.Msg, isIPV6 bool) (string, error) {
-	n := rand.Intn(len(res.Ns))
-	rr := res.Ns[n]
-	if _, ok := rr.(*dns.NS); !ok {
-		return "", fmt.Errorf("%s not a NS record", rr)
-	}
-	ns := rr.(*dns.NS)
-
-	// root nameservers will answer filling the NS section (as authoritative)
-	// and putting the resolved A and AAAA records into extra section
-	// $ dig @198.41.0.4 google.it
-	// ;; AUTHORITY SECTION:
-	// it.			172800	IN	NS	d.dns.it.
-	// it.			172800	IN	NS	r.dns.it.
-	// it.			172800	IN	NS	a.dns.it.
-	// it.			172800	IN	NS	nameserver.cnr.it.
-	// it.			172800	IN	NS	dns.nic.it.
-	// it.			172800	IN	NS	m.dns.it.
-
-	// ;; ADDITIONAL SECTION:
-	// d.dns.it.			172800	IN	A		45.142.220.39
-	// d.dns.it.			172800	IN	AAAA	2a0e:dbc0::39
-	// r.dns.it.			172800	IN	A		193.206.141.46
-	// r.dns.it.			172800	IN	AAAA	2001:760:ffff:ffff::ca
-	// a.dns.it.			172800	IN	A		194.0.16.215
-	// a.dns.it.			172800	IN	AAAA	2001:678:12:0:194:0:16:215
-	// nameserver.cnr.it.	172800	IN	A		194.119.192.34
-	// nameserver.cnr.it.	172800	IN	AAAA	2a00:1620:c0:220:194:119:192:34
-	// dns.nic.it.			172800	IN	A		192.12.192.5
-	// dns.nic.it.			172800	IN	AAAA	2a00:d40:1:1::5
-	// m.dns.it.			172800	IN	A		217.29.76.4
-	// m.dns.it.			172800	IN	AAAA	2001:1ac0:0:200:0:a5d1:6004:2
-
-	// we are going to extract the resolved records from the extra section
-	var ipv4 net.IP
-	var ipv6 net.IP
-	for _, e := range res.Extra {
-		if e.Header().Name != ns.Ns {
-			continue
-		}
-		switch e.Header().Rrtype {
-		case dns.TypeA:
-			a := e.(*dns.A)
-			ipv4 = a.A
-		case dns.TypeAAAA:
-			aaaa := e.(*dns.AAAA)
-			ipv6 = aaaa.AAAA
-		}
-	}
-
-	// If we query the second level NS we get something like this intead:
-	// $ dig @194.0.16.215 google.it
-	// ;; QUESTION SECTION:
-	// ;google.it.			IN	A
-
-	// ;; AUTHORITY SECTION:
-	// google.it.		10800	IN	NS	ns2.google.com.
-	// google.it.		10800	IN	NS	ns4.google.com.
-	// google.it.		10800	IN	NS	ns1.google.com.
-	// google.it.		10800	IN	NS	ns3.google.com.
-	//
-	// no A or AAAA records in Extra section
-	// So we here are going to ask the rootNS server who can resolve the
-	// ns2.google.com. name and will recursively resolve the final A and AAAA record
-	// using the authoritative nameserver
-	if ipv4 == nil && ipv6 == nil {
-		// n := rand.Intn(len(res.Ns))
-		// ns := res.Ns[n].(*dns.NS)
-
-		rootNS := r.getRootNS(isIPV6)
-
-		newReq := new(dns.Msg)
-		if isIPV6 {
-			newReq.SetQuestion(ns.Ns, dns.TypeAAAA)
-		} else {
-			newReq.SetQuestion(ns.Ns, dns.TypeA)
-		}
-
-		var ipv4 net.IP
-		var ipv6 net.IP
-
-		retryForIPv4 := 1
-		for ipv4 == nil && ipv6 == nil && retryForIPv4 >= 0 {
-			ans, err := r.getAnswer(ctx, newReq, rootNS, isIPV6)
-			if err != nil {
-				return "", err
-			}
-
-			for _, e := range ans.Answer {
-				switch e.Header().Rrtype {
-				case dns.TypeA:
-					a := e.(*dns.A)
-					ipv4 = a.A
-				case dns.TypeAAAA:
-					aaaa := e.(*dns.AAAA)
-					ipv6 = aaaa.AAAA
-				}
-			}
-			if ipv4 == nil && ipv6 == nil && isIPV6 {
-				newReq.SetQuestion(ns.Ns, dns.TypeA)
-			}
-			retryForIPv4--
-		}
-
-		if isIPV6 && ipv6 != nil {
-			return fmt.Sprintf("[%s]:53", ipv6), nil
-		}
-		return fmt.Sprintf("%s:53", ipv4), nil
-	}
-	if isIPV6 && ipv6 != nil {
-		return fmt.Sprintf("[%s]:53", ipv6), nil
-	}
-	return fmt.Sprintf("%s:53", ipv4), nil
-}
-
-func (r *Recursor) getRootNS(isIPV6 bool) string {
-	var nsaddr string
-	if isIPV6 {
-		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
-	} else {
-		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
-	}
-
-	return nsaddr
-}
-
-func (r *Recursor) resolveNSLoop(m *dns.Msg, q dns.Question) {
-	nss := []string{}
-	for _, r := range m.Ns {
-		if _, ok := r.(*dns.NS); ok {
-			rns := r.(*dns.NS)
-			nss = append(nss, rns.Ns)
-		}
-	}
-
-	if slices.Contains(nss, q.Name) {
-		for _, e := range m.Extra {
-			if e.Header().Name != q.Name {
-				continue
-			}
-
-			if e.Header().Rrtype == q.Qtype {
-				m.Answer = append(m.Answer, e)
-			}
-		}
-	}
-	m.Extra = []dns.RR{}
-}
-
-func (r *Recursor) getAnswer(ctx context.Context, req *dns.Msg, nsaddr string, isIPV6 bool) (*dns.Msg, error) {
-	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
-	rc.RecursionCount++
-	if rc.RecursionCount >= recursionMaxLevel {
-		return nil, errors.New("getAnswer: recursionMaxLevel reached")
-	}
-	ctx = context.WithValue(ctx, ResolverContextKey, rc)
-
-	if len(req.Question) == 0 {
-		return nil, errors.New("no question available")
-	}
-	q := req.Question[0]
-
-	var err error
-
-	// try to get the answer from cache.
-	// if no cached answer is present, do the recursive query
-	var cacheErr error
-	var ans *dns.Msg
-	isCached := false
-	haveCache := r.cache != nil
-	if haveCache {
-		ans, cacheErr = r.cache.Get(q, nsaddr)
-		if cacheErr == nil {
-			isCached = true
-			if ctx.Value(collector.CollectorContextKey) != nil {
-				cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
-				cc.CacheHits += 1
-			}
-		}
-	}
-	if !isCached {
-		ans, err = r.queryNS(req, nsaddr)
-		if err != nil {
-			return nil, err
-		}
-		if haveCache {
-			r.cache.Set(q, nsaddr, ans)
-		}
-	}
-
-	if !ans.Authoritative && len(ans.Ns) > 0 {
-		// TODO: fix me
-		r.resolveNSLoop(ans, q)
-
-		if len(ans.Answer) == 0 {
-			// find the authoritative ns
-			authNS, err := r.resolveNS(ctx, req, ans, isIPV6)
-			if err != nil {
-				return nil, err
-			}
-			// call getAnswer recursively
-			ans, err = r.getAnswer(ctx, req, authNS, isIPV6)
-			if err != nil {
-				return nil, err
-			}
-			if haveCache && !isCached {
-				r.cache.Set(q, authNS, ans)
-			}
-		}
-	}
-
-	if q.Qtype == dns.TypeA || q.Qtype == dns.TypeAAAA || q.Qtype == dns.TypeCNAME {
-
-		// handle CNAME loop
-		maxLoop := cnameChainMaxDeep
-		for {
-
-			haveAnswer := false
-			switch q.Qtype {
-			case dns.TypeA:
-				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeA) != nil
-			case dns.TypeAAAA:
-				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeAAAA) != nil
-			case dns.TypeCNAME:
-				haveAnswer = utils.MsgGetAnswerByType(ans, dns.TypeCNAME) != nil
-			}
-
-			if haveAnswer {
-				break
-			}
-
-			rr := utils.MsgGetAnswerByType(ans, dns.TypeCNAME)
-			if rr != nil {
-				cname := rr.(*dns.CNAME)
-				// newReq := req.NewWithQuestion(cname.Target, q.Qtype)
-				newReq := new(dns.Msg)
-				newReq.SetQuestion(cname.Target, q.Qtype)
-				nsaddr := r.getRootNS(false)
-				ans, err = r.getAnswer(ctx, newReq, nsaddr, isIPV6)
-				if err != nil {
-					return nil, err
-				}
-				ans.Answer = append(ans.Answer, cname)
-				if haveCache && !isCached {
-					cq := newReq.Question[0]
-					r.cache.Set(cq, nsaddr, ans)
-				}
-				break
-			}
-			maxLoop--
-			if maxLoop == 0 {
-				break
-			}
-		}
-	}
-
-	return ans, nil
 }

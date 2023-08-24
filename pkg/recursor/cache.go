@@ -21,12 +21,12 @@ func newRecursorCache(datadir string) *recursorCache {
 	return rc
 }
 
-func (c *recursorCache) buildKey(q dns.Question, nsaddr string) string {
-	return fmt.Sprintf("%s_%s_%d_%d", nsaddr, q.Name, q.Qtype, q.Qclass)
+func (c *recursorCache) buildKey(q dns.Question, prefix string) string {
+	return fmt.Sprintf("%s_%s_%d_%d", prefix, q.Name, q.Qtype, q.Qclass)
 }
 
-func (c *recursorCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
-	key := c.buildKey(q, nsaddr)
+func (c *recursorCache) Set(q dns.Question, prefix string, m *dns.Msg) error {
+	key := c.buildKey(q, prefix)
 
 	minTTL := utils.MsgGetMinTTL(m)
 
@@ -40,13 +40,12 @@ func (c *recursorCache) Set(q dns.Question, nsaddr string, m *dns.Msg) error {
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
 	// log.Printf("[cache set] %s, ttl:%fs, minTTL: %d", key, time.Until(i.Expires).Seconds(), minTTL)
-	// log.Printf("[cache set] %s, ttl:%fs, minTTL: %d, ans: %s, extra: %s", key, time.Until(i.Expires).Seconds(), minTTL, m.Answer, m.Extra)
 	// log.Printf("msg: %s", m)
 	return c.cache.Set(key, i)
 }
 
-func (c *recursorCache) Get(q dns.Question, nsaddr string) (*dns.Msg, error) {
-	key := c.buildKey(q, nsaddr)
+func (c *recursorCache) Get(q dns.Question, prefix string) (*dns.Msg, error) {
+	key := c.buildKey(q, prefix)
 	item, err := c.cache.Get(key)
 	if err != nil {
 		return nil, err

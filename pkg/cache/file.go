@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	cacheExpiredCheckInterval = 5 * time.Second
+	cacheExpiredCheckInterval = 10 * time.Second
 	cacheDumpInterval         = 60 * time.Second
 
 	cacheMaxItemsPerBucket = 10000

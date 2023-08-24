@@ -21,7 +21,7 @@ type ResolverContext struct {
 
 const (
 	// retries until error
-	maxRetriesOnError = 3
+	maxRetriesOnError = 1
 
 	// for logging
 	handlerName = "resolver"
@@ -66,7 +66,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		if retries == 0 {
 			log.Err(err).
 				Str("query", r.Name()).
-				Msg("error on getAnswer")
+				Msg("resolver error")
 
 			h.Next.ServeDNS(c, r)
 			return
@@ -75,9 +75,8 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	if len(m.Answer) != 0 {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
-		m.Rcode = dns.RcodeSuccess
 		m.RecursionAvailable = true
-		r.Reply(m)
+		r.ReplyWithStatus(m, m.Rcode)
 		return
 	}
 
