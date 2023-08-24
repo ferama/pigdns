@@ -3,6 +3,7 @@ package main
 const (
 	// common
 	DebugFlag         = "debug"
+	InfoFlag          = "info"
 	DatadirFlag       = "datadir"
 	DomainFlag        = "domain"
 	ListenAddressFlag = "listen-address"

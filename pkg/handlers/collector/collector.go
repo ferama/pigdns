@@ -40,13 +40,13 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	var event *zerolog.Event
 
 	if isDOHproxy {
-		event = log.Debug().
+		event = log.Info().
 			Str("query", r.Name()).
 			Str("type", r.Type()).
 			Str("latency", totalLatency.Round(1*time.Millisecond).String()).
 			Str("protocol", r.Proto())
 	} else {
-		event = log.Debug().
+		event = log.Info().
 			Str("query", r.Name()).
 			Str("type", r.Type()).
 			Float64("latency", totalLatency.Seconds()).
