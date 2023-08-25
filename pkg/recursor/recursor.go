@@ -75,6 +75,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	utils.MsgSetupEdns(ans)
+	ans.Authoritative = false
 
 	if r.cache != nil {
 		r.cache.Set(req.Question[0], "-", ans)
@@ -91,7 +92,6 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 	ipv4 := []net.IP{}
 	ipv6 := []net.IP{}
 
-	// if ans.Authoritative {
 	for _, e := range ans.Answer {
 		switch e.Header().Rrtype {
 		case dns.TypeA:
@@ -267,7 +267,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 				resp, err = r.resolve(ctx, newReq, isIPV6, 1, nsaddr)
 
 				if err == nil {
-					ans.Answer = append(resp.Answer, rr)
+					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
