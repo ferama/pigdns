@@ -72,7 +72,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			return
 		}
 	}
-	if len(m.Answer) != 0 {
+	if len(m.Answer) != 0 || len(m.Ns) != 0 {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
 		m.RecursionAvailable = true

@@ -102,7 +102,7 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 			ipv6 = append(ipv6, aaaa.AAAA)
 		}
 	}
-	// } else {
+
 	if len(ipv4) == 0 && len(ipv6) == 0 {
 		if len(ans.Ns) == 0 {
 			return "", errors.New("no NS record found")
@@ -219,7 +219,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 				for _, rr := range ans.Ns {
 					if _, ok := rr.(*dns.SOA); ok {
 						soa := new(dns.Msg)
-						soa.Answer = append(soa.Answer, rr)
+						soa.Ns = append(soa.Ns, rr)
 						soa.SetRcode(ans, ans.Rcode)
 						return soa, nil
 					}
@@ -299,6 +299,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 		}
 	}
+
 	return ans, nil
 }
 
