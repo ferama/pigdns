@@ -415,12 +415,14 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg
 
 		if !ans.Truncated {
 			if haveCache {
-				r.cache.Set(q, nsaddr, ans)
+				if countLabels == 1 {
+					// Always cache root NS answers
+					r.cache.SetWithKey(cacheKey, ans)
+				} else {
+					r.cache.Set(q, nsaddr, ans)
+				}
 			}
-			if countLabels == 1 {
-				// Always cache from cache root NS answers
-				r.cache.SetWithKey(cacheKey, ans)
-			}
+
 			return ans, nil
 		}
 		if network == "tcp" {
