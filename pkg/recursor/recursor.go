@@ -91,18 +91,19 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 	ipv4 := []net.IP{}
 	ipv6 := []net.IP{}
 
-	if ans.Authoritative {
-		for _, e := range ans.Answer {
-			switch e.Header().Rrtype {
-			case dns.TypeA:
-				a := e.(*dns.A)
-				ipv4 = append(ipv4, a.A)
-			case dns.TypeAAAA:
-				aaaa := e.(*dns.AAAA)
-				ipv6 = append(ipv6, aaaa.AAAA)
-			}
+	// if ans.Authoritative {
+	for _, e := range ans.Answer {
+		switch e.Header().Rrtype {
+		case dns.TypeA:
+			a := e.(*dns.A)
+			ipv4 = append(ipv4, a.A)
+		case dns.TypeAAAA:
+			aaaa := e.(*dns.AAAA)
+			ipv6 = append(ipv6, aaaa.AAAA)
 		}
-	} else {
+	}
+	// } else {
+	if len(ipv4) == 0 && len(ipv6) == 0 {
 		if len(ans.Ns) == 0 {
 			return "", errors.New("no NS record found")
 		}
@@ -142,7 +143,7 @@ func (r *Recursor) resolveNSIPFromAns(ans *dns.Msg, isIPV6 bool) (string, error)
 	if ipv4res != nil && !isIPV6 {
 		return fmt.Sprintf("%s:53", ipv4res), nil
 	}
-	return "", errors.New("not ns record found")
+	return "", errors.New("no ns record found")
 }
 
 func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (string, error) {
@@ -195,6 +196,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 
 	l := labels[0:depth]
 
+	log.Printf("$$$ q: %s, labels: %s, l: %s", q.Name, labels, l)
 	slices.Reverse(l)
 	fqdn := dns.Fqdn(strings.Join(l, "."))
 
@@ -205,20 +207,36 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	if err != nil {
 		return nil, err
 	}
+
 	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
-	if !ans.Authoritative && len(ans.Ns) > 0 {
+	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+		// if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the delegate nameserver address
-		nsaddr, err := r.resolveNS(ctx, ans, isIPV6)
+		nextNsaddr, err := r.resolveNS(ctx, ans, isIPV6)
 		if err != nil {
-			return nil, err
+			if depth+1 > len(labels) {
+				for _, rr := range ans.Ns {
+					if _, ok := rr.(*dns.SOA); ok {
+						soa := new(dns.Msg)
+						soa.Answer = append(soa.Answer, rr)
+						soa.SetRcode(ans, ans.Rcode)
+						return soa, nil
+					}
+				}
+			}
+			// if we can't resolve resolve NS because we have soa
+			// records only or errors in NS field etc, try to
+			// get an answer increasing depth level
+			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+			// return nil, err
 		}
 
 		// go deeper
-		res, err := r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
+		res, err := r.resolve(ctx, req, isIPV6, depth+1, nextNsaddr)
 		if err != nil {
 			// resolve using the new addr
-			res, err = r.resolve(ctx, req, isIPV6, depth, nsaddr)
+			res, err = r.resolve(ctx, req, isIPV6, depth, nextNsaddr)
 			if err != nil {
 				return nil, err
 			}
