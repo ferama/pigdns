@@ -203,11 +203,23 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	r1 := new(dns.Msg)
 	r1.SetQuestion(fqdn, q.Qtype)
 
-	ans, err := r.queryNS(r1, nsaddr)
+	ans, err := r.queryNS(r1, nsaddr, true)
 	if err != nil {
 		return nil, err
 	}
 
+	// special case for handling TLDs
+	if dns.CountLabel(q.Name) == 1 {
+		nextNsaddr, err := r.resolveNS(ctx, ans, isIPV6)
+		if err != nil {
+			return nil, err
+		}
+		ans, err := r.queryNS(r1, nextNsaddr, false)
+		if err != nil {
+			return nil, err
+		}
+		return ans, nil
+	}
 	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
@@ -314,17 +326,31 @@ func (r *Recursor) getRootNS(isIPV6 bool) string {
 	return nsaddr
 }
 
-func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
-	haveCache := r.cache != nil
+func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg, error) {
+	haveCache := (r.cache != nil) && useCache
 
 	q := req.Question[0]
+
+	countLabels := dns.CountLabel(q.Name)
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 	if haveCache {
-		ans, cacheErr := r.cache.Get(q, nsaddr)
-		if cacheErr == nil {
+
+		// Always get from cache root NS answers
+		if countLabels == 1 {
+			ans, err := r.cache.GetByKey(cacheKey)
+			if err == nil {
+				return ans, nil
+			}
+		}
+
+		ans, err := r.cache.Get(q, nsaddr)
+		if err == nil {
 			return ans, nil
 		}
 
-		cacheKey := r.cache.BuildKey(q, nsaddr)
+		if countLabels != 1 {
+			cacheKey = r.cache.BuildKey(q, nsaddr)
+		}
 
 		var emu *sync.Mutex
 		// get or create a new mutex for the cache key in a thread
@@ -352,12 +378,19 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 
 		// Another coroutine (the non locked one) likely has filled the cache already
 		// so take the advantage here
-		ans, cacheErr = r.cache.Get(q, nsaddr)
-		if cacheErr == nil {
+		if countLabels == 1 {
+			ans, err := r.cache.GetByKey(cacheKey)
+			if err == nil {
+				return ans, nil
+			}
+		}
+		ans, err = r.cache.Get(q, nsaddr)
+		if err == nil {
 			return ans, nil
 		}
 	}
 
+	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
 	qname := req.Question[0].Name
 	for {
@@ -383,6 +416,10 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		if !ans.Truncated {
 			if haveCache {
 				r.cache.Set(q, nsaddr, ans)
+			}
+			if countLabels == 1 {
+				// Always cache from cache root NS answers
+				r.cache.SetWithKey(cacheKey, ans)
 			}
 			return ans, nil
 		}
