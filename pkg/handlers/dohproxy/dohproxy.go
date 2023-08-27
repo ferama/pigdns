@@ -77,6 +77,6 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	utils.MsgSetupEdns(respMsg)
 
-	r.Reply(respMsg)
+	r.ReplyWithStatus(respMsg, respMsg.Rcode)
 	h.Next.ServeDNS(c, r)
 }
