@@ -69,7 +69,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	nsaddr := r.getRootNS(isIPV6)
-	ans, err := r.resolve(ctx, req, isIPV6, 1, nsaddr)
+	ans, err := r.resolve(ctx, req, isIPV6, 0, nsaddr)
 	if err != nil {
 		return nil, err
 	}
@@ -170,10 +170,11 @@ func (r *Recursor) resolveNS(ctx context.Context, ans *dns.Msg, isIPV6 bool) (st
 	}
 
 	nsaddr := r.getRootNS(isIPV6)
-	resp, err := r.resolve(ctx, r1, isIPV6, 1, nsaddr)
+	resp, err := r.resolve(ctx, r1, isIPV6, 0, nsaddr)
 	if err != nil {
 		return "", err
 	}
+
 	return r.resolveNSIPFromAns(resp, isIPV6)
 }
 
@@ -191,6 +192,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	slices.Reverse(labels)
 
 	if depth > len(labels) {
+		log.Printf("depth: %d, len(labels): %d", depth, len(labels))
 		return nil, errors.New("no answer: max depth reached")
 	}
 
@@ -207,17 +209,23 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("=== %s", ans)
 
 	// special case for handling TLDs
 	if dns.CountLabel(q.Name) == 1 {
+		ans, err := r.queryNS(req, r.getRootNS(isIPV6), false)
+		if err != nil {
+			return nil, err
+		}
 		nextNsaddr, err := r.resolveNS(ctx, ans, isIPV6)
 		if err != nil {
 			return nil, err
 		}
-		ans, err := r.queryNS(r1, nextNsaddr, false)
+		ans, err = r.queryNS(req, nextNsaddr, false)
 		if err != nil {
 			return nil, err
 		}
+
 		return ans, nil
 	}
 	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
@@ -243,6 +251,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 			// return nil, err
 		}
+		log.Printf("%s", nextNsaddr)
 
 		// go deeper
 		res, err := r.resolve(ctx, req, isIPV6, depth+1, nextNsaddr)
@@ -276,7 +285,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 				newReq.SetQuestion(cname.Target, q.Qtype)
 
 				nsaddr := r.getRootNS(isIPV6)
-				resp, err = r.resolve(ctx, newReq, isIPV6, 1, nsaddr)
+				resp, err = r.resolve(ctx, newReq, isIPV6, 0, nsaddr)
 
 				if err == nil {
 					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
