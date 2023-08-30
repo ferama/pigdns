@@ -192,46 +192,32 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 	slices.Reverse(labels)
 
 	if depth > len(labels) {
-		log.Printf("depth: %d, len(labels): %d", depth, len(labels))
 		return nil, errors.New("no answer: max depth reached")
 	}
 
 	l := labels[0:depth]
 
-	log.Printf("$$$ q: %s, labels: %s, l: %s", q.Name, labels, l)
 	slices.Reverse(l)
 	fqdn := dns.Fqdn(strings.Join(l, "."))
 
 	r1 := new(dns.Msg)
 	r1.SetQuestion(fqdn, q.Qtype)
+	log.Printf("$$$ q: %s, labels: %s, l: %s, cl: %d", q.Name, labels, l, dns.CountLabel(r1.Question[0].Name))
 
-	ans, err := r.queryNS(r1, nsaddr, true)
+	// this prevents a recursion loop
+	// In practice this only happens if we receive a query for
+	// . or tld for the first time
+	useCache := true
+	if dns.CountLabel(q.Name) <= 1 {
+		log.Printf("ignoring cache. q: %s", q.Name)
+		useCache = false
+	}
+	ans, err := r.queryNS(r1, nsaddr, useCache)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("=== %s", ans)
-
-	// special case for handling TLDs
-	if dns.CountLabel(q.Name) == 1 {
-		ans, err := r.queryNS(req, r.getRootNS(isIPV6), false)
-		if err != nil {
-			return nil, err
-		}
-		nextNsaddr, err := r.resolveNS(ctx, ans, isIPV6)
-		if err != nil {
-			return nil, err
-		}
-		ans, err = r.queryNS(req, nextNsaddr, false)
-		if err != nil {
-			return nil, err
-		}
-
-		return ans, nil
-	}
-	// log.Printf("auth: %v, fqdn: %s, ns: %s", ans.Authoritative, fqdn, ans)
 
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
-		// if !ans.Authoritative && len(ans.Ns) > 0 {
 		// find the delegate nameserver address
 		nextNsaddr, err := r.resolveNS(ctx, ans, isIPV6)
 		if err != nil {
@@ -251,8 +237,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool, depth
 			return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
 			// return nil, err
 		}
-		log.Printf("%s", nextNsaddr)
-
 		// go deeper
 		res, err := r.resolve(ctx, req, isIPV6, depth+1, nextNsaddr)
 		if err != nil {
@@ -345,7 +329,7 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg
 	if haveCache {
 
 		// Always get from cache root NS answers
-		if countLabels == 1 {
+		if countLabels <= 1 {
 			ans, err := r.cache.GetByKey(cacheKey)
 			if err == nil {
 				return ans, nil
@@ -357,7 +341,7 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg
 			return ans, nil
 		}
 
-		if countLabels != 1 {
+		if countLabels > 1 {
 			cacheKey = r.cache.BuildKey(q, nsaddr)
 		}
 
@@ -387,7 +371,7 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg
 
 		// Another coroutine (the non locked one) likely has filled the cache already
 		// so take the advantage here
-		if countLabels == 1 {
+		if countLabels <= 1 {
 			ans, err := r.cache.GetByKey(cacheKey)
 			if err == nil {
 				return ans, nil
