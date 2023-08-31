@@ -62,7 +62,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
 	if r.cache != nil {
-		ans, cacheErr := r.cache.Get(req.Question[0], "-")
+		ans, cacheErr := r.cache.Get(req.Question[0], "#")
 		if cacheErr == nil {
 			return ans, nil
 		}
@@ -78,7 +78,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	ans.Authoritative = false
 
 	if r.cache != nil {
-		r.cache.Set(req.Question[0], "-", ans)
+		r.cache.Set(req.Question[0], "#", ans)
 	}
 
 	return ans, nil
