@@ -22,7 +22,7 @@ const (
 	cacheDumpInterval         = 60 * time.Second
 
 	cacheMaxItemsPerBucket = 10000
-	cacheNumBuckets        = 256
+	cacheNumBuckets        = 128
 	cacheSubDir            = "cache"
 
 	// this worker are go routines that do jobs like check for record expiration,

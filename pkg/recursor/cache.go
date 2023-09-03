@@ -12,11 +12,13 @@ import (
 
 type recursorCache struct {
 	cache *cache.FileCache
+	name  string
 }
 
-func newRecursorCache(datadir string) *recursorCache {
+func newRecursorCache(datadir string, name string) *recursorCache {
 	rc := &recursorCache{
 		cache: cache.NewFileCache(datadir),
+		name:  name,
 	}
 
 	return rc
@@ -38,7 +40,7 @@ func (c *recursorCache) SetWithKey(key string, m *dns.Msg) error {
 		Data: packed,
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
-	log.Printf("[cache set] %s, ttl:%fs, minTTL: %d", key, time.Until(i.Expires).Seconds(), minTTL)
+	log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
 	// log.Printf("[cache set] msg: %s", m)
 	return c.cache.Set(key, i)
 }

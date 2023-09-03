@@ -41,6 +41,27 @@ var (
 	}
 )
 
+func getRootServers() *authServers {
+	severs := &authServers{}
+	for _, s := range rootNSIPv4 {
+		as := NSServer{
+			Addr:    s,
+			Version: IPv4,
+		}
+		severs.List = append(severs.List, as)
+	}
+
+	for _, s := range rootNSIPv6 {
+		as := NSServer{
+			Addr:    s,
+			Version: IPv6,
+		}
+		severs.List = append(severs.List, as)
+	}
+
+	return severs
+}
+
 func getRootNSIPv4() string {
 	n := rand.Intn(len(rootNSIPv4))
 	return rootNSIPv4[n]
