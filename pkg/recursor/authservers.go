@@ -1,6 +1,7 @@
 package recursor
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 )
@@ -42,7 +43,16 @@ func (a *authServers) String() string {
 	return ret
 }
 
-func (a *authServers) peekOne() NSServer {
-	n := rand.Intn(len(a.List))
-	return a.List[n]
+func (a *authServers) peekOne(allowIPv6 bool) (*NSServer, error) {
+	if len(a.List) == 0 {
+		return nil, errors.New("no NS to peek")
+	}
+	for {
+		n := rand.Intn(len(a.List))
+		s := a.List[n]
+		if !allowIPv6 && s.Version == IPv6 {
+			continue
+		}
+		return &s, nil
+	}
 }
