@@ -1,6 +1,7 @@
 package recursor
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,6 +48,9 @@ func (c *recursorCache) SetWithKey(key string, m *dns.Msg) error {
 
 func (c *recursorCache) Set(q dns.Question, prefix string, m *dns.Msg) error {
 	key := c.buildKey(q, prefix)
+	if key == "" {
+		return errors.New("empty key")
+	}
 
 	return c.SetWithKey(key, m)
 }
