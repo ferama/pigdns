@@ -66,6 +66,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		if retries == 0 {
 			log.Err(err).
 				Str("query", r.Name()).
+				Str("type", r.Type()).
 				Msg("resolver error")
 
 			h.Next.ServeDNS(c, r)

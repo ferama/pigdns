@@ -235,6 +235,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	if err != nil {
 		return resp, nil, err
 	}
+
 	servers, err := r.buildServers(ctx, resp, zone)
 	if err != nil {
 		// no nameservers found
@@ -295,12 +296,13 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	loop := 0
-	// TODO: investigate the 2 here
+	// TODO: investigate the 3 here
 	// if I don't introduce it this will not work as expected (it should return a soa response)
 	// dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
 	// This should respond with a soa record too
 	// dig @127.0.0.1 243.35.149.83.in-addr.arpa
-	for loop < 2 {
+	// dig @127.0.0.1 1-courier.push.apple.com aaaa
+	for loop < 3 {
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead
 			// Get nameservers ips and try to query them
