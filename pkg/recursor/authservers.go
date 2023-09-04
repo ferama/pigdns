@@ -17,12 +17,13 @@ const (
 	IPv6 Version = 0x2
 )
 
-type NSServer struct {
+type nsServer struct {
 	Addr    string
 	Version Version
+	TTL     uint32
 }
 
-func (n *NSServer) withPort() string {
+func (n *nsServer) withPort() string {
 	if n.Version == IPv4 {
 		return fmt.Sprintf("%s:53", n.Addr)
 	}
@@ -32,7 +33,7 @@ func (n *NSServer) withPort() string {
 type authServers struct {
 	Zone string
 
-	List []NSServer
+	List []nsServer
 }
 
 func (a *authServers) String() string {
@@ -43,7 +44,7 @@ func (a *authServers) String() string {
 	return ret
 }
 
-func (a *authServers) peekOne(allowIPv6 bool) (*NSServer, error) {
+func (a *authServers) peekOne(allowIPv6 bool) (*nsServer, error) {
 	if len(a.List) == 0 {
 		return nil, errors.New("no NS to peek")
 	}

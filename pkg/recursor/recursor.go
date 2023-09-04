@@ -37,7 +37,7 @@ const (
 
 type Recursor struct {
 	cache   *recursorCache
-	nsCache *recursorCache
+	nsCache *nsCache
 
 	mu      sync.Mutex
 	lockmap map[string]*sync.Mutex
@@ -50,7 +50,7 @@ func New(datadir string) *Recursor {
 	if datadir != "" {
 		log.Printf("[recursor] enabling file based cache")
 		r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "cache")
-		r.nsCache = newRecursorCache(filepath.Join(datadir, "cache", "ns"), "nscache")
+		r.nsCache = newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache")
 	}
 	return r
 }
@@ -61,12 +61,12 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
-	// if r.cache != nil {
-	// 	ans, cacheErr := r.cache.Get(req.Question[0], "#")
-	// 	if cacheErr == nil {
-	// 		return ans, nil
-	// 	}
-	// }
+	if r.cache != nil {
+		ans, cacheErr := r.cache.Get(req.Question[0], "#")
+		if cacheErr == nil {
+			return ans, nil
+		}
+	}
 
 	ans, err := r.resolve(ctx, req, isIPV6)
 	if err != nil {
@@ -76,21 +76,21 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	utils.MsgSetupEdns(ans)
 	ans.Authoritative = false
 
-	// if r.cache != nil {
-	// 	r.cache.Set(req.Question[0], "#", ans)
-	// }
+	if r.cache != nil {
+		r.cache.Set(req.Question[0], "#", ans)
+	}
 
 	return ans, nil
 }
 
 func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) (*authServers, error) {
+
 	servers := &authServers{
 		Zone: zone,
 	}
 	if len(ans.Ns) == 0 {
 		return nil, errors.New("no NS record found")
 	}
-	// log.Printf("buildServers. zone=%s\n\n%s", zone, ans)
 
 	searchIp := func(e dns.RR) bool {
 		ret := false
@@ -98,16 +98,18 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 		case dns.TypeA:
 			ret = true
 			a := e.(*dns.A)
-			servers.List = append(servers.List, NSServer{
+			servers.List = append(servers.List, nsServer{
 				Addr:    a.A.String(),
 				Version: IPv4,
+				TTL:     a.Hdr.Ttl,
 			})
 		case dns.TypeAAAA:
 			ret = true
 			aaaa := e.(*dns.AAAA)
-			servers.List = append(servers.List, NSServer{
+			servers.List = append(servers.List, nsServer{
 				Addr:    aaaa.AAAA.String(),
 				Version: IPv6,
+				TTL:     aaaa.Hdr.Ttl,
 			})
 		}
 		return ret
@@ -165,7 +167,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 	if len(servers.List) == 0 {
 		return nil, errors.New("can't find auth nameservers")
 	}
-
 	return servers, nil
 }
 
@@ -175,13 +176,19 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	end := false
 	var i int
 
-	log.Printf("{{{ question: %v, offset: %d", q, offset)
+	// log.Printf("{{{ question: %v, offset: %d", q, offset)
 	i, end = dns.NextLabel(q.Name, offset)
 	if end {
 		return getRootServers(), nil
 	}
 	zone := dns.Fqdn(q.Name[i:])
-	log.Printf("|||||||||| i: %d, q.Name: %s, zone: %s", i, q.Name, zone)
+
+	cached, err := r.nsCache.Get(zone)
+	if err == nil {
+		return cached, nil
+	}
+
+	// log.Printf("|||||||||| i: %d, q.Name: %s, zone: %s", i, q.Name, zone)
 
 	nsReq := new(dns.Msg)
 	nsReq.SetQuestion(zone, dns.TypeNS)
@@ -206,18 +213,16 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		// go to upper zone and try again
 		i, end := dns.NextLabel(zone, 0)
 		if end {
+			r.nsCache.Set(servers)
 			return servers, err
 		}
 		next := dns.Fqdn(zone[i:])
 		nsReq := new(dns.Msg)
 		nsReq.SetQuestion(next, dns.TypeNS)
 		servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
-		// if err == nil {
-		// 	servers = nextServers
-		// 	log.Printf("%s", servers)
-		// }
 	}
 
+	r.nsCache.Set(servers)
 	return servers, err
 }
 
@@ -247,24 +252,31 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	// return ans, nil
+	loop := 0
+	// TODO: investigate the 2 here
+	// if I don't introduce it this will not work as expected (it should return a soa response)
+	// dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
+	for loop < 2 {
+		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+			// no asnwer from the previous query but we got nameservers intead
+			// Get nameservers ips and try to query them
+			servers, err := r.buildServers(ctx, ans, q.Name)
+			if err != nil {
+				// soa answer
+				return ans, nil
+				// return nil, err
+			}
 
-	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
-		// no asnwer from the previous query but we got nameservers intead
-		// Get nameservers ips and try to query them
-		servers, err := r.buildServers(ctx, ans, q.Name)
-		if err != nil {
-			return nil, err
+			s, err := servers.peekOne(isIPV6)
+			if err != nil {
+				return nil, err
+			}
+			ans, err = r.queryNS(req, s.withPort(), false)
+			if err != nil {
+				return nil, err
+			}
 		}
-
-		s, err := servers.peekOne(isIPV6)
-		if err != nil {
-			return nil, err
-		}
-		ans, err = r.queryNS(req, s.withPort(), false)
-		if err != nil {
-			return nil, err
-		}
+		loop++
 	}
 
 	haveAnswer := false
@@ -273,7 +285,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			haveAnswer = true
 		}
 	}
-	log.Printf("************** CNAME *****************")
 	// deal with CNAMES
 	if !haveAnswer {
 		resp := ans.Copy()
@@ -302,15 +313,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				break
 			}
 		}
-	}
-
-	for _, rr := range ans.Answer {
-		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
-			haveAnswer = true
-		}
-	}
-	if !haveAnswer {
-		// TODO: soa response
 	}
 
 	return ans, nil

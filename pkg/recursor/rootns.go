@@ -40,7 +40,7 @@ var (
 func getRootServers() *authServers {
 	severs := &authServers{}
 	for _, s := range rootNSIPv4 {
-		as := NSServer{
+		as := nsServer{
 			Addr:    s,
 			Version: IPv4,
 		}
@@ -48,7 +48,7 @@ func getRootServers() *authServers {
 	}
 
 	for _, s := range rootNSIPv6 {
-		as := NSServer{
+		as := nsServer{
 			Addr:    s,
 			Version: IPv6,
 		}
