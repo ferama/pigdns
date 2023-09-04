@@ -242,6 +242,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+		// no asnwer from the previous query but we got nameservers intead
+		// Get nameservers ips and try to query them
 		servers, err := r.buildServers(ctx, ans, q.Name)
 		if err != nil {
 			return nil, err
@@ -294,64 +296,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	return ans, nil
-
-	// haveAnswer := false
-	// for _, rr := range ans.Answer {
-	// 	if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
-	// 		haveAnswer = true
-	// 	}
-	// }
-
-	// // deal with cnames
-	// if !haveAnswer {
-	// 	resp := ans.Copy()
-	// 	maxLoop := cnameChainMaxDeep
-	// 	for {
-
-	// 		rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
-	// 		if rr != nil && rr.Header().Name == q.Name {
-	// 			cname := rr.(*dns.CNAME)
-	// 			newReq := new(dns.Msg)
-	// 			newReq.SetQuestion(cname.Target, q.Qtype)
-
-	// 			nsaddr := r.getRootNS(isIPV6)
-	// 			resp, err = r.resolve(ctx, newReq, isIPV6, 0, nsaddr)
-
-	// 			if err == nil {
-	// 				ans.Answer = append([]dns.RR{rr}, resp.Answer...)
-	// 				for _, rr := range ans.Answer {
-	// 					if rr.Header().Rrtype == q.Qtype {
-	// 						haveAnswer = true
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 		if haveAnswer {
-	// 			break
-	// 		}
-	// 		maxLoop--
-	// 		if maxLoop == 0 {
-	// 			break
-	// 		}
-	// 	}
-	// }
-
-	// if !haveAnswer {
-	// 	if depth+1 > len(labels) {
-	// 		for _, rr := range ans.Ns {
-	// 			if _, ok := rr.(*dns.SOA); ok {
-	// 				soa := new(dns.Msg)
-	// 				soa.Answer = append(soa.Answer, rr)
-	// 				soa.SetRcode(ans, ans.Rcode)
-	// 				return soa, nil
-	// 			}
-	// 		}
-	// 	} else {
-	// 		return r.resolve(ctx, req, isIPV6, depth+1, nsaddr)
-	// 	}
-	// }
-
-	// return ans, nil
 }
 
 func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg, error) {
