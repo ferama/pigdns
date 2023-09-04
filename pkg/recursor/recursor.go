@@ -258,6 +258,18 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	return resp, servers, err
 }
 
+func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
+	for _, rr := range resp.Ns {
+		if _, ok := rr.(*dns.SOA); ok {
+			soa := new(dns.Msg)
+			soa.Ns = append(soa.Ns, rr)
+			soa.SetRcode(resp, resp.Rcode)
+			return soa
+		}
+	}
+	return nil
+}
+
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
 	rc.RecursionCount++
@@ -272,15 +284,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	resp, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
 	if err != nil {
 		if err == errNoNSfound && resp != nil && len(resp.Ns) > 0 {
-			for _, rr := range resp.Ns {
-				if _, ok := rr.(*dns.SOA); ok {
-					soa := new(dns.Msg)
-					soa.Ns = append(soa.Ns, rr)
-					soa.SetRcode(resp, resp.Rcode)
-					return soa, nil
-				}
+			soa := r.findSoa(resp)
+			if soa != nil {
+				return soa, nil
 			}
-
 		}
 		return nil, err
 	}
@@ -347,6 +354,11 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 					return nil, err
 				}
 				if err == nil {
+					soa := r.findSoa(resp)
+					if soa != nil {
+						return soa, nil
+					}
+
 					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
