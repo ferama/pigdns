@@ -199,6 +199,18 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return nil, err
 	}
 	servers, err := r.buildServers(ctx, resp, zone)
+	if err != nil {
+		// no nameservers found
+		// go to upper zone and try again
+		i, end := dns.NextLabel(zone, 0)
+		if end {
+			return servers, err
+		}
+		next := dns.Fqdn(zone[i:])
+		nsReq := new(dns.Msg)
+		nsReq.SetQuestion(next, dns.TypeNS)
+		servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
+	}
 
 	return servers, err
 }
@@ -217,7 +229,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if err != nil {
 		return nil, err
 	}
-	// log.Printf("###### SERVERS '%s'", servers)
+	// log.Printf("%s", servers)
 
 	s, err := servers.peekOne(isIPV6)
 	if err != nil {
@@ -239,12 +251,48 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if err != nil {
 			return nil, err
 		}
-		ans, err := r.queryNS(req, s.withPort(), false)
+		ans, err = r.queryNS(req, s.withPort(), false)
 		if err != nil {
 			return nil, err
 		}
-		return ans, nil
 	}
+
+	haveAnswer := false
+	for _, rr := range ans.Answer {
+		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
+			haveAnswer = true
+		}
+	}
+	// deal with CNAMES
+	if !haveAnswer {
+		resp := ans.Copy()
+		maxLoop := cnameChainMaxDeep
+		for {
+			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
+			if rr != nil && rr.Header().Name == q.Name {
+				cname := rr.(*dns.CNAME)
+				newReq := new(dns.Msg)
+				newReq.SetQuestion(cname.Target, q.Qtype)
+				resp, err := r.resolve(ctx, newReq, isIPV6)
+				if err == nil {
+					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
+					for _, rr := range ans.Answer {
+						if rr.Header().Rrtype == q.Qtype {
+							haveAnswer = true
+						}
+					}
+				}
+			}
+			if haveAnswer {
+				break
+			}
+			maxLoop--
+			if maxLoop == 0 {
+				break
+			}
+		}
+	}
+
 	return ans, nil
 
 	// haveAnswer := false
@@ -305,17 +353,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	// return ans, nil
 }
-
-// func (r *Recursor) getRootNS(isIPV6 bool) string {
-// 	var nsaddr string
-// 	if isIPV6 {
-// 		nsaddr = fmt.Sprintf("[%s]:53", getRootNSIPv6())
-// 	} else {
-// 		nsaddr = fmt.Sprintf("%s:53", getRootNSIPv4())
-// 	}
-
-// 	return nsaddr
-// }
 
 func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg, error) {
 	haveCache := (r.cache != nil) && useCache
@@ -395,9 +432,9 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string, useCache bool) (*dns.Msg
 			return nil, fmt.Errorf("%s. nsaddr: %s", err, nsaddr)
 		}
 		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-			log.Printf("[recursor] quering ROOT ns=%s, q=%s", tmp, qname)
+			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", tmp, qname, dns.TypeToString[q.Qtype])
 		} else {
-			log.Printf("[recursor] quering ns=%s, q=%s", nsaddr, qname)
+			log.Printf("[recursor] quering ns=%s q=%s t=%s", nsaddr, qname, dns.TypeToString[q.Qtype])
 		}
 		ans, _, err := client.Exchange(req, nsaddr)
 		if err != nil {
