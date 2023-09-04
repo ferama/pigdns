@@ -211,9 +211,11 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 	zone := dns.Fqdn(q.Name[i:])
 
-	cached, err := r.nsCache.Get(zone)
-	if err == nil {
-		return nil, cached, nil
+	if r.nsCache != nil {
+		cached, err := r.nsCache.Get(zone)
+		if err == nil {
+			return nil, cached, nil
+		}
 	}
 
 	// log.Printf("|||||||||| i: %d, q.Name: %s, zone: %s", i, q.Name, zone)
@@ -248,7 +250,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	if err == nil {
-		r.nsCache.Set(servers)
+		if r.nsCache != nil {
+			r.nsCache.Set(servers)
+		}
 	}
 	return resp, servers, err
 }
