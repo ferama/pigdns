@@ -32,7 +32,7 @@ const (
 
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
-	resolverMaxLevel = 8
+	resolverMaxLevel = 16
 )
 
 type Recursor struct {
@@ -175,17 +175,18 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	end := false
 	var i int
 
+	log.Printf("{{{ question: %v, offset: %d", q, offset)
 	i, end = dns.NextLabel(q.Name, offset)
 	if end {
 		return getRootServers(), nil
 	}
 	zone := dns.Fqdn(q.Name[i:])
+	log.Printf("|||||||||| i: %d, q.Name: %s, zone: %s", i, q.Name, zone)
 
 	nsReq := new(dns.Msg)
 	nsReq.SetQuestion(zone, dns.TypeNS)
 
-	log.Printf("### zone: %s, qname: %s", zone, q.Name)
-	rservers, err := r.resolveNS(ctx, req, isIPV6, offset+i)
+	rservers, err := r.resolveNS(ctx, req, isIPV6, i)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +199,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	if err != nil {
 		return nil, err
 	}
+	// log.Printf("%s", resp)
 	servers, err := r.buildServers(ctx, resp, zone)
 	if err != nil {
 		// no nameservers found
@@ -210,6 +212,10 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		nsReq := new(dns.Msg)
 		nsReq.SetQuestion(next, dns.TypeNS)
 		servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
+		// if err == nil {
+		// 	servers = nextServers
+		// 	log.Printf("%s", servers)
+		// }
 	}
 
 	return servers, err
@@ -229,7 +235,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if err != nil {
 		return nil, err
 	}
-	// log.Printf("%s", servers)
+	// return nil, errors.New("fake")
 
 	s, err := servers.peekOne(isIPV6)
 	if err != nil {
@@ -240,6 +246,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if err != nil {
 		return nil, err
 	}
+
+	// return ans, nil
 
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers intead
@@ -265,6 +273,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			haveAnswer = true
 		}
 	}
+	log.Printf("************** CNAME *****************")
 	// deal with CNAMES
 	if !haveAnswer {
 		resp := ans.Copy()
@@ -293,6 +302,15 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				break
 			}
 		}
+	}
+
+	for _, rr := range ans.Answer {
+		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
+			haveAnswer = true
+		}
+	}
+	if !haveAnswer {
+		// TODO: soa response
 	}
 
 	return ans, nil
