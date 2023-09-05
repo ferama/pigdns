@@ -21,7 +21,7 @@ type ResolverContext struct {
 
 const (
 	// retries until error
-	maxRetriesOnError = 1
+	maxRetriesOnError = 3
 
 	// for logging
 	handlerName = "resolver"

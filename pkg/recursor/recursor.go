@@ -254,43 +254,90 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		}
 	}
 
-	// log.Printf("|||||||||| i: %d, q.Name: %s, zone: %s", i, q.Name, zone)
-	nsReq := new(dns.Msg)
-	nsReq.SetQuestion(zone, dns.TypeNS)
-
-	resp, rservers, err := r.resolveNS(ctx, req, isIPV6, i)
-	if err != nil {
-		return resp, nil, err
+	type retvalue struct {
+		Resp   *dns.Msg
+		AuthNS *authServers
+		Err    error
 	}
-
-	s, err := rservers.peekOne(isIPV6)
-	if err != nil {
-		return nil, nil, err
-	}
-	resp, err = r.queryNS(nsReq, s.withPort())
-	if err != nil {
-		return resp, nil, err
-	}
-
-	servers, err := r.buildServers(ctx, resp, zone)
-	if err != nil {
-		// no nameservers found
-		// go to upper zone and try again
-		i, end := dns.NextLabel(zone, 0)
-		if end {
-			return resp, nil, err
+	tmp := r.oneInFlight.Run(zone, func(params ...any) any {
+		// Another goroutine (the non locked one) likely has filled the cache already
+		// so take the advantage here
+		if r.nsCache != nil {
+			cached, err := r.nsCache.Get(zone)
+			if err == nil {
+				return &retvalue{
+					Resp:   nil,
+					AuthNS: cached,
+					Err:    nil,
+				}
+			}
 		}
-		next := dns.Fqdn(zone[i:])
+
 		nsReq := new(dns.Msg)
-		nsReq.SetQuestion(next, dns.TypeNS)
-		resp, servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
-	}
+		nsReq.SetQuestion(zone, dns.TypeNS)
+
+		resp, rservers, err := r.resolveNS(ctx, req, isIPV6, i)
+		if err != nil {
+			// return resp, nil, err
+			return &retvalue{
+				Resp:   resp,
+				AuthNS: nil,
+				Err:    err,
+			}
+		}
+
+		s, err := rservers.peekOne(isIPV6)
+		if err != nil {
+			return &retvalue{
+				Resp:   nil,
+				AuthNS: nil,
+				Err:    err,
+			}
+		}
+		resp, err = r.queryNS(nsReq, s.withPort())
+		if err != nil {
+			return &retvalue{
+				Resp:   resp,
+				AuthNS: nil,
+				Err:    err,
+			}
+		}
+
+		servers, err := r.buildServers(ctx, resp, zone)
+		if err != nil {
+			// no nameservers found
+			// go to upper zone and try again
+			i, end := dns.NextLabel(zone, 0)
+			if end {
+				return &retvalue{
+					Resp:   resp,
+					AuthNS: nil,
+					Err:    err,
+				}
+			}
+			next := dns.Fqdn(zone[i:])
+			nsReq := new(dns.Msg)
+			nsReq.SetQuestion(next, dns.TypeNS)
+			resp, servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
+		}
+		return &retvalue{
+			Resp:   resp,
+			AuthNS: servers,
+			Err:    err,
+		}
+	})
+
+	rv := tmp.(*retvalue)
+	resp := rv.Resp
+	err := rv.Err
+	servers := rv.AuthNS
 
 	if err == nil {
 		if r.nsCache != nil {
 			r.nsCache.Set(servers)
 		}
 	}
+
 	return resp, servers, err
 }
 
