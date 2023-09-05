@@ -51,7 +51,7 @@ var proxyCmd = &cobra.Command{
 			}
 			ra, _ := ans.(*dns.A)
 			dohServerAddr = ra.A.String()
-			log.Info().Msgf("%s resoved to %s", dohServerName, dohServerAddr)
+			log.Info().Msgf("%s resolved to %s", dohServerName, dohServerAddr)
 		}
 
 		pigdns.Handle(".", server.BuildDOHProxyHandler(dohServerName, dohServerAddr))

@@ -1,8 +1,6 @@
 package recursor
 
 import (
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
@@ -25,11 +23,7 @@ func newRecursorCache(datadir string, name string) *recursorCache {
 	return rc
 }
 
-func (c *recursorCache) buildKey(q dns.Question, prefix string) string {
-	return fmt.Sprintf("%s_%s_%d_%d", prefix, q.Name, q.Qtype, q.Qclass)
-}
-
-func (c *recursorCache) SetWithKey(key string, m *dns.Msg) error {
+func (c *recursorCache) Set(key string, m *dns.Msg) error {
 	minTTL := utils.MsgGetMinTTL(m)
 
 	packed, err := m.Pack()
@@ -46,16 +40,7 @@ func (c *recursorCache) SetWithKey(key string, m *dns.Msg) error {
 	return c.cache.Set(key, i)
 }
 
-func (c *recursorCache) Set(q dns.Question, prefix string, m *dns.Msg) error {
-	key := c.buildKey(q, prefix)
-	if key == "" {
-		return errors.New("empty key")
-	}
-
-	return c.SetWithKey(key, m)
-}
-
-func (c *recursorCache) GetByKey(key string) (*dns.Msg, error) {
+func (c *recursorCache) Get(key string) (*dns.Msg, error) {
 	item, err := c.cache.Get(key)
 	if err != nil {
 		return nil, err
@@ -84,10 +69,4 @@ func (c *recursorCache) GetByKey(key string) (*dns.Msg, error) {
 		a.Header().Ttl = ttl
 	}
 	return msg, nil
-}
-
-func (c *recursorCache) Get(q dns.Question, prefix string) (*dns.Msg, error) {
-	key := c.buildKey(q, prefix)
-
-	return c.GetByKey(key)
 }

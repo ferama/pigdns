@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/oneinflight"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
@@ -42,10 +43,14 @@ const (
 type Recursor struct {
 	cache   *recursorCache
 	nsCache *nsCache
+
+	oneInFlight *oneinflight.OneInFlight
 }
 
 func New(datadir string) *Recursor {
-	r := &Recursor{}
+	r := &Recursor{
+		oneInFlight: oneinflight.New(),
+	}
 
 	if datadir != "" {
 		log.Printf("[recursor] enabling file based cache")
@@ -61,23 +66,54 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
+	q := req.Question[0]
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+
+	// try to get the answer from cache if we have it
 	if r.cache != nil {
-		ans, cacheErr := r.cache.Get(req.Question[0], "#")
+		ans, cacheErr := r.cache.Get(cacheKey)
 		if cacheErr == nil {
 			return ans, nil
 		}
 	}
 
-	ans, err := r.resolve(ctx, req, isIPV6)
-	if err != nil {
-		return nil, err
+	// if we don't have an answer in cache, run the query (only once concurrently
+	// against the upstream nameservers)
+	type retvalue struct {
+		Ans *dns.Msg
+		Err error
+	}
+	tmp := r.oneInFlight.Run(cacheKey, func(params ...any) any {
+		// Another goroutine (the non locked one) likely has filled the cache already
+		// so take the advantage here
+		if r.cache != nil {
+			ans, cacheErr := r.cache.Get(cacheKey)
+			if cacheErr == nil {
+				return &retvalue{
+					Ans: ans,
+					Err: nil,
+				}
+			}
+		}
+
+		ans, err := r.resolve(ctx, req, isIPV6)
+		return &retvalue{
+			Ans: ans,
+			Err: err,
+		}
+	})
+	res := tmp.(*retvalue)
+	ans := res.Ans
+
+	if res.Err != nil {
+		return nil, res.Err
 	}
 
 	utils.MsgSetupEdns(ans)
 	ans.Authoritative = false
 
 	if r.cache != nil {
-		r.cache.Set(req.Question[0], "#", ans)
+		r.cache.Set(cacheKey, ans)
 	}
 
 	return ans, nil
