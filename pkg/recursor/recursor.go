@@ -173,12 +173,8 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			if e.Header().Name != ns.Ns {
 				continue
 			}
-			ipFound = searchIp(e)
+			searchIp(e)
 		}
-	}
-
-	if ipFound {
-		return servers, nil
 	}
 
 	ipFound = false
@@ -187,7 +183,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			continue
 		}
 		ns := rr.(*dns.NS)
-		// log.Printf("||| ns: %s, searching for ip", ns.Ns)
 
 		// search ip in extra section
 		for _, e := range ans.Extra {
@@ -204,21 +199,19 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 		}
 	}
 
-	// we still don't have any ip. try to resolve from the toResolve list
-	if !ipFound {
-		for _, ns := range toResolve {
-			ra := new(dns.Msg)
-			ra.SetQuestion(ns, dns.TypeA)
-			rans, err := r.resolve(ctx, ra, false)
-			if err != nil {
-				if err == errRecursionMaxLevel {
-					return nil, err
-				}
-				continue
+	// if we have NS not resolved in Extra section, resolve them
+	for _, ns := range toResolve {
+		ra := new(dns.Msg)
+		ra.SetQuestion(ns, dns.TypeA)
+		rans, err := r.resolve(ctx, ra, false)
+		if err != nil {
+			if err == errRecursionMaxLevel {
+				return nil, err
 			}
-			for _, e := range rans.Answer {
-				searchIp(e)
-			}
+			continue
+		}
+		for _, e := range rans.Answer {
+			searchIp(e)
 		}
 	}
 
@@ -276,6 +269,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		nsReq := new(dns.Msg)
 		nsReq.SetQuestion(zone, dns.TypeNS)
 
+		// run recursively here. the recursion will end when we will
+		// encounter the root zone
 		resp, rservers, err := r.resolveNS(ctx, req, isIPV6, i)
 		if err != nil {
 			// return resp, nil, err
@@ -374,6 +369,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 		return nil, err
 	}
+	log.Printf("%s", servers)
 
 	s, err := servers.peekOne(isIPV6)
 	if err != nil {
@@ -392,6 +388,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	// This should respond with a soa record too
 	// dig @127.0.0.1 243.35.149.83.in-addr.arpa
 	// dig @127.0.0.1 1-courier.push.apple.com aaaa
+	// TODO:
+	// dig @127.0.0.1 bmx.waseca.k12.mn.us.redcondor.net
 	for loop < 3 {
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead
