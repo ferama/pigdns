@@ -1,9 +1,5 @@
 package recursor
 
-import (
-	"math/rand"
-)
-
 var (
 	// a.root-servers.net.
 	// b.root-servers.net.
@@ -41,12 +37,23 @@ var (
 	}
 )
 
-func getRootNSIPv4() string {
-	n := rand.Intn(len(rootNSIPv4))
-	return rootNSIPv4[n]
-}
+func getRootServers() *authServers {
+	severs := &authServers{}
+	for _, s := range rootNSIPv4 {
+		as := nsServer{
+			Addr:    s,
+			Version: IPv4,
+		}
+		severs.List = append(severs.List, as)
+	}
 
-func getRootNSIPv6() string {
-	n := rand.Intn(len(rootNSIPv6))
-	return rootNSIPv6[n]
+	for _, s := range rootNSIPv6 {
+		as := nsServer{
+			Addr:    s,
+			Version: IPv6,
+		}
+		severs.List = append(severs.List, as)
+	}
+
+	return severs
 }
