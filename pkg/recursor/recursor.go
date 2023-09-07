@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/oneinflight"
@@ -170,7 +171,8 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 		ns := rr.(*dns.NS)
 		// search ip in extra section
 		for _, e := range ans.Extra {
-			if e.Header().Name != ns.Ns {
+			// if strings.ToLower(e.Header().Name) != strings.ToLower(ns.Ns) {
+			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
 			searchIp(e)
@@ -186,7 +188,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 
 		// search ip in extra section
 		for _, e := range ans.Extra {
-			if e.Header().Name != ns.Ns {
+			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
 			ipFound = searchIp(e)
@@ -201,6 +203,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 
 	// if we have NS not resolved in Extra section, resolve them
 	for _, ns := range toResolve {
+		// log.Printf("||| resolving ns: %s", ns)
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
 		rans, err := r.resolve(ctx, ra, false)
@@ -211,6 +214,8 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			continue
 		}
 		for _, e := range rans.Answer {
+			// a := e.(*dns.A)
+			// log.Printf("| got %s", a.A)
 			searchIp(e)
 		}
 	}
@@ -280,6 +285,16 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 				Err:    err,
 			}
 		}
+
+		// qr := newQueryRacer(rservers, req, isIPV6)
+		// resp, err = qr.run()
+		// if err != nil {
+		// 	return &retvalue{
+		// 		Resp:   resp,
+		// 		AuthNS: nil,
+		// 		Err:    err,
+		// 	}
+		// }
 
 		s, err := rservers.peekOne(isIPV6)
 		if err != nil {
@@ -370,6 +385,11 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
+	// qr := newQueryRacer(servers, req, isIPV6)
+	// ans, err := qr.run()
+	// if err != nil {
+	// 	return nil, err
+	// }
 	s, err := servers.peekOne(isIPV6)
 	if err != nil {
 		return nil, err
@@ -400,10 +420,17 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				return ans, nil
 			}
 
+			// qr := newQueryRacer(servers, req, isIPV6)
+			// ans, err = qr.run()
+			// if err != nil {
+			// 	return nil, err
+			// }
+
 			s, err := servers.peekOne(isIPV6)
 			if err != nil {
 				return nil, err
 			}
+
 			ans, err = r.queryNS(ctx, req, s.withPort())
 			if err != nil {
 				return nil, err

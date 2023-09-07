@@ -23,6 +23,10 @@ type nsServer struct {
 	TTL     uint32
 }
 
+func (n *nsServer) String() string {
+	return n.Addr
+}
+
 func (n *nsServer) withPort() string {
 	if n.Version == IPv4 {
 		return fmt.Sprintf("%s:53", n.Addr)
