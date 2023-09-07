@@ -289,7 +289,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 				Err:    err,
 			}
 		}
-		resp, err = r.queryNS(nsReq, s.withPort())
+		resp, err = r.queryNS(ctx, nsReq, s.withPort())
 		if err != nil {
 			return &retvalue{
 				Resp:   resp,
@@ -369,14 +369,13 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 		return nil, err
 	}
-	log.Printf("%s", servers)
 
 	s, err := servers.peekOne(isIPV6)
 	if err != nil {
 		return nil, err
 	}
 
-	ans, err := r.queryNS(req, s.withPort())
+	ans, err := r.queryNS(ctx, req, s.withPort())
 	if err != nil {
 		return nil, err
 	}
@@ -390,6 +389,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	// dig @127.0.0.1 1-courier.push.apple.com aaaa
 	// TODO:
 	// dig @127.0.0.1 bmx.waseca.k12.mn.us.redcondor.net
+	// dig @127.0.0.1 243.251.209.112.in-addr.arpa
 	for loop < 3 {
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead
@@ -404,7 +404,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			if err != nil {
 				return nil, err
 			}
-			ans, err = r.queryNS(req, s.withPort())
+			ans, err = r.queryNS(ctx, req, s.withPort())
 			if err != nil {
 				return nil, err
 			}
@@ -462,7 +462,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	return ans, nil
 }
 
-func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
+func (r *Recursor) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	// If we are here, there is no cached answer. Do query upstream
@@ -483,7 +483,8 @@ func (r *Recursor) queryNS(req *dns.Msg, nsaddr string) (*dns.Msg, error) {
 		} else {
 			log.Printf("[recursor] quering ns=%s q=%s t=%s", nsaddr, qname, dns.TypeToString[q.Qtype])
 		}
-		ans, _, err := client.Exchange(req, nsaddr)
+
+		ans, _, err := client.ExchangeContext(ctx, req, nsaddr)
 		if err != nil {
 			return nil, err
 		}
