@@ -66,16 +66,26 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) 
 }
 
 func (qr *queryRacer) run() (*dns.Msg, error) {
-	// log.Printf("--> racing on")
-	// for _, s := range qr.servers.List {
-	// 	log.Printf("%s", s.String())
-	// }
+	log.Printf("--> racing on")
+	for _, s := range qr.servers.List {
+		log.Printf("%s", s.String())
+	}
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	ansCH := make(chan *dns.Msg, len(qr.servers.List))
 	errCH := make(chan error, len(qr.servers.List))
 
 	var wg sync.WaitGroup
+
+	defer func() {
+		cancel()
+
+		go func() {
+			wg.Wait()
+			close(ansCH)
+			close(errCH)
+		}()
+	}()
 
 	for _, s := range qr.servers.List {
 		if !qr.isIPV6 && s.Version == IPv6 {
@@ -84,19 +94,12 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		wg.Add(1)
 		go func(ns nsServer) {
 			defer wg.Done()
-			// log.Printf("sleeping for %d seconds", t)
-			// time.Sleep(t * time.Second)
 			ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.withPort())
 
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if err == nil {
-					ansCH <- ans
-				} else {
-					errCH <- err
-				}
+			if err == nil {
+				ansCH <- ans
+			} else {
+				errCH <- err
 			}
 
 		}(s)
@@ -114,34 +117,17 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		select {
 		case ans = <-ansCH:
 			// log.Printf("==== got ans")
-			// log.Printf("%s", ans)
-			cancel()
-			shouldBreak = true
+			return ans, nil
+
 		case err = <-errCH:
 			// log.Printf("==== got err")
 			errors++
 			if errors == len(qr.servers.List) {
-				cancel()
+				// cancel()
 				shouldBreak = true
 			}
 		}
 	}
 
-	cancel()
-	// log.Printf("==== waiting")
-	wg.Wait()
-	// log.Printf("==== done")
-	close(ansCH)
-	close(errCH)
-
-	if ans != nil {
-		// log.Printf("///// returning ans")
-		// log.Printf("%s", ans)
-		return ans, nil
-	}
-	// log.Printf("///// returning err")
-	// if errors == len(qr.servers.List) {
-	// 	return nil, err
-	// }
 	return nil, err
 }

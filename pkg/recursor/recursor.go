@@ -263,6 +263,12 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
+	// qr := newQueryRacer(rservers, req, isIPV6)
+	// resp, err = qr.run()
+	// if err != nil {
+	// 	return resp, nil, err
+	// }
+
 	s, err := rservers.peekOne(isIPV6)
 	if err != nil {
 		return nil, nil, err
