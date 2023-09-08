@@ -171,7 +171,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		ns := rr.(*dns.NS)
 		// search ip in extra section
 		for _, e := range ans.Extra {
-			// if strings.ToLower(e.Header().Name) != strings.ToLower(ns.Ns) {
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
@@ -393,7 +392,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	haveAnswer := false
 	for _, rr := range ans.Answer {
-		if rr.Header().Name == q.Name && rr.Header().Rrtype == q.Qtype {
+		if strings.EqualFold(rr.Header().Name, q.Name) && rr.Header().Rrtype == q.Qtype {
 			haveAnswer = true
 		}
 	}
@@ -405,7 +404,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		maxLoop := cnameChainMaxDeep
 		for {
 			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
-			if rr != nil && rr.Header().Name == q.Name {
+			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
