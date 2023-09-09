@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"sync"
+	"time"
 
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
@@ -66,10 +67,10 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) 
 }
 
 func (qr *queryRacer) run() (*dns.Msg, error) {
-	log.Printf("--> racing on")
-	for _, s := range qr.servers.List {
-		log.Printf("%s", s.String())
-	}
+	// log.Printf("--> racing on")
+	// for _, s := range qr.servers.List {
+	// 	log.Printf("%s", s.String())
+	// }
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	ansCH := make(chan *dns.Msg, len(qr.servers.List))
@@ -87,47 +88,61 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		}()
 	}()
 
+	worker := func(ns nsServer, wg *sync.WaitGroup) {
+		defer wg.Done()
+		req := qr.req.Copy()
+		log.Printf("||||| worker stared for ns=%s, q=%s", ns.Addr, req.Question[0].String())
+		ans, err := qr.queryNS(ctx, req, ns.withPort())
+
+		if err == nil {
+			ansCH <- ans
+		} else {
+			errCH <- err
+		}
+
+	}
+
+	countErrors := 0
+	var err error
+	var ans *dns.Msg
+
+	nextNSTimeout := 150 * time.Millisecond
+	nextNSTimer := time.NewTimer(nextNSTimeout)
+	defer nextNSTimer.Stop()
+
 	for _, s := range qr.servers.List {
 		if !qr.isIPV6 && s.Version == IPv6 {
 			continue
 		}
+
 		wg.Add(1)
-		go func(ns nsServer) {
-			defer wg.Done()
-			ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.withPort())
-
-			if err == nil {
-				ansCH <- ans
-			} else {
-				errCH <- err
-			}
-
-		}(s)
-	}
-
-	errors := 0
-	var err error
-	var ans *dns.Msg
-
-	shouldBreak := false
-	for {
-		if shouldBreak {
-			break
+		nsc := nsServer{
+			Addr:    s.Addr,
+			Version: s.Version,
+			TTL:     s.TTL,
 		}
+		go worker(nsc, &wg)
+		nextNSTimer.Reset(nextNSTimeout)
+
 		select {
+		case <-nextNSTimer.C:
+			continue
 		case ans = <-ansCH:
-			// log.Printf("==== got ans")
 			return ans, nil
 
 		case err = <-errCH:
-			// log.Printf("==== got err")
-			errors++
-			if errors == len(qr.servers.List) {
-				// cancel()
-				shouldBreak = true
+			countErrors++
+			if countErrors == len(qr.servers.List) {
+				return nil, err
 			}
 		}
 	}
 
-	return nil, err
+	select {
+	case ans = <-ansCH:
+		return ans, nil
+
+	case err = <-errCH:
+		return nil, err
+	}
 }

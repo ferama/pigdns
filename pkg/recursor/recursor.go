@@ -178,8 +178,8 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 	}
 
-	ipFound = false
 	for _, rr := range ans.Ns {
+		ipFound = false
 		if _, ok := rr.(*dns.NS); !ok {
 			continue
 		}
@@ -205,18 +205,18 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		// log.Printf("||| resolving ns: %s", ns)
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
+
 		rans, err := r.resolve(ctx, ra, isIPV6)
+		// log.Printf("rc: %d", rc.RecursionCount)
+
 		if err != nil {
-			// log.Printf("/// err resolving ns: %s. err: %s", ns, err)
 			if err == errRecursionMaxLevel {
-				return nil, err
+				// this fixes ns01.xsdns.net
+				break
 			}
 			continue
 		}
-		// log.Printf("/// done resolving ns: %s", ns)
 		for _, e := range rans.Answer {
-			// a := e.(*dns.A)
-			// log.Printf("| got %s", a.A)
 			searchIp(e)
 		}
 	}
@@ -281,6 +281,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 
 	if err != nil {
+		if err == errRecursionMaxLevel {
+			return resp, servers, err
+		}
 		// no nameservers found
 		// go to upper zone and try again
 		i, end := dns.NextLabel(zone, 0)
@@ -336,31 +339,24 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	// qr := newQueryRacer(servers, req, isIPV6)
-	// ans, err := qr.run()
+	qr := newQueryRacer(servers, req, isIPV6)
+	ans, err := qr.run()
+	if err != nil {
+		return nil, err
+	}
+	// s, err := servers.peekOne(isIPV6)
 	// if err != nil {
 	// 	return nil, err
 	// }
-	s, err := servers.peekOne(isIPV6)
-	if err != nil {
-		return nil, err
-	}
 
-	ans, err := r.queryNS(ctx, req, s.withPort())
-	if err != nil {
-		return nil, err
-	}
+	// ans, err := r.queryNS(ctx, req, s.withPort())
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	loop := 0
 	// TODO: investigate the 3 here
 	// if I don't introduce it this will not work as expected (it should return a soa response)
-	// dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
-	// This should respond with a soa record too
-	// dig @127.0.0.1 243.35.149.83.in-addr.arpa
-	// dig @127.0.0.1 1-courier.push.apple.com aaaa
-	// TODO:
-	// dig @127.0.0.1 bmx.waseca.k12.mn.us.redcondor.net
-	// dig @127.0.0.1 243.251.209.112.in-addr.arpa
 	for loop < 3 {
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead
@@ -370,22 +366,23 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// soa answer
 				return ans, nil
 			}
+			// log.Printf("%s", servers)
 
-			// qr := newQueryRacer(servers, req, isIPV6)
-			// ans, err = qr.run()
+			qr := newQueryRacer(servers, req, isIPV6)
+			ans, err = qr.run()
+			if err != nil {
+				return nil, err
+			}
+
+			// s, err := servers.peekOne(isIPV6)
 			// if err != nil {
 			// 	return nil, err
 			// }
 
-			s, err := servers.peekOne(isIPV6)
-			if err != nil {
-				return nil, err
-			}
-
-			ans, err = r.queryNS(ctx, req, s.withPort())
-			if err != nil {
-				return nil, err
-			}
+			// ans, err = r.queryNS(ctx, req, s.withPort())
+			// if err != nil {
+			// 	return nil, err
+			// }
 		}
 		loop++
 	}
