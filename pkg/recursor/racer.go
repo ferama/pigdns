@@ -91,7 +91,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	worker := func(ns nsServer, wg *sync.WaitGroup) {
 		defer wg.Done()
 		req := qr.req.Copy()
-		log.Printf("||||| worker stared for ns=%s, q=%s", ns.Addr, req.Question[0].String())
+		// log.Printf("||||| worker started for ns=%s, q=%s", ns.Addr, req.Question[0].String())
 		ans, err := qr.queryNS(ctx, req, ns.withPort())
 
 		if err == nil {

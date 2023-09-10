@@ -27,6 +27,7 @@ const ResolverContextKey contextKey = "recursor-context"
 
 type ResolverContext struct {
 	RecursionCount int
+	ToResolveList  []string
 }
 
 const (
@@ -38,7 +39,7 @@ const (
 
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
-	resolverMaxLevel = 64
+	resolverMaxLevel = 16
 )
 
 type Recursor struct {
@@ -64,6 +65,7 @@ func New(datadir string) *Recursor {
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	cc := &ResolverContext{
 		RecursionCount: 0,
+		ToResolveList:  make([]string, 0),
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, cc)
 
@@ -200,14 +202,23 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 	}
 
+	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
+
 	// if we have NS not resolved in Extra section, resolve them
 	for _, ns := range toResolve {
+
+		// prevents loops. if this ns was already in context in a previous
+		// recursion, do not put it again in loop.
+		if slices.Contains(rc.ToResolveList, ns) {
+			break
+		}
+		rc.ToResolveList = append(rc.ToResolveList, ns)
+
 		// log.Printf("||| resolving ns: %s", ns)
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
 
 		rans, err := r.resolve(ctx, ra, isIPV6)
-		// log.Printf("rc: %d", rc.RecursionCount)
 
 		if err != nil {
 			if err == errRecursionMaxLevel {
@@ -216,6 +227,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			}
 			continue
 		}
+
 		for _, e := range rans.Answer {
 			searchIp(e)
 		}
@@ -344,6 +356,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if err != nil {
 		return nil, err
 	}
+
 	// s, err := servers.peekOne(isIPV6)
 	// if err != nil {
 	// 	return nil, err
@@ -397,15 +410,23 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if !haveAnswer {
 		ans.Ns = []dns.RR{}
 		ans.Extra = []dns.RR{}
-		resp := ans.Copy()
 		maxLoop := cnameChainMaxDeep
 		for {
-			rr := utils.MsgGetAnswerByType(resp, dns.TypeCNAME)
+			rr := utils.MsgGetAnswerByType(ans.Copy(), dns.TypeCNAME)
 			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
+
+				rc := ctx.Value(ResolverContextKey).(*ResolverContext)
+				// prevents loops. if this ns was already in context in a previous
+				// recursion, do not put it again in loop.
+				if slices.Contains(rc.ToResolveList, cname.Target) {
+					break
+				}
+				rc.ToResolveList = append(rc.ToResolveList, cname.Target)
+
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
-				resp, err := r.resolve(ctx, newReq, isIPV6)
+				resp, err := r.Query(ctx, newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
