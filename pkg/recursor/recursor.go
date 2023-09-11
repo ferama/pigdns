@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/netip"
 	"path/filepath"
 	"strings"
 	"time"
@@ -160,11 +159,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 
 	// search in answer section
 	for _, rr := range ans.Answer {
-		ipFound = searchIp(rr)
-		if ipFound {
-			continue
-		}
-
 		if _, ok := rr.(*dns.NS); !ok {
 			continue
 		}
@@ -214,7 +208,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 
-		// log.Printf("||| resolving ns: %s", ns)
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
 
@@ -274,18 +267,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
-	// qr := newQueryRacer(rservers, req, isIPV6)
-	// resp, err = qr.run()
-	// if err != nil {
-	// 	return resp, nil, err
-	// }
-
-	s, err := rservers.peekOne(isIPV6)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resp, err = r.queryNS(ctx, nsReq, s.withPort())
+	qr := newQueryRacer(rservers, req, isIPV6)
+	resp, err = qr.run()
 	if err != nil {
 		return resp, nil, err
 	}
@@ -357,16 +340,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	// s, err := servers.peekOne(isIPV6)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// ans, err := r.queryNS(ctx, req, s.withPort())
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	loop := 0
 	// TODO: investigate the 3 here
 	// if I don't introduce it this will not work as expected (it should return a soa response)
@@ -386,16 +359,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			if err != nil {
 				return nil, err
 			}
-
-			// s, err := servers.peekOne(isIPV6)
-			// if err != nil {
-			// 	return nil, err
-			// }
-
-			// ans, err = r.queryNS(ctx, req, s.withPort())
-			// if err != nil {
-			// 	return nil, err
-			// }
 		}
 		loop++
 	}
@@ -426,6 +389,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
+
+				// run a new query here to solve the CNAME
 				resp, err := r.Query(ctx, newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
@@ -456,41 +421,4 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	return ans, nil
-}
-
-func (r *Recursor) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) (*dns.Msg, error) {
-	q := req.Question[0]
-
-	// If we are here, there is no cached answer. Do query upstream
-	network := "udp"
-	qname := req.Question[0].Name
-	for {
-		client := &dns.Client{
-			Timeout: dialTimeout,
-			Net:     network,
-		}
-
-		tmp, err := netip.ParseAddrPort(nsaddr)
-		if err != nil {
-			return nil, fmt.Errorf("%s. nsaddr: %s", err, nsaddr)
-		}
-		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", tmp, qname, dns.TypeToString[q.Qtype])
-		} else {
-			log.Printf("[recursor] quering ns=%s q=%s t=%s", nsaddr, qname, dns.TypeToString[q.Qtype])
-		}
-
-		ans, _, err := client.ExchangeContext(ctx, req, nsaddr)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ans.Truncated {
-			return ans, nil
-		}
-		if network == "tcp" {
-			return nil, errors.New("cannot get a non truncated answer")
-		}
-		network = "tcp"
-	}
 }

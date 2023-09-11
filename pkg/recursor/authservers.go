@@ -1,9 +1,7 @@
 package recursor
 
 import (
-	"errors"
 	"fmt"
-	"math/rand"
 )
 
 // Version type
@@ -46,18 +44,4 @@ func (a *authServers) String() string {
 		ret = fmt.Sprintf("%s\n%s", ret, i.Addr)
 	}
 	return ret
-}
-
-func (a *authServers) peekOne(allowIPv6 bool) (*nsServer, error) {
-	if len(a.List) == 0 {
-		return nil, errors.New("no NS to peek")
-	}
-	for {
-		n := rand.Intn(len(a.List))
-		s := a.List[n]
-		if !allowIPv6 && s.Version == IPv6 {
-			continue
-		}
-		return &s, nil
-	}
 }

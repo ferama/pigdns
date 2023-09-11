@@ -25,6 +25,7 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 		req:     req,
 		isIPV6:  isIPV6,
 	}
+
 	return q
 }
 
@@ -91,7 +92,6 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	worker := func(ns nsServer, wg *sync.WaitGroup) {
 		defer wg.Done()
 		req := qr.req.Copy()
-		// log.Printf("||||| worker started for ns=%s, q=%s", ns.Addr, req.Question[0].String())
 		ans, err := qr.queryNS(ctx, req, ns.withPort())
 
 		if err == nil {
@@ -138,6 +138,8 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		}
 	}
 
+	// If I'm out of loop and I'm here is because all the timeout occurred
+	// and I still don't have an answer so wait here for it
 	select {
 	case ans = <-ansCH:
 		return ans, nil
