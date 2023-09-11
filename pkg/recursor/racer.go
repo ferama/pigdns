@@ -38,7 +38,7 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns nsServer) (*dns.Msg, error) {
+func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	// If we are here, there is no cached answer. Do query upstream
@@ -93,9 +93,10 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		}()
 	}()
 
-	worker := func(ns nsServer, wg *sync.WaitGroup) {
+	worker := func(ns *nsServer, wg *sync.WaitGroup) {
 		defer wg.Done()
-		ans, err := qr.queryNS(ctx, qr.req, ns)
+		// Copy is needed here, to prevent race conditions
+		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
 
 		if err == nil {
 			ansCH <- ans

@@ -12,6 +12,15 @@ type nsServer struct {
 	TTL     uint32
 }
 
+func (n *nsServer) Copy() *nsServer {
+	c := &nsServer{
+		Addr:    n.Addr,
+		Version: n.Version,
+		TTL:     n.TTL,
+	}
+	return c
+}
+
 func (n *nsServer) String() string {
 	return n.Addr
 }
@@ -26,7 +35,7 @@ func (n *nsServer) withPort() string {
 type authServers struct {
 	Zone string
 
-	List []nsServer
+	List []*nsServer
 }
 
 func (a *authServers) String() string {

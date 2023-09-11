@@ -136,7 +136,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		case dns.TypeA:
 			ret = true
 			a := e.(*dns.A)
-			servers.List = append(servers.List, nsServer{
+			servers.List = append(servers.List, &nsServer{
 				Addr:    a.A.String(),
 				Version: pigdns.FamilyIPv4,
 				TTL:     a.Hdr.Ttl,
@@ -144,7 +144,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		case dns.TypeAAAA:
 			ret = true
 			aaaa := e.(*dns.AAAA)
-			servers.List = append(servers.List, nsServer{
+			servers.List = append(servers.List, &nsServer{
 				Addr:    aaaa.AAAA.String(),
 				Version: pigdns.FamilyIPv6,
 				TTL:     aaaa.Hdr.Ttl,
@@ -214,7 +214,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 
 		if err != nil {
 			if err == errRecursionMaxLevel {
-				// this fixes ns01.xsdns.net
 				break
 			}
 			continue
