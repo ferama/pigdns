@@ -256,15 +256,15 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		}
 	}
 
-	nsReq := new(dns.Msg)
-	nsReq.SetQuestion(zone, dns.TypeNS)
-
 	// run recursively here. the recursion will end when we will
 	// encounter the root zone
 	resp, rservers, err := r.resolveNS(ctx, req, isIPV6, i)
 	if err != nil {
 		return resp, nil, err
 	}
+
+	nsReq := new(dns.Msg)
+	nsReq.SetQuestion(zone, dns.TypeNS)
 
 	qr := newQueryRacer(rservers, nsReq, isIPV6)
 	resp, err = qr.run()
@@ -273,21 +273,16 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
-
 	if err != nil {
 		if err == errRecursionMaxLevel {
 			return resp, servers, err
 		}
 		// no nameservers found
-		// go to upper zone and try again
-		i, end := dns.NextLabel(zone, 0)
-		if end {
-			return resp, nil, err
-		}
-		next := dns.Fqdn(zone[i:])
-		nsReq := new(dns.Msg)
-		nsReq.SetQuestion(next, dns.TypeNS)
-		resp, servers, err = r.resolveNS(ctx, nsReq, isIPV6, 0)
+		// return the latest servers found (rserver), and hope
+		// for an answer there
+		servers = rservers
+		// reset error
+		err = nil
 	}
 
 	if err == nil {
