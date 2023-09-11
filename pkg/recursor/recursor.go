@@ -54,11 +54,9 @@ func New(datadir string) *Recursor {
 		oneInFlight: oneinflight.New(),
 	}
 
-	if datadir != "" {
-		log.Printf("[recursor] enabling file based cache")
-		r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "cache")
-		r.nsCache = newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache")
-	}
+	log.Printf("[recursor] enabling file based cache")
+	r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "cache")
+	r.nsCache = newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache")
 	return r
 }
 

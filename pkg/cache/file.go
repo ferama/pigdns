@@ -98,6 +98,12 @@ func (c *FileCache) setupJobs() {
 }
 
 func (c *FileCache) dumpJob(bucketIdx uint64) {
+	// disable persistence if we don't have a datadir
+	if c.datadir == "" {
+		log.Warn().Msg("no datadir. not persisting cache")
+		return
+	}
+
 	bucket := c.buckets[bucketIdx]
 
 	// log.Printf("[cache] dumping bucket '%d' to disk", bucket.idx)
@@ -132,6 +138,11 @@ func (c *FileCache) dumpJob(bucketIdx uint64) {
 }
 
 func (c *FileCache) load(bucketIdx uint64) {
+	// disable persistence if we don't have a datadir
+	if c.datadir == "" {
+		return
+	}
+
 	path := filepath.Join(c.datadir, cacheSubDir, fmt.Sprintf("%d.bin", bucketIdx))
 	b, err := os.ReadFile(path)
 	if err != nil {
