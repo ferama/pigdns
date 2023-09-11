@@ -8,18 +8,21 @@ import (
 	"github.com/miekg/dns"
 )
 
+// Version type
+type RequestFamily byte
+
 const (
-	FamilyIPv4 = 1
-	FamilyIPv6 = 2
+	FamilyIPv4 RequestFamily = 0x1
+	FamilyIPv6 RequestFamily = 0x2
 )
 
 type Request struct {
 	Msg            *dns.Msg
 	ResponseWriter dns.ResponseWriter
 
-	name   string // lowercase qname.
-	family int8   // transport's family.
-	ip     string // client's ip.
+	name   string        // lowercase qname.
+	family RequestFamily // transport's family.
+	ip     string        // client's ip.
 }
 
 func (r *Request) NewWithQuestion(name string, typ uint16) *Request {
@@ -68,9 +71,9 @@ func (r *Request) Proto() string {
 }
 
 // Family returns the family of the transport, 1 for IPv4 and 2 for IPv6.
-func (r *Request) Family() int {
+func (r *Request) Family() RequestFamily {
 	if r.family != 0 {
-		return int(r.family)
+		return r.family
 	}
 
 	var a net.IP

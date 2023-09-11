@@ -1,5 +1,7 @@
 package recursor
 
+import "github.com/ferama/pigdns/pkg/pigdns"
+
 var (
 	// a.root-servers.net.
 	// b.root-servers.net.
@@ -42,7 +44,7 @@ func getRootServers() *authServers {
 	for _, s := range rootNSIPv4 {
 		as := nsServer{
 			Addr:    s,
-			Version: IPv4,
+			Version: pigdns.FamilyIPv4,
 		}
 		severs.List = append(severs.List, as)
 	}
@@ -50,7 +52,7 @@ func getRootServers() *authServers {
 	for _, s := range rootNSIPv6 {
 		as := nsServer{
 			Addr:    s,
-			Version: IPv6,
+			Version: pigdns.FamilyIPv6,
 		}
 		severs.List = append(severs.List, as)
 	}

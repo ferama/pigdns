@@ -8,11 +8,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
 )
 
+const (
+	nextNSTimeout = 150 * time.Millisecond
+)
+
+// the query racer, given a list of authoritative nameservers
+// and a query, starts a run to get the result.
+// It peek one nameserver from the list and starts an exchange. It
+// starts a timer also. If the timer expire, it starts a new exchange using
+// the next nameserver. If one of the nameservers return an answer, the run ends.
+// If all of the nameserers give errors, the run ends
 type queryRacer struct {
 	servers *authServers
 	req     *dns.Msg
@@ -34,7 +45,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) 
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
-	qname := req.Question[0].Name
 	for {
 		client := &dns.Client{
 			Timeout: dialTimeout,
@@ -46,14 +56,15 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) 
 			return nil, fmt.Errorf("%s. nsaddr: %s", err, nsaddr)
 		}
 
+		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
+			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", tmp, q.Name, dns.TypeToString[q.Qtype])
+		} else {
+			log.Printf("[recursor] quering ns=%s q=%s t=%s", nsaddr, q.Name, dns.TypeToString[q.Qtype])
+		}
+
 		ans, _, err := client.ExchangeContext(ctx, req, nsaddr)
 		if err != nil {
 			return nil, err
-		}
-		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-			log.Printf("[recursor] queried ROOT ns=%s q=%s t=%s", tmp, qname, dns.TypeToString[q.Qtype])
-		} else {
-			log.Printf("[recursor] queried ns=%s q=%s t=%s", nsaddr, qname, dns.TypeToString[q.Qtype])
 		}
 
 		if !ans.Truncated {
@@ -106,12 +117,11 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	var err error
 	var ans *dns.Msg
 
-	nextNSTimeout := 150 * time.Millisecond
 	nextNSTimer := time.NewTimer(nextNSTimeout)
 	defer nextNSTimer.Stop()
 
 	for _, s := range qr.servers.List {
-		if !qr.isIPV6 && s.Version == IPv6 {
+		if !qr.isIPV6 && s.Version == pigdns.FamilyIPv6 {
 			continue
 		}
 
@@ -132,6 +142,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 
 		case err = <-errCH:
 			countErrors++
+			// no more nameservers to query
 			if countErrors == len(qr.servers.List) {
 				return nil, err
 			}

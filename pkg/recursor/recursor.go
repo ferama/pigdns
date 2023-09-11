@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/oneinflight"
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
@@ -139,7 +140,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			a := e.(*dns.A)
 			servers.List = append(servers.List, nsServer{
 				Addr:    a.A.String(),
-				Version: IPv4,
+				Version: pigdns.FamilyIPv4,
 				TTL:     a.Hdr.Ttl,
 			})
 		case dns.TypeAAAA:
@@ -147,7 +148,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			aaaa := e.(*dns.AAAA)
 			servers.List = append(servers.List, nsServer{
 				Addr:    aaaa.AAAA.String(),
-				Version: IPv6,
+				Version: pigdns.FamilyIPv6,
 				TTL:     aaaa.Hdr.Ttl,
 			})
 		}
@@ -267,7 +268,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
-	qr := newQueryRacer(rservers, req, isIPV6)
+	qr := newQueryRacer(rservers, nsReq, isIPV6)
 	resp, err = qr.run()
 	if err != nil {
 		return resp, nil, err
