@@ -3,8 +3,6 @@ package recursor
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/netip"
 	"sync"
 	"time"
 
@@ -40,7 +38,7 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) (*dns.Msg, error) {
+func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	// If we are here, there is no cached answer. Do query upstream
@@ -51,18 +49,13 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, nsaddr string) 
 			Net:     network,
 		}
 
-		tmp, err := netip.ParseAddrPort(nsaddr)
-		if err != nil {
-			return nil, fmt.Errorf("%s. nsaddr: %s", err, nsaddr)
-		}
-
-		if slices.Contains(rootNSIPv4, tmp.Addr().String()) || slices.Contains(rootNSIPv6, tmp.Addr().String()) {
-			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", tmp, q.Name, dns.TypeToString[q.Qtype])
+		if slices.Contains(rootNSIPv4, ns.Addr) || slices.Contains(rootNSIPv6, ns.Addr) {
+			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
 		} else {
-			log.Printf("[recursor] quering ns=%s q=%s t=%s", nsaddr, q.Name, dns.TypeToString[q.Qtype])
+			log.Printf("[recursor] quering ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
 		}
 
-		ans, _, err := client.ExchangeContext(ctx, req, nsaddr)
+		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
 		if err != nil {
 			return nil, err
 		}
@@ -102,8 +95,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 
 	worker := func(ns nsServer, wg *sync.WaitGroup) {
 		defer wg.Done()
-		req := qr.req.Copy()
-		ans, err := qr.queryNS(ctx, req, ns.withPort())
+		ans, err := qr.queryNS(ctx, qr.req, ns)
 
 		if err == nil {
 			ansCH <- ans
@@ -126,12 +118,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		}
 
 		wg.Add(1)
-		nsc := nsServer{
-			Addr:    s.Addr,
-			Version: s.Version,
-			TTL:     s.TTL,
-		}
-		go worker(nsc, &wg)
+		go worker(s, &wg)
 		nextNSTimer.Reset(nextNSTimeout)
 
 		select {
