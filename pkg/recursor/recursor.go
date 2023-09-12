@@ -39,7 +39,7 @@ const (
 
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
-	resolverMaxLevel = 16
+	resolverMaxLevel = 24
 )
 
 type Recursor struct {
@@ -110,14 +110,36 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	utils.MsgSetupEdns(ans)
-	ans.Authoritative = false
+	ans = r.cleanMsg(ans, q)
 
 	if r.cache != nil {
 		r.cache.Set(cacheKey, ans)
 	}
 
 	return ans, nil
+}
+
+func (r *Recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
+	cleaned := new(dns.Msg)
+	// cleaned.Answer = ans.Answer
+
+	cleaned.Authoritative = false
+	cleaned.SetRcode(ans, ans.Rcode)
+
+	for _, rr := range ans.Answer {
+		if rr.Header().Rrtype != dns.TypeNone {
+			cleaned.Answer = append(cleaned.Answer, rr)
+		}
+	}
+	for _, rr := range ans.Ns {
+		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {
+			cleaned.Ns = append(cleaned.Ns, rr)
+		}
+		if rr.Header().Rrtype == dns.TypeSOA {
+			cleaned.Ns = append(cleaned.Ns, rr)
+		}
+	}
+	return cleaned
 }
 
 func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, isIPV6 bool) (*authServers, error) {
@@ -309,7 +331,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	rc := ctx.Value(ResolverContextKey).(*ResolverContext)
 	rc.RecursionCount++
 	if rc.RecursionCount >= resolverMaxLevel {
-		log.Printf("///////// %d", rc.RecursionCount)
+		log.Printf("///////// RecursionLimit %d", rc.RecursionCount)
 		return nil, errRecursionMaxLevel
 	}
 	ctx = context.WithValue(ctx, ResolverContextKey, rc)

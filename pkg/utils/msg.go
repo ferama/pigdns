@@ -1,10 +1,12 @@
 package utils
 
-import "github.com/miekg/dns"
+import (
+	"github.com/miekg/dns"
+)
 
 const (
-	MaxTTL             = 60 * 60 * 48 // 172800
-	ResponseMaxMsgSize = 512
+	MaxTTL     = 60 * 60 * 48 // 172800
+	MaxMsgSize = 1232
 )
 
 // MsgGetAnswerByType detects if an answer contains a message type.
@@ -60,13 +62,19 @@ func MsgGetMinTTL(m *dns.Msg) uint32 {
 }
 
 func MsgSetupEdns(m *dns.Msg) {
-	if m.IsEdns0() == nil {
-		m.SetEdns0(ResponseMaxMsgSize, false)
-	} else {
-		m.IsEdns0().SetUDPSize(ResponseMaxMsgSize)
-	}
 
-	if m.Len() > ResponseMaxMsgSize {
-		m.Compress = true
+	m.Compress = true
+
+	if m.IsEdns0() == nil {
+		opt := new(dns.OPT)
+		opt.Hdr.Name = "."
+		opt.Hdr.Rrtype = dns.TypeOPT
+		opt.SetUDPSize(MaxMsgSize)
+
+		m.Extra = append(m.Extra, opt)
+	} else {
+		opt := m.IsEdns0()
+		opt.SetUDPSize(MaxMsgSize)
 	}
+	// log.Printf("####### len: %d", m.Len())
 }

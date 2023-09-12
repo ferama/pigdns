@@ -7,7 +7,6 @@ import (
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/recursor"
 	"github.com/ferama/pigdns/pkg/utils"
-	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,9 +19,6 @@ type RecursorContext struct {
 }
 
 const (
-	// retries until error
-	maxRetriesOnError = 1
-
 	// for logging
 	handlerName = "recursor"
 )
@@ -54,29 +50,23 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		return
 	}
 
-	m := new(dns.Msg)
-	retries := maxRetriesOnError
-	for {
-		m, err = h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
-		if err == nil {
-			break
-		}
-		retries--
+	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
+	if err != nil {
+		log.Err(err).
+			Str("query", r.Name()).
+			Str("type", r.Type()).
+			Msg("recursor error")
 
-		if retries == 0 {
-			log.Err(err).
-				Str("query", r.Name()).
-				Str("type", r.Type()).
-				Msg("recursor error")
-
-			h.Next.ServeDNS(c, r)
-			return
-		}
+		h.Next.ServeDNS(c, r)
+		return
 	}
+
 	if len(m.Answer) != 0 || len(m.Ns) != 0 {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
 		m.RecursionAvailable = true
+		utils.MsgSetupEdns(m)
+
 		r.ReplyWithStatus(m, m.Rcode)
 		return
 	}
