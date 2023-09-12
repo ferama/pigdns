@@ -7,8 +7,8 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/any"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
+	"github.com/ferama/pigdns/pkg/handlers/recursor"
 	"github.com/ferama/pigdns/pkg/handlers/regexip"
-	"github.com/ferama/pigdns/pkg/handlers/resolver"
 	"github.com/ferama/pigdns/pkg/handlers/root"
 	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -43,7 +43,7 @@ func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = resolver.NewResolver(chain, datadir, allowedNets)
+	chain = recursor.NewRecursor(chain, datadir, allowedNets)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
 	chain = &collector.Handler{Next: chain}

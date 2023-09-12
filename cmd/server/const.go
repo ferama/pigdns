@@ -11,11 +11,11 @@ const (
 
 	// Standard DNS server. If true and the resolver is enabled
 	// the standard (tcp and udp) dns server, will handle it
-	DnsServeResolverEnable = "dns-serve-resolver"
+	DnsServeRecursorEnable = "dns-serve-recursor"
 
 	// resolver
-	ResolverEnableFlag    = "resolver-enable"
-	ResolverAllowNetworks = "resolver-allow-nets"
+	RecursorEnableFlag    = "recursor-enable"
+	RecursorAllowNetworks = "recursor-allow-nets"
 
 	// certmanager
 	CertmanEmailFlag      = "certman-email"

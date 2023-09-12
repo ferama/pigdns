@@ -1,4 +1,4 @@
-package resolver
+package recursor
 
 import (
 	"context"
@@ -13,9 +13,9 @@ import (
 
 type contextKey string
 
-const ResolverContextKey contextKey = "resolver-middleware-context"
+const RecursorContextKey contextKey = "recursor-middleware-context"
 
-type ResolverContext struct {
+type RecursorContext struct {
 	RecursionCount int
 }
 
@@ -24,7 +24,7 @@ const (
 	maxRetriesOnError = 1
 
 	// for logging
-	handlerName = "resolver"
+	handlerName = "recursor"
 )
 
 type handler struct {
@@ -34,7 +34,7 @@ type handler struct {
 	allowedNets []string
 }
 
-func NewResolver(next pigdns.Handler, datadir string, allowedNets []string) *handler {
+func NewRecursor(next pigdns.Handler, datadir string, allowedNets []string) *handler {
 	h := &handler{
 		Next:        next,
 		recursor:    recursor.New(datadir),
@@ -49,7 +49,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		log.Fatal().Err(err)
 	}
 	if !allowed {
-		log.Printf("[resolver] client '%s' is not allowed", r.ResponseWriter.RemoteAddr())
+		log.Printf("[recursor handler] client '%s' is not allowed", r.ResponseWriter.RemoteAddr())
 		h.Next.ServeDNS(c, r)
 		return
 	}
@@ -67,7 +67,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			log.Err(err).
 				Str("query", r.Name()).
 				Str("type", r.Type()).
-				Msg("resolver error")
+				Msg("recursor error")
 
 			h.Next.ServeDNS(c, r)
 			return

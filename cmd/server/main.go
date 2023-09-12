@@ -39,9 +39,9 @@ func init() {
 	viper.BindPFlag(DatadirFlag, rootCmd.Flags().Lookup(DatadirFlag))
 
 	// dns server
-	rootCmd.Flags().Bool(DnsServeResolverEnable, false, `if true and resolver is enabled, enable the standard dns server (tcp and udp) 
+	rootCmd.Flags().Bool(DnsServeRecursorEnable, false, `if true and resolver is enabled, enable the standard dns server (tcp and udp) 
 to serve the resolver requests. By default they are enabled in the DOH server only`)
-	viper.BindPFlag(DnsServeResolverEnable, rootCmd.Flags().Lookup(DnsServeResolverEnable))
+	viper.BindPFlag(DnsServeRecursorEnable, rootCmd.Flags().Lookup(DnsServeRecursorEnable))
 
 	rootCmd.Flags().StringP(DomainFlag, "d", "", "the pigdns domain")
 	viper.BindPFlag(DomainFlag, rootCmd.Flags().Lookup(DomainFlag))
@@ -53,9 +53,9 @@ to serve the resolver requests. By default they are enabled in the DOH server on
 	viper.BindPFlag(ZoneFileFlag, rootCmd.Flags().Lookup(ZoneFileFlag))
 
 	// resolver
-	rootCmd.Flags().BoolP(ResolverEnableFlag, "r", false, "if true, enable recursive resolver for not managed zones starting from root nameservers")
-	viper.BindPFlag(ResolverEnableFlag, rootCmd.Flags().Lookup(ResolverEnableFlag))
-	rootCmd.Flags().StringArray(ResolverAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
+	rootCmd.Flags().BoolP(RecursorEnableFlag, "r", false, "if true, enable recursive resolver for not managed zones starting from root nameservers")
+	viper.BindPFlag(RecursorEnableFlag, rootCmd.Flags().Lookup(RecursorEnableFlag))
+	rootCmd.Flags().StringArray(RecursorAllowNetworks, []string{}, `sets a list of allowed networks. if empty no filter will be applied.
 The list can be set using env var or multiple flags.
 Example (with env var):
   PIGDNS_RESOLVER_ALLOW_NETS="127.0.0.1/32 192.168.10.0/24" pigdns -r ...
@@ -63,7 +63,7 @@ Example (with env var):
 Or with multiple flags:
   pigdns -d pig.io -r --resolver-allow-nets "192.168.10.0/24" --resolver-allow-nets "127.0.0.1/32"
 `)
-	viper.BindPFlag(ResolverAllowNetworks, rootCmd.Flags().Lookup(ResolverAllowNetworks))
+	viper.BindPFlag(RecursorAllowNetworks, rootCmd.Flags().Lookup(RecursorAllowNetworks))
 
 	// cert
 	rootCmd.Flags().StringP(CertmanEmailFlag, "e", "user@not-exists.com", `
@@ -125,9 +125,9 @@ var rootCmd = &cobra.Command{
 		webDohEnable := viper.GetBool(WebDohEnableFlag)
 		certmanUseStaging := viper.GetBool(CertmanUseStagingFlag)
 
-		resolverEnable := viper.GetBool(ResolverEnableFlag)
+		resolverEnable := viper.GetBool(RecursorEnableFlag)
 		webHTTPSDisable := viper.GetBool(WebHTTPSDisableFlag)
-		dnsServeResolverEnable := viper.GetBool(DnsServeResolverEnable)
+		dnsServeResolverEnable := viper.GetBool(DnsServeRecursorEnable)
 
 		if !domainEnable && !resolverEnable {
 			failWithHelp(cmd, "you need to enable at least one of domain related functionalities (domanin flag) or recursor")
@@ -163,7 +163,7 @@ var rootCmd = &cobra.Command{
 			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux, true)
 		}
 		if resolverEnable {
-			h := server.BuildResolverHandler(datadir, viper.GetStringSlice(ResolverAllowNetworks))
+			h := server.BuildResolverHandler(datadir, viper.GetStringSlice(RecursorAllowNetworks))
 			if dnsServeResolverEnable {
 				pigdns.HandleMux(".", h, dnsMux, false)
 			}
