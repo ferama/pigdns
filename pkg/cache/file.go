@@ -19,14 +19,14 @@ import (
 
 const (
 	cacheExpiredCheckInterval = 10 * time.Second
-	cacheDumpInterval         = 60 * time.Second
+	cacheDumpInterval         = 5 * time.Minute
 
 	cacheMaxItemsPerBucket = 10000
 	cacheNumBuckets        = 128
 	cacheSubDir            = "cache"
 
 	// this worker are go routines that do jobs like check for record expiration,
-	// cahce dumps to disk and so on
+	// cache dumps to disk and so on
 	cacheMaxWorkers = 5
 )
 
@@ -41,14 +41,19 @@ type FileCache struct {
 	buckets map[uint64]*bucket
 	datadir string
 
-	workerPool *worker.Pool
+	name string
+
+	expireWorkerPool *worker.Pool
+	dumpWorkerPool   *worker.Pool
 }
 
-func NewFileCache(datadir string) *FileCache {
+func NewFileCache(datadir string, name string) *FileCache {
 	cache := &FileCache{
-		buckets:    make(map[uint64]*bucket),
-		datadir:    datadir,
-		workerPool: worker.NewPool(cacheMaxWorkers),
+		buckets:          make(map[uint64]*bucket),
+		datadir:          datadir,
+		name:             name,
+		expireWorkerPool: worker.NewPool(cacheMaxWorkers),
+		dumpWorkerPool:   worker.NewPool(cacheMaxWorkers),
 	}
 
 	var i uint64
@@ -66,11 +71,13 @@ func NewFileCache(datadir string) *FileCache {
 }
 
 func (c *FileCache) setupJobs() {
-	expiredTicker := time.NewTicker(cacheExpiredCheckInterval)
-	dumpTicker := time.NewTicker(cacheDumpInterval)
-	for {
-		select {
-		case <-expiredTicker.C:
+
+	go func() {
+		for {
+			time.Sleep(cacheExpiredCheckInterval)
+
+			// t := time.Now()
+			// log.Printf("[%s cache] expire job started", c.name)
 			var i uint64
 			for i = 0; i <= cacheNumBuckets; i++ {
 				// this is needed to be sure that the value of i doesn't change
@@ -78,23 +85,36 @@ func (c *FileCache) setupJobs() {
 				n := i
 
 				// check expired
-				c.workerPool.Enqueue(func() {
+				c.expireWorkerPool.Enqueue(func() {
 					c.checkExpiredJob(n)
 				})
 			}
-		case <-dumpTicker.C:
+
+			c.expireWorkerPool.Wait()
+			// log.Printf("[%s cache] expire job ended. took %s", c.name, time.Since(t))
+		}
+	}()
+
+	go func() {
+		for {
+			time.Sleep(cacheDumpInterval)
+
+			// t := time.Now()
+			// log.Printf("[%s cache] dump job started", c.name)
 			var i uint64
 			for i = 0; i <= cacheNumBuckets; i++ {
 				// this is needed to be sure that the value of i doesn't change
 				// while is read from the checkExpired function
 				n := i
 				// dump cache to disk
-				c.workerPool.Enqueue(func() {
+				c.dumpWorkerPool.Enqueue(func() {
 					c.dumpJob(n)
 				})
 			}
+			c.dumpWorkerPool.Wait()
+			// log.Printf("[%s cache] dump job ended. took %s", c.name, time.Since(t))
 		}
-	}
+	}()
 }
 
 func (c *FileCache) dumpJob(bucketIdx uint64) {
@@ -106,15 +126,13 @@ func (c *FileCache) dumpJob(bucketIdx uint64) {
 
 	bucket := c.buckets[bucketIdx]
 
-	// log.Printf("[cache] dumping bucket '%d' to disk", bucket.idx)
-
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
 	bucket.mu.RLock()
 	err := enc.Encode(bucket.data)
 	if err != nil {
-		log.Printf("[cache] cannot dump cache %s", err)
+		log.Printf("[%s cache] cannot dump cache %s", c.name, err)
 		bucket.mu.RUnlock()
 		return
 	}
@@ -123,14 +141,14 @@ func (c *FileCache) dumpJob(bucketIdx uint64) {
 	dir := filepath.Join(c.datadir, cacheSubDir)
 	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
-		log.Printf("[cache] cannot store cache %s", err)
+		log.Printf("[%s cache] cannot store cache %s", c.name, err)
 		return
 	}
 	path := filepath.Join(dir, fmt.Sprintf("%d.bin", bucket.idx))
 
 	fi, err := os.Create(path)
 	if err != nil {
-		log.Printf("[cache] cannot store cache %s", err)
+		log.Printf("[%s cache] cannot store cache %s", c.name, err)
 		return
 	}
 	defer fi.Close()
@@ -146,17 +164,17 @@ func (c *FileCache) load(bucketIdx uint64) {
 	path := filepath.Join(c.datadir, cacheSubDir, fmt.Sprintf("%d.bin", bucketIdx))
 	b, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("[cache] cannot read cache file %s", err)
+		log.Printf("[%s cache] cannot read cache file %s", c.name, err)
 		return
 	}
 
 	d := gob.NewDecoder(bytes.NewBuffer(b))
 	err = d.Decode(&c.buckets[bucketIdx].data)
 	if err != nil {
-		log.Printf("[cache] cannot load cache %s", err)
+		log.Printf("[%s cache] cannot load cache %s", c.name, err)
 	}
-	log.Printf("[cache] bucket '%d' loaded items %d/%d",
-		bucketIdx, len(c.buckets[bucketIdx].data), cacheMaxItemsPerBucket)
+	log.Printf("[%s cache] bucket '%d' loaded items %d/%d",
+		c.name, bucketIdx, len(c.buckets[bucketIdx].data), cacheMaxItemsPerBucket)
 }
 
 func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
@@ -173,7 +191,7 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 	for k, v := range bucket.data {
 		// log.Printf("[cache item] %s, ttl: %fs", k, time.Until(v.Expires).Seconds())
 		if time.Now().After(v.Expires) {
-			log.Printf("[cache] expired %s", k)
+			log.Printf("[%s cache] expired %s", c.name, k)
 			delete(bucket.data, k)
 		}
 		s = append(s, struct {
@@ -193,7 +211,7 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 
 		ei := len(s) - cacheMaxItemsPerBucket
 		for _, i := range s[:ei] {
-			log.Printf("[cache] evicted %s", i.key)
+			log.Printf("[%s cache] evicted %s", c.name, i.key)
 			delete(bucket.data, i.key)
 		}
 	}

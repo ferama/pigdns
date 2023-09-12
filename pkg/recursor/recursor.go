@@ -55,7 +55,7 @@ func New(datadir string) *Recursor {
 	}
 
 	log.Printf("[recursor] enabling file based cache")
-	r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "cache")
+	r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "ipcache")
 	r.nsCache = newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache")
 	return r
 }

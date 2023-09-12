@@ -14,6 +14,9 @@ import (
 
 const (
 	nextNSTimeout = 150 * time.Millisecond
+
+	// https://www.netmeister.org/blog/dns-size.html
+	requestMsgSize = 1232
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -41,6 +44,9 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
+	if req.IsEdns0() == nil {
+		req.SetEdns0(requestMsgSize, true)
+	}
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
 	for {

@@ -16,7 +16,7 @@ type recursorCache struct {
 
 func newRecursorCache(datadir string, name string) *recursorCache {
 	rc := &recursorCache{
-		cache: cache.NewFileCache(datadir),
+		cache: cache.NewFileCache(datadir, name),
 		name:  name,
 	}
 

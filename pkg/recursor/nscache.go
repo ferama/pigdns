@@ -17,7 +17,7 @@ type nsCache struct {
 
 func newNSCache(datadir string, name string) *nsCache {
 	c := &nsCache{
-		cache: cache.NewFileCache(datadir),
+		cache: cache.NewFileCache(datadir, name),
 		name:  name,
 	}
 
