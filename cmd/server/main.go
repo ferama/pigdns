@@ -163,7 +163,7 @@ var rootCmd = &cobra.Command{
 			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux, true)
 		}
 		if resolverEnable {
-			h := server.BuildResolverHandler(datadir, viper.GetStringSlice(RecursorAllowNetworks))
+			h := server.BuildRecursorHandler(datadir, viper.GetStringSlice(RecursorAllowNetworks))
 			if dnsServeResolverEnable {
 				pigdns.HandleMux(".", h, dnsMux, false)
 			}

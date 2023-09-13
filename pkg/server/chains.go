@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	"github.com/ferama/pigdns/pkg/handlers/acl"
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
 	"github.com/ferama/pigdns/pkg/handlers/any"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
@@ -24,9 +25,9 @@ func BuildDOHProxyHandler(serverURI string, serverAddr string) pigdns.Handler {
 	return chain
 }
 
-// BuildResolverHandler creates an handler that resolves recursively
+// BuildRecursorHandler creates an handler that resolves recursively
 // starting from root NS
-func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
+func BuildRecursorHandler(datadir string, allowedNets []string) pigdns.Handler {
 	var chain pigdns.Handler
 
 	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
@@ -43,9 +44,10 @@ func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = recursor.NewRecursorHandler(chain, datadir, allowedNets)
+	chain = recursor.NewRecursorHandler(chain, datadir)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
+	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}
 	chain = &collector.Handler{Next: chain}
 
 	return chain

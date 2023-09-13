@@ -42,15 +42,15 @@ const (
 	resolverMaxLevel = 24
 )
 
-type recursor struct {
+type Recursor struct {
 	cache   *recursorCache
 	nsCache *nsCache
 
 	oneInFlight *oneinflight.OneInFlight
 }
 
-func newRecursor(datadir string) *recursor {
-	r := &recursor{
+func New(datadir string) *Recursor {
+	r := &Recursor{
 		oneInFlight: oneinflight.New(),
 	}
 
@@ -60,7 +60,7 @@ func newRecursor(datadir string) *recursor {
 	return r
 }
 
-func (r *recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	cc := &recursorContext{
 		RecursionCount: 0,
 		ToResolveList:  make([]string, 0),
@@ -119,7 +119,7 @@ func (r *recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	return ans, nil
 }
 
-func (r *recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
+func (r *Recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
 	cleaned := new(dns.Msg)
 	// cleaned.Answer = ans.Answer
 
@@ -142,7 +142,7 @@ func (r *recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
 	return cleaned
 }
 
-func (r *recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, isIPV6 bool) (*authServers, error) {
+func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, isIPV6 bool) (*authServers, error) {
 
 	servers := &authServers{
 		Zone: zone,
@@ -258,7 +258,7 @@ func (r *recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 // *dns.Msg the latest response from a queried NS server if any
 // *authServers the authServers object
 // error
-func (r *recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, offset int) (*dns.Msg, *authServers, error) {
+func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, offset int) (*dns.Msg, *authServers, error) {
 	q := req.Question[0]
 
 	end := false
@@ -315,7 +315,7 @@ func (r *recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	return resp, servers, err
 }
 
-func (r *recursor) findSoa(resp *dns.Msg) *dns.Msg {
+func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 	for _, rr := range resp.Ns {
 		if _, ok := rr.(*dns.SOA); ok {
 			soa := new(dns.Msg)
@@ -327,7 +327,7 @@ func (r *recursor) findSoa(resp *dns.Msg) *dns.Msg {
 	return nil
 }
 
-func (r *recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 	rc.RecursionCount++
 	if rc.RecursionCount >= resolverMaxLevel {

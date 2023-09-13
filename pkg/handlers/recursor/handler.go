@@ -5,6 +5,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/recursor"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -17,30 +18,18 @@ const (
 type handler struct {
 	Next pigdns.Handler
 
-	recursor    *recursor
-	allowedNets []string
+	recursor *recursor.Recursor
 }
 
-func NewRecursorHandler(next pigdns.Handler, datadir string, allowedNets []string) *handler {
+func NewRecursorHandler(next pigdns.Handler, datadir string) *handler {
 	h := &handler{
-		Next:        next,
-		recursor:    newRecursor(datadir),
-		allowedNets: allowedNets,
+		Next:     next,
+		recursor: recursor.New(datadir),
 	}
 	return h
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
-	allowed, err := utils.IsClientAllowed(r.ResponseWriter.RemoteAddr(), h.allowedNets)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	if !allowed {
-		log.Printf("[recursor handler] client '%s' is not allowed", r.ResponseWriter.RemoteAddr())
-		h.Next.ServeDNS(c, r)
-		return
-	}
-
 	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
 	if err != nil {
 		log.Err(err).
