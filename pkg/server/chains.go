@@ -43,7 +43,7 @@ func BuildResolverHandler(datadir string, allowedNets []string) pigdns.Handler {
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = recursor.NewRecursor(chain, datadir, allowedNets)
+	chain = recursor.NewRecursorHandler(chain, datadir, allowedNets)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
 	chain = &collector.Handler{Next: chain}
