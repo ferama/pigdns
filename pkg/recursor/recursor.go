@@ -43,8 +43,8 @@ const (
 )
 
 type Recursor struct {
-	cache   *recursorCache
-	nsCache *nsCache
+	ansCache *recursorCache
+	nsCache  *nsCache
 
 	oneInFlight *oneinflight.OneInFlight
 }
@@ -52,11 +52,11 @@ type Recursor struct {
 func New(datadir string) *Recursor {
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
+		ansCache:    newRecursorCache(filepath.Join(datadir, "cache", "addr"), "ipcache"),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache"),
 	}
 
 	log.Printf("[recursor] enabling file based cache")
-	r.cache = newRecursorCache(filepath.Join(datadir, "cache", "addr"), "ipcache")
-	r.nsCache = newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache")
 	return r
 }
 
@@ -71,11 +71,9 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 
 	// try to get the answer from cache if we have it
-	if r.cache != nil {
-		ans, cacheErr := r.cache.Get(cacheKey)
-		if cacheErr == nil {
-			return ans, nil
-		}
+	cached, cacheErr := r.ansCache.Get(cacheKey)
+	if cacheErr == nil {
+		return cached, nil
 	}
 
 	// if we don't have an answer in cache, run the query (only once concurrently
@@ -87,13 +85,11 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	tmp := r.oneInFlight.Run(cacheKey, func(params ...any) any {
 		// Another goroutine (the non locked one) likely has filled the cache already
 		// so take the advantage here
-		if r.cache != nil {
-			ans, cacheErr := r.cache.Get(cacheKey)
-			if cacheErr == nil {
-				return &retvalue{
-					Ans: ans,
-					Err: nil,
-				}
+		ans, cacheErr := r.ansCache.Get(cacheKey)
+		if cacheErr == nil {
+			return &retvalue{
+				Ans: ans,
+				Err: nil,
 			}
 		}
 
@@ -111,22 +107,19 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	ans = r.cleanMsg(ans, q)
-
-	if r.cache != nil {
-		r.cache.Set(cacheKey, ans)
-	}
+	r.ansCache.Set(cacheKey, ans)
 
 	return ans, nil
 }
 
 func (r *Recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
 	cleaned := new(dns.Msg)
-	// cleaned.Answer = ans.Answer
 
 	cleaned.Authoritative = false
 	cleaned.SetRcode(ans, ans.Rcode)
 
 	for _, rr := range ans.Answer {
+		// exclude TypeNone from the final answer
 		if rr.Header().Rrtype != dns.TypeNone {
 			cleaned.Answer = append(cleaned.Answer, rr)
 		}
@@ -270,11 +263,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 	zone := dns.Fqdn(q.Name[i:])
 
-	if r.nsCache != nil {
-		cached, err := r.nsCache.Get(zone)
-		if err == nil {
-			return nil, cached, nil
-		}
+	cached, err := r.nsCache.Get(zone)
+	if err == nil {
+		return nil, cached, nil
 	}
 
 	// run recursively here. the recursion will end when we will
@@ -307,9 +298,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	if err == nil {
-		if r.nsCache != nil {
-			r.nsCache.Set(servers)
-		}
+		r.nsCache.Set(servers)
 	}
 
 	return resp, servers, err
