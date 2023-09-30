@@ -14,13 +14,12 @@
 
 Start with a basic conf file
 ```yaml
-middlewares:
-  zone:
-    enabled: true
-    regexIPEnabled: true
-    zoneFilePath: ./hack/zone.conf
+zone:
+  enabled: true
+  regexIPEnabled: true
+  zoneFilePath: ./hack/zone.conf
 
-    name: <your-domain>
+  name: <your-domain>
 ```
 
 Delegate a subdomain to pigdns.

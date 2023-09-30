@@ -18,16 +18,6 @@ type zone struct {
 	ZoneFilePath string `koanf:"zoneFilePath"`
 }
 
-type middlewares struct {
-	Recursor struct {
-		Enabled     bool     `koanf:"enabled"`
-		EnableOnUDP bool     `koanf:"enableOnUDP"`
-		AllowedNets []string `koanf:"allowedNets"`
-	} `koanf:"recursor"`
-
-	Zone zone `koanf:"zone"`
-}
-
 type certm struct {
 	Enabled    bool   `koanf:"enabled"`
 	UseStaging bool   `koanf:"useStaging"`
@@ -43,8 +33,14 @@ type conf struct {
 
 	DOHEnabled bool `koanf:"dohEnabled"`
 
-	Middlewares middlewares `koanf:"middlewares"`
-	Certman     certm       `koanf:"certman"`
+	Recursor struct {
+		Enabled     bool     `koanf:"enabled"`
+		EnableOnUDP bool     `koanf:"enableOnUDP"`
+		AllowedNets []string `koanf:"allowedNets"`
+	} `koanf:"recursor"`
+
+	Zone    zone  `koanf:"zone"`
+	Certman certm `koanf:"certman"`
 }
 
 func loadConf(path string, debug bool) *conf {

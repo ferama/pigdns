@@ -5,14 +5,13 @@ datadir: "."
 UDPTCPEnabled: true
 DOHEnabled: false
 
-middlewares:
-  recursor:
-    enabled: true
-    enableOnUDP: true
-  
-  zone:
-    enabled: true
-    regexIPEnabled: true
-    zoneFilePath: ./hack/zone.conf
+recursor:
+  enabled: true
+  enableOnUDP: true
 
-    name: pig.loc
+zone:
+  enabled: true
+  regexIPEnabled: true
+  zoneFilePath: ./hack/zone.conf
+
+  name: pig.loc

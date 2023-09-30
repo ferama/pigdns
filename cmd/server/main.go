@@ -45,12 +45,12 @@ var rootCmd = &cobra.Command{
 		}
 
 		certmanEnable := conf.Certman.Enabled
-		if certmanEnable && !conf.Middlewares.Zone.Enabled {
+		if certmanEnable && !conf.Zone.Enabled {
 			failWithHelp(cmd, "cannot enable certman without a zone conf")
 		}
 		if certmanEnable {
 			cm := certman.New(
-				conf.Middlewares.Zone.Name,
+				conf.Zone.Name,
 				conf.DataDir,
 				conf.Certman.Email,
 				conf.Certman.UseStaging,
@@ -62,15 +62,15 @@ var rootCmd = &cobra.Command{
 
 		dnsMux := dns.NewServeMux()
 		dohMux := dns.NewServeMux()
-		if conf.Middlewares.Recursor.Enabled {
-			h := server.BuildRecursorHandler(conf.DataDir, conf.Middlewares.Recursor.AllowedNets)
-			if conf.Middlewares.Recursor.EnableOnUDP {
+		if conf.Recursor.Enabled {
+			h := server.BuildRecursorHandler(conf.DataDir, conf.Recursor.AllowedNets)
+			if conf.Recursor.EnableOnUDP {
 				pigdns.HandleMux(".", h, dnsMux, false)
 			}
 			pigdns.HandleMux(".", h, dohMux, true)
 		}
 
-		zoneConf := conf.Middlewares.Zone
+		zoneConf := conf.Zone
 
 		if zoneConf.Enabled {
 			h := server.BuildZoneHandler(
@@ -91,11 +91,11 @@ var rootCmd = &cobra.Command{
 			}()
 		}
 
-		if conf.DOHEnabled && conf.Middlewares.Zone.Enabled {
+		if conf.DOHEnabled && conf.Zone.Enabled {
 			ws := web.NewWebServer(
 				dohMux,
 				conf.DataDir,
-				conf.Middlewares.Zone.Name,
+				conf.Zone.Name,
 			)
 			wg.Add(1)
 			go func() {
