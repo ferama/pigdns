@@ -71,7 +71,6 @@ var rootCmd = &cobra.Command{
 		}
 
 		zoneConf := conf.Zone
-
 		if zoneConf.Enabled {
 			h := server.BuildZoneHandler(
 				zoneConf.ZoneFilePath,
@@ -91,6 +90,7 @@ var rootCmd = &cobra.Command{
 			}()
 		}
 
+		// I need a zone conf to be able to use doh
 		if conf.DOHEnabled && conf.Zone.Enabled {
 			ws := web.NewWebServer(
 				dohMux,
