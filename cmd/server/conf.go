@@ -32,10 +32,6 @@ type certm struct {
 	Enabled    bool   `koanf:"enabled"`
 	UseStaging bool   `koanf:"useStaging"`
 	Email      string `koanf:"email"`
-	WebCerts   struct {
-		Enabled bool   `koanf:"enabled"`
-		ApiKey  string `koanf:"string"`
-	} `koanf:"webCerts"`
 }
 
 type conf struct {

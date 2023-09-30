@@ -1,12 +1,14 @@
+# sample config
+
 logLevel: info
 datadir: "."
 UDPTCPEnabled: true
-DOHEnabled: true
+DOHEnabled: false
 
 middlewares:
   recursor:
     enabled: true
-    # enableOnUDP: true
+    enableOnUDP: true
   
   zone:
     enabled: true
