@@ -1,0 +1,7 @@
+logLevel: debug
+domain: pigdns.io
+
+certman:
+  enabled: false
+  useStaging: false
+  email: user@not-exists.com
