@@ -9,31 +9,26 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
+type zone struct {
+	Enabled bool `koanf:"enabled"`
+
+	Name           string `koanf:"name"`
+	RegexipEnabled bool   `koanf:"regexipEnabled"`
+
+	ZoneFilePath string `koanf:"zoneFilePath"`
+}
+
 type middlewares struct {
-	RegexipEnabled bool `koanf:"regexipEnabled"`
-	Recursor       struct {
+	Recursor struct {
 		Enabled     bool     `koanf:"enabled"`
+		EnableOnUDP bool     `koanf:"enableOnUDP"`
 		AllowedNets []string `koanf:"allowedNets"`
 	} `koanf:"recursor"`
-	ZoneFile struct {
-		Enabled bool   `koanf:"enabled"`
-		Path    string `koanf:"path"`
-	} `koanf:"zoneFile"`
+
+	Zone zone `koanf:"zone"`
 }
 
-type UDPTCPDnsChain struct {
-	Enabled       bool        `koanf:"enabled"`
-	ListenAddress string      `koanf:"listenAddress"`
-	Middlewares   middlewares `koanf:"middlewares"`
-}
-
-type DohChain struct {
-	Enabled       bool        `koanf:"enabled"`
-	ListenAddress string      `koanf:"listenAddress"`
-	Middlewares   middlewares `koanf:"middlewares"`
-}
-
-type Certman struct {
+type certm struct {
 	Enabled    bool   `koanf:"enabled"`
 	UseStaging bool   `koanf:"useStaging"`
 	Email      string `koanf:"email"`
@@ -45,12 +40,15 @@ type Certman struct {
 
 type conf struct {
 	LogLevel string `koanf:"logLevel"`
-	Domain   string `koanf:"domain"`
 	DataDir  string `koanf:"dataDir"`
 
-	DohChain       DohChain       `koanf:"DOHChain"`
-	UDPTCPDnsChain UDPTCPDnsChain `koanf:"UDPTCPDNSChain"`
-	Certman        Certman        `koanf:"certman"`
+	UDPTCPEnabled       bool   `koanf:"udpTCPEnabled"`
+	UDPTCPListenAddress string `koanf:"udpTCPListenAddress"`
+
+	DOHEnabled bool `koanf:"dohEnabled"`
+
+	Middlewares middlewares `koanf:"middlewares"`
+	Certman     certm       `koanf:"certman"`
 }
 
 func loadConf(path string, debug bool) *conf {
@@ -61,12 +59,13 @@ func loadConf(path string, debug bool) *conf {
 
 	// default values
 	k.Load(structs.Provider(conf{
-		LogLevel: "info",
-		DataDir:  ".",
-		UDPTCPDnsChain: UDPTCPDnsChain{
-			ListenAddress: ":53",
-		},
-		Certman: Certman{
+		LogLevel:            "info",
+		DataDir:             ".",
+		UDPTCPEnabled:       true,
+		DOHEnabled:          false,
+		UDPTCPListenAddress: ":53",
+
+		Certman: certm{
 			Enabled:    false,
 			UseStaging: false,
 			Email:      "user@not-exists.com",

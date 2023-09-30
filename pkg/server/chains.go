@@ -53,8 +53,8 @@ func BuildRecursorHandler(datadir string, allowedNets []string) pigdns.Handler {
 	return chain
 }
 
-// BuildDomainHandler craetes an handler that resolves custom zone
-func BuildDomainHandler(zoneFilePath string, domain string, certmanEnable bool) pigdns.Handler {
+// BuildZoneHandler craetes an handler that resolves custom zone
+func BuildZoneHandler(zoneFilePath string, zoneName string, regexipEnable bool, certmanEnable bool) pigdns.Handler {
 	// the first handler that write back to the client calling
 	// w.WriteMsg(m) win. No other handler can write back anymore
 	// Chain rings are called in reverse order
@@ -62,13 +62,15 @@ func BuildDomainHandler(zoneFilePath string, domain string, certmanEnable bool) 
 
 	// leaf handler (is the latest one)
 	chain = &root.Handler{
-		Domain:   domain,
+		Domain:   zoneName,
 		ZoneFile: zoneFilePath,
 	}
 
-	chain = &regexip.Handler{Next: chain}
+	if regexipEnable {
+		chain = &regexip.Handler{Next: chain}
+	}
 	if zoneFilePath != "" {
-		chain = zone.New(chain, domain, zoneFilePath)
+		chain = zone.New(chain, zoneName, zoneFilePath)
 	}
 	if certmanEnable {
 		chain = &acmec.Handler{Next: chain}

@@ -29,11 +29,9 @@ func failWithHelp(cmd *cobra.Command, msg string) {
 var rootCmd = &cobra.Command{
 	Use:  "pigdns",
 	Long: "dynamic dns resolver",
+	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := loadConf("./pigdns.yaml", true)
-		fmt.Println("################")
-		fmt.Printf("%s\n", conf.LogLevel)
-		os.Exit(1)
+		conf := loadConf(args[0], false)
 
 		debug := strings.EqualFold(conf.LogLevel, "debug")
 		info := strings.EqualFold(conf.LogLevel, "info")
@@ -46,74 +44,58 @@ var rootCmd = &cobra.Command{
 			zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		}
 
-		domain := conf.Domain
-
-		domainEnable := domain != ""
-
-		email := conf.Certman.Email
-		datadir := conf.DataDir
-		webCertsEnable := conf.Certman.WebCerts.Enabled
-		webCertsApikey := conf.Certman.WebCerts.ApiKey
-
-		webDohEnable := conf.DohChain.Enabled
-		certmanUseStaging := conf.Certman.UseStaging
-
-		// resolverEnable := viper.GetBool(RecursorEnableFlag)
-		// webHTTPSDisable := viper.GetBool(WebHTTPSDisableFlag)
-		// dnsServeResolverEnable := viper.GetBool(DnsServeRecursorEnable)
-
-		// if !domainEnable && !resolverEnable {
-		// 	failWithHelp(cmd, "you need to enable at least one of domain related functionalities (domanin flag) or recursor")
-		// }
-
 		certmanEnable := conf.Certman.Enabled
-		if certmanEnable && !domainEnable {
-			failWithHelp(cmd, "cannot enable certman without a domain. please set the 'domain' flag")
+		if certmanEnable && !conf.Middlewares.Zone.Enabled {
+			failWithHelp(cmd, "cannot enable certman without a zone conf")
 		}
 		if certmanEnable {
-			cm := certman.New(domain, datadir, email, certmanUseStaging)
+			cm := certman.New(
+				conf.Middlewares.Zone.Name,
+				conf.DataDir,
+				conf.Certman.Email,
+				conf.Certman.UseStaging,
+			)
 			go cm.Run()
 		}
 
-		if webCertsEnable && !domainEnable {
-			failWithHelp(cmd, "cannot enable web certs without a domain. please set the 'domain' flag")
-		}
+		var wg sync.WaitGroup
 
-		// TODO:
-		// dns server and doh server should use different dnsMux
-		// The dns server should not use the resolver handler (is very dangerous) unless
-		// it is forced too with an optional flag
-		// The doh mux instead could use it more safely
 		dnsMux := dns.NewServeMux()
 		dohMux := dns.NewServeMux()
-		if domainEnable {
-			h := server.BuildDomainHandler(
-				conf.UDPTCPDnsChain.Middlewares.ZoneFile.Path,
-				domain,
-				conf.Certman.Enabled,
-			)
-			pigdns.HandleMux(dns.Fqdn(domain), h, dnsMux, false)
-			pigdns.HandleMux(dns.Fqdn(domain), h, dohMux, true)
+		if conf.Middlewares.Recursor.Enabled {
+			h := server.BuildRecursorHandler(conf.DataDir, conf.Middlewares.Recursor.AllowedNets)
+			if conf.Middlewares.Recursor.EnableOnUDP {
+				pigdns.HandleMux(".", h, dnsMux, false)
+			}
+			pigdns.HandleMux(".", h, dohMux, true)
 		}
 
-		// if resolverEnable {
-		// 	h := server.BuildRecursorHandler(datadir, viper.GetStringSlice(RecursorAllowNetworks))
-		// 	if dnsServeResolverEnable {
-		// 		pigdns.HandleMux(".", h, dnsMux, false)
-		// 	}
-		// 	pigdns.HandleMux(".", h, dohMux, true)
-		// }
+		zoneConf := conf.Middlewares.Zone
 
-		var wg sync.WaitGroup
-		if webCertsEnable || webDohEnable {
+		if zoneConf.Enabled {
+			h := server.BuildZoneHandler(
+				zoneConf.ZoneFilePath,
+				zoneConf.Name,
+				zoneConf.RegexipEnabled,
+				false)
+			pigdns.HandleMux(dns.Fqdn(zoneConf.Name), h, dnsMux, false)
+			pigdns.HandleMux(dns.Fqdn(zoneConf.Name), h, dohMux, true)
+		}
+
+		if conf.UDPTCPEnabled {
+			s := server.NewServer(dnsMux, conf.UDPTCPListenAddress)
+			wg.Add(1)
+			go func() {
+				s.Start()
+				wg.Done()
+			}()
+		}
+
+		if conf.DOHEnabled && conf.Middlewares.Zone.Enabled {
 			ws := web.NewWebServer(
 				dohMux,
-				datadir,
-				domain,
-				webCertsEnable,
-				webCertsApikey,
-				webDohEnable,
-				false,
+				conf.DataDir,
+				conf.Middlewares.Zone.Name,
 			)
 			wg.Add(1)
 			go func() {
@@ -121,13 +103,6 @@ var rootCmd = &cobra.Command{
 				wg.Done()
 			}()
 		}
-
-		s := server.NewServer(dnsMux, conf.UDPTCPDnsChain.ListenAddress)
-		wg.Add(1)
-		go func() {
-			s.Start()
-			wg.Done()
-		}()
 
 		wg.Wait()
 	},

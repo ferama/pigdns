@@ -1,7 +1,16 @@
-logLevel: debug
-domain: pigdns.io
+logLevel: info
+datadir: "."
+UDPTCPEnabled: true
+DOHEnabled: true
 
-certman:
-  enabled: false
-  useStaging: false
-  email: user@not-exists.com
+middlewares:
+  recursor:
+    enabled: true
+    # enableOnUDP: true
+  
+  zone:
+    enabled: true
+    regexIPEnabled: true
+    zoneFilePath: ./hack/zone.conf
+
+    name: pig.loc

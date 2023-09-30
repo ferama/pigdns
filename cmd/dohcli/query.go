@@ -9,7 +9,6 @@ import (
 	"github.com/ferama/pigdns/pkg/doh"
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -22,7 +21,7 @@ var qCmd = &cobra.Command{
 	Long:  "Query a doh server",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		server := viper.GetString(ServerNameFlag)
+		server, _ := cmd.Flags().GetString(ServerNameFlag)
 		serverAddr := fmt.Sprintf("https://%s", server)
 
 		if server == "" {
