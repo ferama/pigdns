@@ -11,7 +11,6 @@ import (
 
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
-	"github.com/spf13/viper"
 )
 
 const testListenAddress = "127.0.0.1:6353"
@@ -22,8 +21,8 @@ func createTempFile(t *testing.T, content string) string {
 	if err != nil {
 		t.Fail()
 	}
-	viper.Set("domain", "pig.io")
-	viper.Set("zone-file", tmpfile)
+	// viper.Set("domain", "pig.io")
+	// viper.Set("zone-file", tmpfile)
 
 	return tmpfile
 }

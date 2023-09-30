@@ -2,9 +2,7 @@ package web
 
 import (
 	"crypto/tls"
-	"embed"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,17 +15,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-//go:embed templates/*
-var f embed.FS
-
 type webServer struct {
 	router *gin.Engine
 
 	datadir string
 	domain  string
-	apikey  string
-
-	useHTTPS bool
 
 	cachedCert        *tls.Certificate
 	cachedCertModTime time.Time
@@ -36,11 +28,7 @@ type webServer struct {
 func NewWebServer(
 	dnsMux *dns.ServeMux,
 	datadir string,
-	domain string,
-	webCertsEnable bool,
-	webCertsApikey string,
-	webDohEnable bool,
-	useHTTPS bool) *webServer {
+	domain string) *webServer {
 
 	gin.SetMode(gin.ReleaseMode)
 
@@ -48,21 +36,17 @@ func NewWebServer(
 	router.Use(gin.Recovery())
 
 	// router := gin.Default()
-	templ := template.Must(template.New("").ParseFS(f, "templates/*.html"))
-	router.SetHTMLTemplate(templ)
 
 	s := &webServer{
-		router:   router,
-		datadir:  datadir,
-		domain:   domain,
-		apikey:   webCertsApikey,
-		useHTTPS: useHTTPS,
+		router:  router,
+		datadir: datadir,
+		domain:  domain,
 	}
-	s.setupRoutes(webCertsEnable, webDohEnable, dnsMux)
+	s.setupRoutes(dnsMux)
 	return s
 }
 
-func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool, dnsMux *dns.ServeMux) {
+func (s *webServer) setupRoutes(dnsMux *dns.ServeMux) {
 	// setup health endpoint
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -70,25 +54,12 @@ func (s *webServer) setupRoutes(webCertsEnable bool, webDohEnable bool, dnsMux *
 		})
 	})
 
-	if webDohEnable {
-		// install doh routes
-		s.router.GET("/dns-query", routes.DohHandler(dnsMux))
-		// the RFC8484 indicates this path for post requests
-		s.router.POST("/dns-query", routes.DohHandler(dnsMux))
-		// chrome seems to query to the root path instead... I'm missing something?
-		s.router.POST("/", routes.DohHandler(dnsMux))
-	}
-
-	if webCertsEnable {
-		// web ui
-		s.router.GET("/", routes.RootHandler(s.domain, s.apikey != ""))
-		certsGroup := s.router.Group("/certs")
-		if s.apikey != "" {
-			certsGroup.Use(authMiddleware(s.apikey))
-		}
-		routes.CertRoutes(s.datadir, certsGroup)
-	}
-
+	// install doh routes
+	s.router.GET("/dns-query", routes.DohHandler(dnsMux))
+	// the RFC8484 indicates this path for post requests
+	s.router.POST("/dns-query", routes.DohHandler(dnsMux))
+	// chrome seems to query to the root path instead... I'm missing something?
+	s.router.POST("/", routes.DohHandler(dnsMux))
 }
 
 func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -111,15 +82,6 @@ func (s *webServer) getCertificates(h *tls.ClientHelloInfo) (*tls.Certificate, e
 }
 
 func (s *webServer) Start() {
-	if !s.useHTTPS {
-		log.Info().Msg("web listening on ':80'")
-		srv := http.Server{
-			Addr:    ":80",
-			Handler: s.router,
-		}
-		srv.ListenAndServe()
-	}
-
 	log.Info().Msg("web listening on ':443'")
 	go http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
