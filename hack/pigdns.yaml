@@ -2,17 +2,26 @@
 
 LogLevel: info
 Datadir: "."
+
 NetListener:
   Enabled: true
+  Address: ":53"
 DOHEnabled: false
 
 Recursor:
   Enabled: true
   EnableOnUDP: true
+  AllowedNets:
+    - 127.0.0.1/32
+    - 192.168.10.0/24
 
 Zone:
   Enabled: true
+  Name: pig.loc
   RegexipEnabled: true
   ZoneFilePath: ./hack/zone.conf
 
-  Name: pig.loc
+Certman:
+  Enabled: false
+  UseStaging: false
+  Email: user@not-exists.com
