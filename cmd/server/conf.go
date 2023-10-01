@@ -24,14 +24,21 @@ type certm struct {
 	Email      string `koanf:"email"`
 }
 
+// this struct holds the net listener configuration.
+type netListener struct {
+	// You can disable the standard net listener.
+	// You may want to enable the DOH mode only
+	Enabled bool `koanf:"enabled"`
+	// the address here, referes to both tcp and udp protocols
+	Address string `koanf:"address"`
+}
+
 type conf struct {
 	LogLevel string `koanf:"logLevel"`
 	DataDir  string `koanf:"dataDir"`
 
-	UDPTCPEnabled       bool   `koanf:"udpTCPEnabled"`
-	UDPTCPListenAddress string `koanf:"udpTCPListenAddress"`
-
-	DOHEnabled bool `koanf:"dohEnabled"`
+	NetListener netListener `koanf:"netListener"`
+	DOHEnabled  bool        `koanf:"dohEnabled"`
 
 	Recursor struct {
 		Enabled     bool     `koanf:"enabled"`
@@ -51,11 +58,13 @@ func loadConf(path string, debug bool) *conf {
 
 	// default values
 	k.Load(structs.Provider(conf{
-		LogLevel:            "info",
-		DataDir:             ".",
-		UDPTCPEnabled:       true,
-		DOHEnabled:          false,
-		UDPTCPListenAddress: ":53",
+		LogLevel: "info",
+		DataDir:  ".",
+		NetListener: netListener{
+			Enabled: true,
+			Address: ":53",
+		},
+		DOHEnabled: false,
 
 		Certman: certm{
 			Enabled:    false,

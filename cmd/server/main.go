@@ -81,8 +81,8 @@ var rootCmd = &cobra.Command{
 			pigdns.HandleMux(dns.Fqdn(zoneConf.Name), h, dohMux, true)
 		}
 
-		if conf.UDPTCPEnabled {
-			s := server.NewServer(dnsMux, conf.UDPTCPListenAddress)
+		if conf.NetListener.Enabled {
+			s := server.NewServer(dnsMux, conf.NetListener.Address)
 			wg.Add(1)
 			go func() {
 				s.Start()

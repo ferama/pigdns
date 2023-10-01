@@ -1,17 +1,18 @@
 # sample config
 
-logLevel: info
-datadir: "."
-UDPTCPEnabled: true
+LogLevel: info
+Datadir: "."
+NetListener:
+  Enabled: true
 DOHEnabled: false
 
-recursor:
-  enabled: true
-  enableOnUDP: true
+Recursor:
+  Enabled: true
+  EnableOnUDP: true
 
-zone:
-  enabled: true
-  regexIPEnabled: true
-  zoneFilePath: ./hack/zone.conf
+Zone:
+  Enabled: true
+  RegexipEnabled: true
+  ZoneFilePath: ./hack/zone.conf
 
-  name: pig.loc
+  Name: pig.loc
