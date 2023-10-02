@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
+	"github.com/rs/zerolog/log"
 )
 
 type zone struct {
@@ -50,10 +51,16 @@ type conf struct {
 	Certman certm `koanf:"certman"`
 }
 
-func loadConf(path string, debug bool) *conf {
-	if debug {
-		fmt.Println("=== Current Conf ===")
+func (c *conf) pprint() {
+	pp, err := json.MarshalIndent(c, "", "  ")
+	log.Print("=== Current conf ===")
+	if err == nil {
+		log.Printf("\n%s", pp)
 	}
+	log.Print("===  ===")
+}
+
+func loadConf(path string) *conf {
 	var k = koanf.New(".")
 
 	// default values
@@ -78,8 +85,5 @@ func loadConf(path string, debug bool) *conf {
 	var c conf
 	k.Unmarshal("", &c)
 
-	if debug {
-		k.Print()
-	}
 	return &c
 }

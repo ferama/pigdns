@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 	Long: "dynamic dns resolver",
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := loadConf(args[0], false)
+		conf := loadConf(args[0])
 
 		debug := strings.EqualFold(conf.LogLevel, "debug")
 		info := strings.EqualFold(conf.LogLevel, "info")
@@ -42,6 +42,10 @@ var rootCmd = &cobra.Command{
 		}
 		if debug {
 			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
+
+		if debug {
+			conf.pprint()
 		}
 
 		certmanEnable := conf.Certman.Enabled
@@ -63,7 +67,7 @@ var rootCmd = &cobra.Command{
 		dnsMux := dns.NewServeMux()
 		dohMux := dns.NewServeMux()
 		if conf.Recursor.Enabled {
-			h := server.BuildRecursorHandler(conf.DataDir, conf.Recursor.AllowedNets)
+			h := server.BuildRecursorHandler(conf.DataDir, conf.Recursor.AllowedNets, nil)
 			if conf.Recursor.EnableOnUDP {
 				pigdns.HandleMux(".", h, dnsMux, false)
 			}

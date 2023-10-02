@@ -1,7 +1,7 @@
 # sample config
 
-LogLevel: info
-Datadir: "."
+LogLevel: debug
+DataDir: "./data"
 
 NetListener:
   Enabled: true
@@ -14,6 +14,8 @@ Recursor:
   AllowedNets:
     - 127.0.0.1/32
     - 192.168.10.0/24
+  Blocklists:
+    - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
 
 Zone:
   Enabled: true

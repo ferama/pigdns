@@ -2,3 +2,4 @@
 *.pem
 __debug_bin
 /cache
+/data
