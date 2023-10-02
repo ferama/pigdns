@@ -34,6 +34,12 @@ type netListener struct {
 	Address string `koanf:"address"`
 }
 
+type recursorConf struct {
+	Enabled     bool     `koanf:"enabled"`
+	AllowedNets []string `koanf:"allowedNets"`
+	ServeOnUDP  bool     `koanf:"serveOnUDP"`
+	BlockLists  []string `koanf:"blockLists"`
+}
 type conf struct {
 	LogLevel string `koanf:"logLevel"`
 	DataDir  string `koanf:"dataDir"`
@@ -41,11 +47,7 @@ type conf struct {
 	NetListener netListener `koanf:"netListener"`
 	DOHEnabled  bool        `koanf:"dohEnabled"`
 
-	Recursor struct {
-		Enabled     bool     `koanf:"enabled"`
-		EnableOnUDP bool     `koanf:"enableOnUDP"`
-		AllowedNets []string `koanf:"allowedNets"`
-	} `koanf:"recursor"`
+	Recursor recursorConf `koanf:"recursor"`
 
 	Zone    zone  `koanf:"zone"`
 	Certman certm `koanf:"certman"`
@@ -72,6 +74,13 @@ func loadConf(path string) *conf {
 			Address: ":53",
 		},
 		DOHEnabled: false,
+		Recursor: recursorConf{
+			ServeOnUDP: false,
+			AllowedNets: []string{
+				"127.0.0.1/32",
+				"::1",
+			},
+		},
 
 		Certman: certm{
 			Enabled:    false,

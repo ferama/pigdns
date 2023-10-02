@@ -58,6 +58,7 @@ func NewBlocklistHandler(uri []string, next pigdns.Handler) *handler {
 					h.lists[u][dns.Fqdn(key)] = true
 				}
 			}
+			log.Info().Msgf("[blocklist] '%s' loaded", u)
 		}
 	}
 
@@ -76,7 +77,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	if !allowed {
-		log.Printf("[blocklist handler] domain '%s' is not allowed", r.Name())
+		log.Printf("[blocklist] domain '%s' is not allowed", r.Name())
 		if c.Value(collector.CollectorContextKey) != nil {
 			cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 			cc.AnweredBy = handlerName

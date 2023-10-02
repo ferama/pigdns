@@ -1,6 +1,6 @@
 # sample config
 
-LogLevel: debug
+LogLevel: info
 DataDir: "./data"
 
 NetListener:
@@ -10,11 +10,13 @@ DOHEnabled: false
 
 Recursor:
   Enabled: true
-  EnableOnUDP: true
+  # by default the recursor is served on DOH only
+  ServeOnUDP: true
   AllowedNets:
+    # - 0.0.0.0/0 # allows all nets (very dangerous)
     - 127.0.0.1/32
     - 192.168.10.0/24
-  Blocklists:
+  BlockLists:
     - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
 
 Zone:

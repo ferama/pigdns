@@ -36,7 +36,7 @@ func IsAddrInNetwork(addr string, networks []string) (bool, error) {
 
 func IsClientAllowed(client net.Addr, allowedNets []string) (bool, error) {
 	if len(allowedNets) == 0 {
-		return true, nil
+		return false, nil
 	}
 	r, err := IsAddrInNetwork(client.String(), allowedNets)
 	if err != nil {
