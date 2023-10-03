@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
@@ -94,6 +93,6 @@ func loadConf(path string) *conf {
 
 	var c conf
 	k.Unmarshal("", &c)
-	fmt.Printf("--> %s\n", k.String("datadir"))
+
 	return &c
 }

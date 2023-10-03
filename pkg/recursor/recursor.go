@@ -119,10 +119,16 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
 	cleaned.SetRcode(ans, ans.Rcode)
 
 	for _, rr := range ans.Answer {
-		// exclude TypeNone from the final answer
-		if rr.Header().Rrtype != dns.TypeNone {
-			cleaned.Answer = append(cleaned.Answer, rr)
+		// exclude not requested answers (except if they contains CNAMEs)
+		if rr.Header().Rrtype != dns.TypeCNAME && rr.Header().Rrtype != q.Qtype {
+			continue
 		}
+		// exclude TypeNone from the final answer
+		if rr.Header().Rrtype == dns.TypeNone {
+			continue
+		}
+
+		cleaned.Answer = append(cleaned.Answer, rr)
 	}
 	for _, rr := range ans.Ns {
 		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {

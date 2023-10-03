@@ -23,6 +23,7 @@ doh ./cmd/client
 "
 
 ### pigdns
+GOOS=linux GOARCH=arm build pigdns ./cmd/server
 GOOS=linux GOARCH=arm64 build pigdns ./cmd/server
 GOOS=linux GOARCH=amd64 build pigdns ./cmd/server
 GOOS=darwin GOARCH=arm64 build pigdns ./cmd/server
