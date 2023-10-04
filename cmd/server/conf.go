@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
@@ -89,7 +91,14 @@ func loadConf(path string) *conf {
 		},
 	}, "."), nil)
 
+	// merge with config file
 	k.Load(file.Provider(path), yaml.Parser())
+
+	// allow overrides from env
+	// Ex: PIGDNS_netListener_address=":5353"
+	k.Load(env.Provider("PIGDNS_", ".", func(s string) string {
+		return strings.Replace(strings.TrimPrefix(s, "PIGDNS_"), "_", ".", -1)
+	}), nil)
 
 	var c conf
 	k.Unmarshal("", &c)
