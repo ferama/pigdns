@@ -252,7 +252,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 	return servers, nil
 }
 
-// resolveNS build an authServers object filling it with zone and resolved related nameservers ips
+// resolveNS builds an authServers object filling it with zone and resolved related nameservers ips
 // it returns in order:
 // *dns.Msg the latest response from a queried NS server if any
 // *authServers the authServers object
@@ -353,6 +353,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	loop := 0
 	// TODO: investigate the 3 here
 	// if I don't introduce it this will not work as expected (it should return a soa response)
+	// Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
 	for loop < 3 {
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead

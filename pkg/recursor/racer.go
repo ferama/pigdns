@@ -21,9 +21,9 @@ const (
 
 // the query racer, given a list of authoritative nameservers
 // and a query, starts a run to get the result.
-// It peek one nameserver from the list and starts an exchange. It
-// starts a timer also. If the timer expire, it starts a new exchange using
-// the next nameserver. If one of the nameservers return an answer, the run ends.
+// It peeks one nameserver from the list and starts an exchange. It
+// starts a timer also. If the timer expires, it starts a new exchange using
+// the next nameserver. If one of the nameservers returns an answer, the run ends.
 // If all of the nameserers give errors, the run ends
 type queryRacer struct {
 	servers *authServers
