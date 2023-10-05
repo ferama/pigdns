@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -92,7 +94,11 @@ func loadConf(path string) *conf {
 	}, "."), nil)
 
 	// merge with config file
-	k.Load(file.Provider(path), yaml.Parser())
+	err := k.Load(file.Provider(path), yaml.Parser())
+	if err != nil {
+		fmt.Printf("error while parsing conf file at '%s'\n", path)
+		os.Exit(1)
+	}
 
 	// allow overrides from env
 	// Ex: PIGDNS_netListener_address=":5353"

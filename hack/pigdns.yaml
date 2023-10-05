@@ -2,11 +2,11 @@
 
 logLevel: debug
 dataDir: "./data"
+dohEnabled: false
 
 netListener:
   enabled: true
   address: ":53"
-dohEnabled: false
 
 recursor:
   enabled: true
