@@ -69,24 +69,27 @@ func New(datadir string) *Recursor {
 
 	log.Printf("[recursor] enabling file based cache")
 
-	// r.getDNSKEY("relatech.link.")
-
 	return r
 }
 
-func (r *Recursor) getDNSKEY(zone string) *dns.RR {
+func (r *Recursor) getDNSKEY(zone string) []dns.RR {
 	req := new(dns.Msg)
 	req.SetQuestion(zone, dns.TypeDNSKEY)
-	req.SetEdns0(1232, true)
+	req.SetEdns0(requestDefaultMsgSize, true)
 
 	resp, err := r.Query(context.TODO(), req, false)
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return nil
 	}
-	log.Printf("%s", resp)
+	keys := []dns.RR{}
+	for _, rr := range resp.Answer {
+		if dnskey, ok := rr.(*dns.DNSKEY); ok {
+			keys = append(keys, dnskey)
+		}
+	}
 
-	return nil
+	return keys
 }
 
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
@@ -269,8 +272,11 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 
 		ra := new(dns.Msg)
-		ra.SetQuestion(ns, dns.TypeA)
-
+		if isIPV6 {
+			ra.SetQuestion(ns, dns.TypeAAAA)
+		} else {
+			ra.SetQuestion(ns, dns.TypeA)
+		}
 		rans, err := r.resolve(ctx, ra, isIPV6)
 
 		if err != nil {
@@ -308,6 +314,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return nil, getRootServers(), nil
 	}
 	zone := dns.Fqdn(q.Name[i:])
+
+	// keys := r.getDNSKEY(zone)
+	// log.Printf("%s", keys)
 
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {

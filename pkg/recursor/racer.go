@@ -16,7 +16,7 @@ const (
 	nextNSTimeout = 150 * time.Millisecond
 
 	// https://www.netmeister.org/blog/dns-size.html
-	requestMsgSize = 1232
+	requestDefaultMsgSize = 1232
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -64,7 +64,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 
 	// remove any existing OPT flag and force the do flag (to get the RRSIG record)
 	req = qr.removeOPT(req)
-	req.SetEdns0(requestMsgSize, true)
+	req.SetEdns0(requestDefaultMsgSize, true)
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
