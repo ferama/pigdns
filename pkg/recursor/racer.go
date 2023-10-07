@@ -41,12 +41,31 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
+func (qr *queryRacer) removeOPT(msg *dns.Msg) *dns.Msg {
+	extra := make([]dns.RR, len(msg.Extra))
+	copy(extra, msg.Extra)
+
+	msg.Extra = []dns.RR{}
+
+	for _, rr := range extra {
+		switch rr.(type) {
+		case *dns.OPT:
+			continue
+		default:
+			msg.Extra = append(msg.Extra, rr)
+		}
+	}
+
+	return msg
+}
+
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
-	if req.IsEdns0() == nil {
-		req.SetEdns0(requestMsgSize, true)
-	}
+	// remove any existing OPT flag and force the do flag (to get the RRSIG record)
+	req = qr.removeOPT(req)
+	req.SetEdns0(requestMsgSize, true)
+
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
 	for {

@@ -46,6 +46,8 @@ type Recursor struct {
 	ansCache *recursorCache
 	nsCache  *nsCache
 
+	rootkeys []dns.RR
+
 	oneInFlight *oneinflight.OneInFlight
 }
 
@@ -56,8 +58,35 @@ func New(datadir string) *Recursor {
 		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache"),
 	}
 
+	r.rootkeys = []dns.RR{}
+	for _, k := range rootKeys {
+		rr, err := dns.NewRR(k)
+		if err != nil {
+			log.Fatal().Msgf("invalid root key: %s", err.Error())
+		}
+		r.rootkeys = append(r.rootkeys, rr)
+	}
+
 	log.Printf("[recursor] enabling file based cache")
+
+	// r.getDNSKEY("relatech.link.")
+
 	return r
+}
+
+func (r *Recursor) getDNSKEY(zone string) *dns.RR {
+	req := new(dns.Msg)
+	req.SetQuestion(zone, dns.TypeDNSKEY)
+	req.SetEdns0(1232, true)
+
+	resp, err := r.Query(context.TODO(), req, false)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil
+	}
+	log.Printf("%s", resp)
+
+	return nil
 }
 
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
@@ -73,6 +102,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	// try to get the answer from cache if we have it
 	cached, cacheErr := r.ansCache.Get(cacheKey)
 	if cacheErr == nil {
+		cached = r.cleanMsg(cached, req)
 		return cached, nil
 	}
 
@@ -106,19 +136,29 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	ans = r.cleanMsg(ans, q)
 	r.ansCache.Set(cacheKey, ans)
 
+	ans = r.cleanMsg(ans, req)
 	return ans, nil
 }
 
-func (r *Recursor) cleanMsg(ans *dns.Msg, q dns.Question) *dns.Msg {
+func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
+	q := req.Question[0]
+
 	cleaned := new(dns.Msg)
 
 	cleaned.Authoritative = false
 	cleaned.SetRcode(ans, ans.Rcode)
 
+	opt := req.IsEdns0()
+
 	for _, rr := range ans.Answer {
+		if opt != nil && opt.Do() {
+			if rr.Header().Rrtype == dns.TypeRRSIG {
+				cleaned.Answer = append(cleaned.Answer, rr)
+				continue
+			}
+		}
 		// exclude not requested answers (except if they contains CNAMEs)
 		if rr.Header().Rrtype != dns.TypeCNAME && rr.Header().Rrtype != q.Qtype {
 			continue
