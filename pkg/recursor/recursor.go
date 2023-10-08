@@ -139,6 +139,8 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
+	// log.Printf("%s", ans)
+
 	r.ansCache.Set(cacheKey, ans)
 
 	ans = r.cleanMsg(ans, req)
@@ -146,6 +148,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 }
 
 func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
+	// return ans
 	q := req.Question[0]
 
 	cleaned := new(dns.Msg)
@@ -435,9 +438,15 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		ans.Extra = []dns.RR{}
 		maxLoop := cnameChainMaxDeep
 		for {
-			rr := utils.MsgGetAnswerByType(ans.Copy(), dns.TypeCNAME)
-			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
+			ansCopy := ans.Copy()
+			rset := utils.MsgGetAnswerByType(ansCopy, dns.TypeCNAME, "")
+			if len(rset) == 0 {
+				continue
+			}
+			rr := rset[0]
+			if strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
+				risgs := utils.MsgGetAnswerByType(ansCopy, dns.TypeRRSIG, cname.Header().Name)
 
 				rc := ctx.Value(recursorContextKey).(*recursorContext)
 				// prevents loops. if this ns was already in context in a previous
@@ -449,25 +458,30 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
+				newReq.SetEdns0(requestDefaultMsgSize, true)
 
 				// run a new query here to solve the CNAME
 				resp, err := r.Query(ctx, newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
+
 				if err == nil {
 					soa := r.findSoa(resp)
 					if soa != nil {
 						return soa, nil
 					}
+					// log.Printf("%s", ans)
 
-					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
+					// TODO: do not loss RRSIG here
+					ans.Answer = []dns.RR{rr}
+					ans.Answer = append(ans.Answer, risgs[0])
+					ans.Answer = append(ans.Answer, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
 						}
 					}
-
 				}
 			}
 			if haveAnswer {

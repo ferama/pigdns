@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"strings"
+
 	"github.com/miekg/dns"
 )
 
@@ -12,32 +14,29 @@ const (
 // MsgGetAnswerByType detects if an answer contains a message type.
 // If yes returns it, else returns nil
 // Usage: MsgGetAnswerByType(m, dns.TypeA)
-func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
+func MsgGetAnswerByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
+	ret := []dns.RR{}
+
 	if msg == nil {
-		return nil
+		return ret
 	}
 	if len(msg.Answer) == 0 {
-		return nil
+		return ret
 	}
 	for _, rr := range msg.Answer {
-		switch typ {
-		case dns.TypeA:
-			if _, ok := rr.(*dns.A); ok {
-				return rr
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
 			}
-		case dns.TypeAAAA:
-			if _, ok := rr.(*dns.AAAA); ok {
-				return rr
-			}
-		case dns.TypeCNAME:
-			if _, ok := rr.(*dns.CNAME); ok {
-				return rr
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
 			}
 		}
 
 	}
 
-	return nil
+	return ret
 }
 
 func MsgGetMinTTL(m *dns.Msg) uint32 {
