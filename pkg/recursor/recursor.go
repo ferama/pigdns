@@ -318,9 +318,6 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 	zone := dns.Fqdn(q.Name[i:])
 
-	// keys := r.getDNSKEY(zone)
-	// log.Printf("%s", keys)
-
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
 		return nil, cached, nil
@@ -356,6 +353,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	if err == nil {
+		keys := r.getDNSKEY(zone)
+		servers.DNSkeys = keys
+
 		r.nsCache.Set(servers)
 	}
 
@@ -446,7 +446,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			rr := rset[0]
 			if strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
-				risgs := utils.MsgGetAnswerByType(ansCopy, dns.TypeRRSIG, cname.Header().Name)
+				// risgs := utils.MsgGetAnswerByType(ansCopy, dns.TypeRRSIG, cname.Header().Name)
 
 				rc := ctx.Value(recursorContextKey).(*recursorContext)
 				// prevents loops. if this ns was already in context in a previous
@@ -475,7 +475,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 					// TODO: do not loss RRSIG here
 					ans.Answer = []dns.RR{rr}
-					ans.Answer = append(ans.Answer, risgs[0])
+					// ans.Answer = append(ans.Answer, risgs...)
 					ans.Answer = append(ans.Answer, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
@@ -494,5 +494,22 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 	}
 
+	// log.Printf("%s", servers.DNSkeys)
+	// rsig := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
+	// if len(rsig) > 0 && len(servers.DNSkeys) > 0 {
+	// 	sig := rsig[0].(*dns.RRSIG)
+	// 	key := servers.DNSkeys[0].(*dns.DNSKEY)
+
+	// 	rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
+	// 	// log.Printf("KEY ========= %s", key)
+	// 	key.KeyTag()
+	// 	err := sig.Verify(key, rrset)
+	// 	if err != nil {
+	// 		log.Printf("DNSKEY verify ERROR '%s'", q.Name)
+	// 	} else {
+	// 		log.Printf("DNSKEY verified '%s'", q.Name)
+	// 	}
+	// }
+	// log.Printf("%s", utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, ""))
 	return ans, nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/miekg/dns"
 )
 
 type nsServer struct {
@@ -34,6 +35,8 @@ func (n *nsServer) withPort() string {
 
 type authServers struct {
 	Zone string
+
+	DNSkeys []dns.RR
 
 	List []*nsServer
 }
