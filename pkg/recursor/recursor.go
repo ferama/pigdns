@@ -72,16 +72,23 @@ func New(datadir string) *Recursor {
 	return r
 }
 
-func (r *Recursor) getDNSKEY(zone string, servers *authServers) []dns.RR {
+// func (r *Recursor) getDNSKEY(zone string, servers *authServers) []dns.RR {
+func (r *Recursor) getDNSKEY(zone string) []dns.RR {
 	req := new(dns.Msg)
 	req.SetQuestion(zone, dns.TypeDNSKEY)
 	// utils.MsgSetupEdns(req)
 
 	keys := []dns.RR{}
 
-	qr := newQueryRacer(servers, req, false)
-	resp, err := qr.run()
+	// qr := newQueryRacer(servers, req, false)
+	// resp, err := qr.run()
+	// if err != nil {
+	// 	return keys
+	// }
+
+	resp, err := r.Query(context.TODO(), req, false)
 	if err != nil {
+		log.Error().Msg(err.Error())
 		return keys
 	}
 
@@ -355,10 +362,6 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	if err == nil {
-		// TODO: disabled. almost doubles stress test time
-		// keys := r.getDNSKEY(zone, servers)
-		// servers.DNSkeys = keys
-
 		r.nsCache.Set(servers)
 	}
 
@@ -461,7 +464,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
-				utils.MsgSetupEdns(newReq)
+				// utils.MsgSetupEdns(newReq)
 
 				// run a new query here to solve the CNAME
 				resp, err := r.Query(ctx, newReq, isIPV6)
@@ -495,24 +498,28 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			}
 		}
 	}
-	// log.Printf("%s", ans)
 
-	// log.Printf("%s", servers.DNSkeys)
-	// rsig := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
-	// if len(rsig) > 0 && len(servers.DNSkeys) > 0 {
-	// 	sig := rsig[0].(*dns.RRSIG)
-	// 	key := servers.DNSkeys[0].(*dns.DNSKEY)
+	rrsigs := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
+	dnssecVerified := false
+	for _, rrsig := range rrsigs {
+		sig := rrsig.(*dns.RRSIG)
+		log.Printf("[DNSKEY] q: '%s' signer name: '%s'", q.Name, sig.SignerName)
+		keys := r.getDNSKEY(sig.SignerName)
+		for _, krr := range keys {
+			key := krr.(*dns.DNSKEY)
+			rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
+			if len(rrset) == 0 {
+				continue
+			}
+			err := sig.Verify(key, rrset)
+			if err == nil {
+				dnssecVerified = true
+			}
+		}
+	}
+	if dnssecVerified {
+		log.Printf("[DNSSEC] verfified for '%s'", q.Name)
+	}
 
-	// 	rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
-	// 	// log.Printf("KEY ========= %s", key)
-	// 	key.KeyTag()
-	// 	err := sig.Verify(key, rrset)
-	// 	if err != nil {
-	// 		log.Printf("DNSKEY verify ERROR '%s'", q.Name)
-	// 	} else {
-	// 		log.Printf("DNSKEY verified '%s'", q.Name)
-	// 	}
-	// }
-	// log.Printf("%s", utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, ""))
 	return ans, nil
 }

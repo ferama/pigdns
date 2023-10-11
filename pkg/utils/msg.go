@@ -62,6 +62,24 @@ func MsgGetMinTTL(m *dns.Msg) uint32 {
 	return minTTL
 }
 
+func removeOPT(msg *dns.Msg) *dns.Msg {
+	extra := make([]dns.RR, len(msg.Extra))
+	copy(extra, msg.Extra)
+
+	msg.Extra = []dns.RR{}
+
+	for _, rr := range extra {
+		switch rr.(type) {
+		case *dns.OPT:
+			continue
+		default:
+			msg.Extra = append(msg.Extra, rr)
+		}
+	}
+
+	return msg
+}
+
 func MsgSetupEdns(m *dns.Msg) {
 
 	m.Compress = true
@@ -74,8 +92,8 @@ func MsgSetupEdns(m *dns.Msg) {
 
 		m.Extra = append(m.Extra, opt)
 	} else {
-		opt := m.IsEdns0()
-		opt.SetUDPSize(MaxMsgSize)
+		removeOPT(m)
+		m.SetEdns0(MaxMsgSize, true)
 	}
 	// log.Printf("####### len: %d", m.Len())
 }
