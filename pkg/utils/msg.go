@@ -7,7 +7,9 @@ import (
 )
 
 const (
-	MaxTTL     = 60 * 60 * 48 // 172800
+	MaxTTL = 60 * 60 * 48 // 172800
+
+	// https://www.netmeister.org/blog/dns-size.html
 	MaxMsgSize = 1232
 )
 

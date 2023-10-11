@@ -72,17 +72,19 @@ func New(datadir string) *Recursor {
 	return r
 }
 
-func (r *Recursor) getDNSKEY(zone string) []dns.RR {
+func (r *Recursor) getDNSKEY(zone string, servers *authServers) []dns.RR {
 	req := new(dns.Msg)
 	req.SetQuestion(zone, dns.TypeDNSKEY)
-	req.SetEdns0(requestDefaultMsgSize, true)
+	// utils.MsgSetupEdns(req)
 
-	resp, err := r.Query(context.TODO(), req, false)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return nil
-	}
 	keys := []dns.RR{}
+
+	qr := newQueryRacer(servers, req, false)
+	resp, err := qr.run()
+	if err != nil {
+		return keys
+	}
+
 	for _, rr := range resp.Answer {
 		if dnskey, ok := rr.(*dns.DNSKEY); ok {
 			keys = append(keys, dnskey)
@@ -353,8 +355,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 
 	if err == nil {
-		keys := r.getDNSKEY(zone)
-		servers.DNSkeys = keys
+		// TODO: disabled. almost doubles stress test time
+		// keys := r.getDNSKEY(zone, servers)
+		// servers.DNSkeys = keys
 
 		r.nsCache.Set(servers)
 	}
@@ -439,12 +442,12 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		maxLoop := cnameChainMaxDeep
 		for {
 			ansCopy := ans.Copy()
+			var rr dns.RR
 			rset := utils.MsgGetAnswerByType(ansCopy, dns.TypeCNAME, "")
-			if len(rset) == 0 {
-				continue
+			if len(rset) > 0 {
+				rr = rset[0]
 			}
-			rr := rset[0]
-			if strings.EqualFold(rr.Header().Name, q.Name) {
+			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
 				// risgs := utils.MsgGetAnswerByType(ansCopy, dns.TypeRRSIG, cname.Header().Name)
 
@@ -458,7 +461,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
-				newReq.SetEdns0(requestDefaultMsgSize, true)
+				utils.MsgSetupEdns(newReq)
 
 				// run a new query here to solve the CNAME
 				resp, err := r.Query(ctx, newReq, isIPV6)
@@ -471,16 +474,15 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 					if soa != nil {
 						return soa, nil
 					}
-					// log.Printf("%s", ans)
 
-					// TODO: do not loss RRSIG here
-					ans.Answer = []dns.RR{rr}
-					// ans.Answer = append(ans.Answer, risgs...)
-					ans.Answer = append(ans.Answer, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
 						}
+					}
+					if !haveAnswer {
+						ans.Answer = []dns.RR{rr}
+						ans.Answer = append(ans.Answer, resp.Answer...)
 					}
 				}
 			}
@@ -493,6 +495,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			}
 		}
 	}
+	// log.Printf("%s", ans)
 
 	// log.Printf("%s", servers.DNSkeys)
 	// rsig := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")

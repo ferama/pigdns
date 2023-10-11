@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/slices"
@@ -14,9 +15,6 @@ import (
 
 const (
 	nextNSTimeout = 150 * time.Millisecond
-
-	// https://www.netmeister.org/blog/dns-size.html
-	requestDefaultMsgSize = 1232
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -41,30 +39,11 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) removeOPT(msg *dns.Msg) *dns.Msg {
-	extra := make([]dns.RR, len(msg.Extra))
-	copy(extra, msg.Extra)
-
-	msg.Extra = []dns.RR{}
-
-	for _, rr := range extra {
-		switch rr.(type) {
-		case *dns.OPT:
-			continue
-		default:
-			msg.Extra = append(msg.Extra, rr)
-		}
-	}
-
-	return msg
-}
-
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	// remove any existing OPT flag and force the do flag (to get the RRSIG record)
-	req = qr.removeOPT(req)
-	req.SetEdns0(requestDefaultMsgSize, true)
+	utils.MsgSetupEdns(req)
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
