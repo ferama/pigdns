@@ -452,7 +452,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			}
 			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
-				// risgs := utils.MsgGetAnswerByType(ansCopy, dns.TypeRRSIG, cname.Header().Name)
 
 				rc := ctx.Value(recursorContextKey).(*recursorContext)
 				// prevents loops. if this ns was already in context in a previous
@@ -514,11 +513,15 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			err := sig.Verify(key, rrset)
 			if err == nil {
 				dnssecVerified = true
+				break
 			}
 		}
 	}
 	if dnssecVerified {
-		log.Printf("[DNSSEC] verfified for '%s'", q.Name)
+		log.Printf("[DNSSEC] verified for '%s'", q.Name)
+	}
+	if len(rrsigs) > 0 && !dnssecVerified {
+		log.Printf("[DNSSEC] verify error '%s'", q.Name)
 	}
 
 	return ans, nil

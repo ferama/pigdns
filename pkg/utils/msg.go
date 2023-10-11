@@ -15,7 +15,10 @@ const (
 
 // MsgGetAnswerByType detects if an answer contains a message type.
 // If yes returns it, else returns nil
-// Usage: MsgGetAnswerByType(m, dns.TypeA)
+// Usage:
+//
+//	do not filter by record name: MsgGetAnswerByType(m, dns.TypeA, "")
+//	filter by record name: MsgGetAnswerByType(m, dns.TypeA, "google.com")
 func MsgGetAnswerByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
 	ret := []dns.RR{}
 
