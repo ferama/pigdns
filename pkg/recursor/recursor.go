@@ -152,33 +152,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 	// log.Printf("%s", ans)
 
-	rrsigs := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
-	dnssecVerified := false
-	for _, rrsig := range rrsigs {
-		sig := rrsig.(*dns.RRSIG)
-		log.Printf("[DNSKEY] q: '%s' signer name: '%s'", q.Name, sig.SignerName)
-
-		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6)
-		for _, krr := range keys {
-			key := krr.(*dns.DNSKEY)
-			rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
-			if len(rrset) == 0 {
-				continue
-			}
-			err := sig.Verify(key, rrset)
-			if err == nil {
-				dnssecVerified = true
-				break
-			}
-		}
-	}
-	if dnssecVerified {
-		log.Printf("[DNSSEC] verified for '%s'", q.Name)
-	}
-	if len(rrsigs) > 0 && !dnssecVerified {
-		log.Printf("[DNSSEC] verify error '%s'", q.Name)
-	}
-
 	r.ansCache.Set(cacheKey, ans)
 
 	ans = r.cleanMsg(ans, req)
