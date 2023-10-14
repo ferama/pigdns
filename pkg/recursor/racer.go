@@ -61,9 +61,19 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 		}
 
 		if slices.Contains(rootNSIPv4, ns.Addr) || slices.Contains(rootNSIPv6, ns.Addr) {
-			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
+			log.Debug().
+				Str("ns", ns.Addr).
+				Str("q", q.Name).
+				Str("type", dns.TypeToString[q.Qtype]).
+				Bool("ROOT", true).
+				Msg("[recursor]")
 		} else {
-			log.Printf("[recursor] quering ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
+			log.Debug().
+				Str("ns", ns.Addr).
+				Str("q", q.Name).
+				Str("type", dns.TypeToString[q.Qtype]).
+				Bool("ROOT", false).
+				Msg("[recursor]")
 		}
 
 		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
@@ -83,10 +93,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 }
 
 func (qr *queryRacer) run() (*dns.Msg, error) {
-	// log.Printf("--> racing on")
-	// for _, s := range qr.servers.List {
-	// 	log.Printf("%s", s.String())
-	// }
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	ansCH := make(chan *dns.Msg, len(qr.servers.List))

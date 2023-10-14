@@ -447,12 +447,11 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 			// no asnwer from the previous query but we got nameservers instead
 			// Get nameservers ips and try to query them
-			servers, err := r.buildServers(ctx, ans, q.Name, isIPV6)
+			servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
 			if err != nil {
 				// soa answer
 				return ans, nil
 			}
-			// log.Printf("%s", servers)
 
 			qr := newQueryRacer(servers, req, isIPV6)
 			ans, err = qr.run()

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
-	"github.com/rs/zerolog/log"
 )
 
 type nsCache struct {
@@ -42,7 +41,7 @@ func (c *nsCache) Set(as *authServers) error {
 		Data: packed.Bytes(),
 	}
 	i.SetTTL(time.Duration(ttl) * time.Second)
-	log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
+	// log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
 	return c.cache.Set(key, i)
 }
 
@@ -59,7 +58,7 @@ func (c *nsCache) Get(zone string) (*authServers, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[%s get] zone=%s", c.name, as.Zone)
+	// log.Printf("[%s get] zone=%s", c.name, as.Zone)
 
 	return &as, nil
 }
