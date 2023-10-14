@@ -40,7 +40,7 @@ const (
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
 	resolverMaxLevel = 24
-	// resolverMaxLevel = 8
+	// resolverMaxLevel = 16
 )
 
 type Recursor struct {
@@ -71,36 +71,6 @@ func New(datadir string) *Recursor {
 	log.Printf("[recursor] enabling file based cache")
 
 	return r
-}
-
-// func (r *Recursor) getDNSKEY(zone string, servers *authServers) []dns.RR {
-func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dns.RR {
-	req := new(dns.Msg)
-	req.SetQuestion(zone, dns.TypeDNSKEY)
-	// utils.MsgSetupEdns(req)
-
-	keys := []dns.RR{}
-
-	// qr := newQueryRacer(servers, req, false)
-	// resp, err := qr.run()
-	// if err != nil {
-	// 	return keys
-	// }
-
-	// resp, err := r.Query(context.TODO(), req, isIPV6)
-	resp, err := r.resolve(ctx, req, isIPV6)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return keys
-	}
-
-	for _, rr := range resp.Answer {
-		if dnskey, ok := rr.(*dns.DNSKEY); ok {
-			keys = append(keys, dnskey)
-		}
-	}
-
-	return keys
 }
 
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
@@ -382,6 +352,65 @@ func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 	return nil
 }
 
+func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, servers *authServers) []dns.RR {
+	req := new(dns.Msg)
+	req.SetQuestion(zone, dns.TypeDNSKEY)
+	// utils.MsgSetupEdns(req)
+
+	q := req.Question[0]
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+
+	// try to get the answer from cache if we have it
+	cached, cacheErr := r.ansCache.Get(cacheKey)
+	if cacheErr == nil {
+		return utils.MsgGetAnswerByType(cached, dns.TypeDNSKEY, "")
+	}
+
+	keys := []dns.RR{}
+
+	qr := newQueryRacer(servers, req, isIPV6)
+	resp, err := qr.run()
+	if err != nil {
+		r.ansCache.Set(cacheKey, resp)
+		return keys
+	}
+
+	r.ansCache.Set(cacheKey, resp)
+	keys = utils.MsgGetAnswerByType(resp, dns.TypeDNSKEY, "")
+	return keys
+}
+
+func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) {
+
+	rrsigs := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
+	dnssecVerified := false
+	for _, rrsig := range rrsigs {
+		sig := rrsig.(*dns.RRSIG)
+		log.Printf("[DNSKEY] q: '%s' signer name: '%s'", q.Name, sig.SignerName)
+
+		// TODO: this keys are not cached!
+		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
+		for _, krr := range keys {
+			key := krr.(*dns.DNSKEY)
+			rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
+			if len(rrset) == 0 {
+				continue
+			}
+			err := sig.Verify(key, rrset)
+			if err == nil {
+				dnssecVerified = true
+				break
+			}
+		}
+	}
+	if dnssecVerified {
+		log.Printf("[DNSSEC] verified for '%s'", q.Name)
+	}
+	if len(rrsigs) > 0 && !dnssecVerified {
+		log.Printf("[DNSSEC] verify error '%s'", q.Name)
+	}
+}
+
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 	rc.RecursionCount++
@@ -468,7 +497,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// utils.MsgSetupEdns(newReq)
 
 				// run a new query here to solve the CNAME
-				resp, err := r.Query(ctx, newReq, isIPV6)
+				resp, err := r.Query(context.TODO(), newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
@@ -500,32 +529,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 	}
 
-	// rrsigs := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
-	// dnssecVerified := false
-	// for _, rrsig := range rrsigs {
-	// 	sig := rrsig.(*dns.RRSIG)
-	// 	log.Printf("[DNSKEY] q: '%s' signer name: '%s'", q.Name, sig.SignerName)
-
-	// 	keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6)
-	// 	for _, krr := range keys {
-	// 		key := krr.(*dns.DNSKEY)
-	// 		rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
-	// 		if len(rrset) == 0 {
-	// 			continue
-	// 		}
-	// 		err := sig.Verify(key, rrset)
-	// 		if err == nil {
-	// 			dnssecVerified = true
-	// 			break
-	// 		}
-	// 	}
-	// }
-	// if dnssecVerified {
-	// 	log.Printf("[DNSSEC] verified for '%s'", q.Name)
-	// }
-	// if len(rrsigs) > 0 && !dnssecVerified {
-	// 	log.Printf("[DNSSEC] verify error '%s'", q.Name)
-	// }
+	r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
 
 	return ans, nil
 }
