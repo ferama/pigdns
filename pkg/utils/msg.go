@@ -13,19 +13,19 @@ const (
 	MaxMsgSize = 1232
 )
 
-// MsgGetAnswerByType detects if an answer contains a message type.
+// MsgExtractRRByType detects if an answer contains a message type.
 // If yes returns it, else returns nil
 // Usage:
 //
-//	do not filter by record name: MsgGetAnswerByType(m, dns.TypeA, "")
-//	filter by record name: MsgGetAnswerByType(m, dns.TypeA, "google.com")
-func MsgGetAnswerByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
+//	do not filter by record name: MsgExtractRRByType(m, dns.TypeA, "")
+//	filter by record name: MsgExtractRRByType(m, dns.TypeA, "google.com")
+func MsgExtractByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
 	ret := []dns.RR{}
 
 	if msg == nil {
 		return ret
 	}
-	if len(msg.Answer) == 0 {
+	if len(msg.Answer) == 0 && len(msg.Extra) == 0 && len(msg.Ns) == 0 {
 		return ret
 	}
 	for _, rr := range msg.Answer {
@@ -38,7 +38,30 @@ func MsgGetAnswerByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
 				ret = append(ret, rr)
 			}
 		}
+	}
 
+	for _, rr := range msg.Extra {
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
+			}
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
+			}
+		}
+	}
+
+	for _, rr := range msg.Ns {
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
+			}
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
+			}
+		}
 	}
 
 	return ret

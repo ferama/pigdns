@@ -322,6 +322,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
+	// r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
+
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
 		if err == errRecursionMaxLevel {
@@ -365,7 +367,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 	// try to get the answer from cache if we have it
 	cached, cacheErr := r.ansCache.Get(cacheKey)
 	if cacheErr == nil {
-		return utils.MsgGetAnswerByType(cached, dns.TypeDNSKEY, "")
+		return utils.MsgExtractByType(cached, dns.TypeDNSKEY, "")
 	}
 
 	keys := []dns.RR{}
@@ -378,20 +380,24 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 	}
 
 	r.ansCache.Set(cacheKey, resp)
-	keys = utils.MsgGetAnswerByType(resp, dns.TypeDNSKEY, "")
+	keys = utils.MsgExtractByType(resp, dns.TypeDNSKEY, "")
 	return keys
 }
 
 func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) {
+	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
 
-	rrsigs := utils.MsgGetAnswerByType(ans, dns.TypeRRSIG, "")
 	dnssecVerified := false
 	for _, rrsig := range rrsigs {
 		sig := rrsig.(*dns.RRSIG)
 		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
+
 		for _, krr := range keys {
 			key := krr.(*dns.DNSKEY)
-			rrset := utils.MsgGetAnswerByType(ans, sig.TypeCovered, q.Name)
+			rrset := utils.MsgExtractByType(ans, sig.TypeCovered, q.Name)
+			// if q.Name == "ovh.net." {
+			// 	log.Printf("%s", dns.TypeToString[sig.TypeCovered])
+			// }
 			if len(rrset) == 0 {
 				continue
 			}
@@ -404,10 +410,15 @@ func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Questio
 					Msg("[dnssec] verified")
 				break
 			}
+			// } else {
+			// 	log.Debug().
+			// 		Str("q", q.Name).
+			// 		Str("signer", sig.SignerName).
+			// 		Msg("[dnssec] failed")
+			// }
 		}
 	}
 	if len(rrsigs) > 0 && !dnssecVerified {
-		log.Printf("[DNSSEC] verify error '%s'", q.Name)
 		log.Error().
 			Str("q", q.Name).
 			Msg("[dnssec] verify error")
@@ -479,7 +490,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		for {
 			ansCopy := ans.Copy()
 			var rr dns.RR
-			rset := utils.MsgGetAnswerByType(ansCopy, dns.TypeCNAME, "")
+			rset := utils.MsgExtractByType(ansCopy, dns.TypeCNAME, "")
 			if len(rset) > 0 {
 				rr = rset[0]
 			}

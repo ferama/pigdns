@@ -35,6 +35,7 @@ var rootCmd = &cobra.Command{
 
 		debug := strings.EqualFold(conf.LogLevel, "debug")
 		info := strings.EqualFold(conf.LogLevel, "info")
+		error := strings.EqualFold(conf.LogLevel, "error")
 
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 		if info {
@@ -42,6 +43,9 @@ var rootCmd = &cobra.Command{
 		}
 		if debug {
 			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
+		if error {
+			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 		}
 
 		if debug {

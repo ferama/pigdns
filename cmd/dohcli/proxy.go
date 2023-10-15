@@ -42,7 +42,7 @@ var proxyCmd = &cobra.Command{
 				fmt.Println(err)
 				os.Exit(1)
 			}
-			rset := utils.MsgGetAnswerByType(resp, dns.TypeA, "")
+			rset := utils.MsgExtractByType(resp, dns.TypeA, "")
 			if len(rset) == 0 {
 				fmt.Println("cannot resolve server name")
 				os.Exit(1)
