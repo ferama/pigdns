@@ -10,7 +10,6 @@ import (
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -60,21 +59,12 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 			Net:     network,
 		}
 
-		if slices.Contains(rootNSIPv4, ns.Addr) || slices.Contains(rootNSIPv6, ns.Addr) {
-			log.Debug().
-				Str("ns", ns.Addr).
-				Str("q", q.Name).
-				Str("type", dns.TypeToString[q.Qtype]).
-				Bool("ROOT", true).
-				Msg("[recursor]")
-		} else {
-			log.Debug().
-				Str("ns", ns.Addr).
-				Str("q", q.Name).
-				Str("type", dns.TypeToString[q.Qtype]).
-				Bool("ROOT", false).
-				Msg("[recursor]")
-		}
+		log.Debug().
+			Str("ns", ns.Addr).
+			Str("fqdn", ns.Fqdn).
+			Str("q", q.Name).
+			Str("type", dns.TypeToString[q.Qtype]).
+			Msg("[recursor]")
 
 		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
 		if err != nil {

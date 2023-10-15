@@ -178,7 +178,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		return nil, errNoNSfound
 	}
 
-	searchIp := func(e dns.RR) bool {
+	searchIp := func(e dns.RR, ns string) bool {
 		ret := false
 		switch e.Header().Rrtype {
 		case dns.TypeA:
@@ -186,6 +186,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			a := e.(*dns.A)
 			servers.List = append(servers.List, &nsServer{
 				Addr:    a.A.String(),
+				Fqdn:    ns,
 				Version: pigdns.FamilyIPv4,
 				TTL:     a.Hdr.Ttl,
 			})
@@ -194,6 +195,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			aaaa := e.(*dns.AAAA)
 			servers.List = append(servers.List, &nsServer{
 				Addr:    aaaa.AAAA.String(),
+				Fqdn:    ns,
 				Version: pigdns.FamilyIPv6,
 				TTL:     aaaa.Hdr.Ttl,
 			})
@@ -217,7 +219,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			searchIp(e)
+			searchIp(e, ns.Ns)
 		}
 	}
 
@@ -233,7 +235,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			ipFound = searchIp(e)
+			ipFound = searchIp(e, ns.Ns)
 		}
 
 		if !ipFound {
@@ -271,7 +273,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 
 		for _, e := range rans.Answer {
-			searchIp(e)
+			searchIp(e, ns)
 		}
 	}
 
