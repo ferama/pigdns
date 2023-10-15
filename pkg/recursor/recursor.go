@@ -388,9 +388,6 @@ func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Questio
 	dnssecVerified := false
 	for _, rrsig := range rrsigs {
 		sig := rrsig.(*dns.RRSIG)
-		log.Printf("[DNSKEY] q: '%s' signer name: '%s'", q.Name, sig.SignerName)
-
-		// TODO: this keys are not cached!
 		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
 		for _, krr := range keys {
 			key := krr.(*dns.DNSKEY)
@@ -401,15 +398,19 @@ func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Questio
 			err := sig.Verify(key, rrset)
 			if err == nil {
 				dnssecVerified = true
+				log.Debug().
+					Str("q", q.Name).
+					Str("signer", sig.SignerName).
+					Msg("[dnssec] verified")
 				break
 			}
 		}
 	}
-	if dnssecVerified {
-		log.Printf("[DNSSEC] verified for '%s'", q.Name)
-	}
 	if len(rrsigs) > 0 && !dnssecVerified {
 		log.Printf("[DNSSEC] verify error '%s'", q.Name)
+		log.Error().
+			Str("q", q.Name).
+			Msg("[dnssec] verify error")
 	}
 }
 
