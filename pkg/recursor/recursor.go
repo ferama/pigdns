@@ -125,6 +125,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	r.ansCache.Set(cacheKey, ans)
 
 	ans = r.cleanMsg(ans, req)
+
 	return ans, nil
 }
 

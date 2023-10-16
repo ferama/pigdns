@@ -46,6 +46,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
+	noEdnsTried := false
 	for {
 		client := &dns.Client{
 			Timeout: dialTimeout,
@@ -65,6 +66,13 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 		}
 
 		if !ans.Truncated {
+			// if the server reply with FORMERR, retry with no edns
+			if ans.Rcode == dns.RcodeFormatError && !noEdnsTried {
+				utils.RemoveOPT(req)
+				noEdnsTried = true
+				continue
+			}
+
 			return ans, nil
 		}
 		if network == "tcp" {
