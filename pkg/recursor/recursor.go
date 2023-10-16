@@ -120,10 +120,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	// log.Printf("%s", ans)
-
 	r.ansCache.Set(cacheKey, ans)
-
 	ans = r.cleanMsg(ans, req)
 
 	return ans, nil
@@ -521,6 +518,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// utils.MsgSetupEdns(newReq)
 
 				// run a new query here to solve the CNAME
+				// TODO: this one easily escape the blocklist.
+				// it should traverse all the chain
 				resp, err := r.Query(context.TODO(), newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err

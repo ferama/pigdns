@@ -65,14 +65,14 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 			return nil, err
 		}
 
-		if !ans.Truncated {
-			// if the server reply with FORMERR, retry with no edns
-			if ans.Rcode == dns.RcodeFormatError && !noEdnsTried {
-				utils.RemoveOPT(req)
-				noEdnsTried = true
-				continue
-			}
+		// if the server reply with FORMERR, retry with no edns
+		if ans.Rcode == dns.RcodeFormatError && !noEdnsTried {
+			utils.RemoveOPT(req)
+			noEdnsTried = true
+			continue
+		}
 
+		if !ans.Truncated {
 			return ans, nil
 		}
 		if network == "tcp" {
