@@ -322,7 +322,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
-	// r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
+	r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
 
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
@@ -384,45 +384,57 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 	return keys
 }
 
-func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) {
+// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
+func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
 
-	dnssecVerified := false
+	var sig *dns.RRSIG
+	verified := false
+
+	if len(rrsigs) == 0 {
+		// nothing to verify
+		return true
+	}
 	for _, rrsig := range rrsigs {
-		sig := rrsig.(*dns.RRSIG)
+		sig = rrsig.(*dns.RRSIG)
 		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
 
+		errors := 0
 		for _, krr := range keys {
 			key := krr.(*dns.DNSKEY)
 			rrset := utils.MsgExtractByType(ans, sig.TypeCovered, q.Name)
-			// if q.Name == "ovh.net." {
-			// 	log.Printf("%s", dns.TypeToString[sig.TypeCovered])
-			// }
 			if len(rrset) == 0 {
 				continue
 			}
 			err := sig.Verify(key, rrset)
 			if err == nil {
-				dnssecVerified = true
-				log.Debug().
-					Str("q", q.Name).
-					Str("signer", sig.SignerName).
-					Msg("[dnssec] verified")
+				verified = true
 				break
+			} else {
+				errors++
 			}
-			// } else {
-			// 	log.Debug().
-			// 		Str("q", q.Name).
-			// 		Str("signer", sig.SignerName).
-			// 		Msg("[dnssec] failed")
-			// }
+		}
+		if errors == 0 {
+			// nothing to verify
+			verified = true
 		}
 	}
-	if len(rrsigs) > 0 && !dnssecVerified {
-		log.Error().
-			Str("q", q.Name).
-			Msg("[dnssec] verify error")
+
+	if verified {
+		if sig != nil {
+			log.Debug().
+				Str("q", q.Name).
+				Str("signer", sig.SignerName).
+				Msg("[dnssec] verified")
+		}
+
+		return true
 	}
+
+	log.Debug().
+		Str("q", q.Name).
+		Msg("[dnssec] not valid")
+	return false
 }
 
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
