@@ -132,10 +132,8 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	// return ans
 	q := req.Question[0]
 
-	cleaned := new(dns.Msg)
-
-	cleaned.Authoritative = false
-	cleaned.SetRcode(ans, ans.Rcode)
+	cleaned := ans.Copy()
+	cleaned.Answer = []dns.RR{}
 
 	opt := req.IsEdns0()
 
