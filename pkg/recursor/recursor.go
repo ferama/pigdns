@@ -286,6 +286,9 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	}
 	zone := dns.Fqdn(q.Name[i:])
 
+	// keys := r.getDNSKEY(zone)
+	// log.Printf("%s", keys)
+
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
 		return nil, cached, nil
