@@ -114,6 +114,7 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 
 	cleaned := ans.Copy()
 	cleaned.Answer = []dns.RR{}
+	cleaned.Ns = []dns.RR{}
 
 	opt := req.IsEdns0()
 
@@ -138,10 +139,16 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	for _, rr := range ans.Ns {
 		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {
 			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
 		}
 		if rr.Header().Rrtype == dns.TypeSOA {
 			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
 		}
+		if opt != nil && opt.Do() {
+			cleaned.Ns = append(cleaned.Ns, rr)
+		}
+
 	}
 	return cleaned
 }
@@ -456,29 +463,35 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	loop := 0
-	// TODO: investigate the 3 here
-	// if I don't introduce it this will not work as expected (it should return a soa response)
-	// Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
-	for loop < 3 {
-		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
-			// no asnwer from the previous query but we got nameservers instead
-			// Get nameservers ips and try to query them
-			servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
-			if err != nil {
-				// soa answer
-				r.ansCache.Set(cacheKey, ans)
-				return ans, nil
-			}
-
-			qr := newQueryRacer(servers, req, isIPV6)
-			ans, err = qr.run()
-			if err != nil {
-				return nil, err
-			}
+	// loop := 0
+	// // TODO: investigate the 3 here
+	// // if I don't introduce it this will not work as expected (it should return a soa response)
+	// // Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
+	// for loop < 3 {
+	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+		// no asnwer from the previous query but we got nameservers instead
+		// Get nameservers ips and try to query them
+		servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
+		if err != nil {
+			// soa answer
+			r.ansCache.Set(cacheKey, ans)
+			return ans, nil
 		}
-		loop++
+
+		qr := newQueryRacer(servers, req, isIPV6)
+		ans, err = qr.run()
+		if err != nil {
+			return nil, err
+		}
+
+		soa := r.findSoa(ans)
+		if soa != nil {
+			r.ansCache.Set(cacheKey, soa)
+			return soa, nil
+		}
 	}
+	// 	loop++
+	// }
 
 	haveAnswer := false
 	for _, rr := range ans.Answer {
