@@ -1,9 +1,11 @@
 package blocklist
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -25,44 +27,68 @@ var (
 type handler struct {
 	Next pigdns.Handler
 
-	lists map[string]map[string]bool
+	list map[string]bool
 }
 
-func NewBlocklistHandler(uri []string, next pigdns.Handler) *handler {
+func NewBlocklistHandler(blocklists []string, whitelists []string, next pigdns.Handler) *handler {
 	h := &handler{
 		Next: next,
 
-		lists: map[string]map[string]bool{},
+		list: map[string]bool{},
 	}
 
-	for _, u := range uri {
+	for _, u := range blocklists {
 		lowered := strings.ToLower(u)
 		if strings.HasPrefix(lowered, "http") {
-			res, err := http.Get(u)
-			if err != nil {
-				log.Warn().Msgf("cannot load blocklist: %s", u)
-				continue
-			}
-			b, err := io.ReadAll(res.Body)
-			if err != nil {
-				log.Warn().Msgf("cannot load blocklist: %s. Err: %s", u, err)
-				continue
-			}
-			content := string(b)
-			lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-
-			h.lists[u] = make(map[string]bool)
-			for _, l := range lines {
-				if !commentsRE.Match([]byte(l)) {
-					key := strings.ToLower(l)
-					h.lists[u][dns.Fqdn(key)] = true
-				}
-			}
-			log.Info().Msgf("[blocklist] '%s' loaded", u)
+			h.addHTTP(u)
 		}
 	}
 
+	for _, u := range whitelists {
+		h.removeFile(u)
+	}
+
 	return h
+}
+
+func (h *handler) removeFile(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Warn().Msgf("[blocklist] '%s'", err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	// optionally, resize scanner's capacity for lines over 64K, see next example
+	for scanner.Scan() {
+		line := scanner.Text()
+		delete(h.list, dns.Fqdn(line))
+	}
+	log.Info().Msgf("[blocklist] '%s' loaded as whitelist", path)
+}
+
+func (h *handler) addHTTP(uri string) {
+	res, err := http.Get(uri)
+	if err != nil {
+		log.Warn().Msgf("cannot load blocklist: %s", uri)
+		return
+	}
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Warn().Msgf("cannot load blocklist: %s. Err: %s", uri, err)
+		return
+	}
+	content := string(b)
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+
+	for _, l := range lines {
+		if !commentsRE.Match([]byte(l)) {
+			key := strings.ToLower(l)
+			h.list[dns.Fqdn(key)] = true
+		}
+	}
+	log.Info().Msgf("[blocklist] '%s' loaded", uri)
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
@@ -70,10 +96,8 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	key := strings.ToLower(r.Name())
 
-	for _, blocklist := range h.lists {
-		if _, ok := blocklist[key]; ok {
-			allowed = false
-		}
+	if _, ok := h.list[key]; ok {
+		allowed = false
 	}
 
 	if !allowed {

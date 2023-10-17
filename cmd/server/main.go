@@ -74,7 +74,9 @@ var rootCmd = &cobra.Command{
 			h := server.BuildRecursorHandler(
 				conf.DataDir,
 				conf.Recursor.AllowedNets,
-				conf.Recursor.BlockLists)
+				conf.Recursor.BlockLists,
+				conf.Recursor.WhiteLists,
+			)
 
 			if conf.Recursor.ServeOnUDP {
 				pigdns.HandleMux(".", h, dnsMux, false)
