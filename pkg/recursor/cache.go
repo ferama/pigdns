@@ -6,6 +6,7 @@ import (
 	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 )
 
 type recursorCache struct {
@@ -66,5 +67,7 @@ func (c *recursorCache) Get(key string) (*dns.Msg, error) {
 	for _, a := range msg.Ns {
 		a.Header().Ttl = ttl
 	}
+
+	log.Printf("[%s get] key=%s", c.name, key)
 	return msg, nil
 }

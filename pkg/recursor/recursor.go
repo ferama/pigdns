@@ -81,32 +81,15 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	ctx = context.WithValue(ctx, recursorContextKey, cc)
 
 	q := req.Question[0]
-	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 
-	// try to get the answer from cache if we have it
-	cached, cacheErr := r.ansCache.Get(cacheKey)
-	if cacheErr == nil {
-		cached = r.cleanMsg(cached, req)
-		return cached, nil
-	}
-
-	// if we don't have an answer in cache, run the query (only once concurrently
+	// run the query (only once concurrently
 	// against the upstream nameservers)
 	type retvalue struct {
 		Ans *dns.Msg
 		Err error
 	}
-	tmp := r.oneInFlight.Run(cacheKey, func(params ...any) any {
-		// Another goroutine (the non locked one) likely has filled the cache already
-		// so take the advantage here
-		ans, cacheErr := r.ansCache.Get(cacheKey)
-		if cacheErr == nil {
-			return &retvalue{
-				Ans: ans,
-				Err: nil,
-			}
-		}
-
+	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
 		return &retvalue{
 			Ans: ans,
@@ -120,7 +103,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	r.ansCache.Set(cacheKey, ans)
 	ans = r.cleanMsg(ans, req)
 
 	return ans, nil
@@ -380,8 +362,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 	return keys
 }
 
-// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
-func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
+func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
 
 	var sig *dns.RRSIG
@@ -433,6 +414,13 @@ func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Questio
 	return false
 }
 
+// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
+func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
+	rrsig := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
+
+	return rrsig
+}
+
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 	rc.RecursionCount++
@@ -444,11 +432,18 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	q := req.Question[0]
 
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+	cached, cacheErr := r.ansCache.Get(cacheKey)
+	if cacheErr == nil {
+		return cached, nil
+	}
+
 	resp, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
 	if err != nil {
 		if err == errNoNSfound && resp != nil && len(resp.Ns) > 0 {
 			soa := r.findSoa(resp)
 			if soa != nil {
+				r.ansCache.Set(cacheKey, soa)
 				return soa, nil
 			}
 		}
@@ -472,6 +467,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
 			if err != nil {
 				// soa answer
+				r.ansCache.Set(cacheKey, ans)
 				return ans, nil
 			}
 
@@ -515,7 +511,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
-				// utils.MsgSetupEdns(newReq)
 
 				// run a new query here to solve the CNAME
 				// TODO: this one easily escape the blocklist.
@@ -528,6 +523,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				if err == nil {
 					soa := r.findSoa(resp)
 					if soa != nil {
+						r.ansCache.Set(cacheKey, soa)
 						return soa, nil
 					}
 
@@ -553,6 +549,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
+
+	r.ansCache.Set(cacheKey, ans)
 
 	return ans, nil
 }
