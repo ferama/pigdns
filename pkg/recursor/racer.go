@@ -7,16 +7,13 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/exp/slices"
 )
 
 const (
 	nextNSTimeout = 150 * time.Millisecond
-
-	// https://www.netmeister.org/blog/dns-size.html
-	requestDefaultMsgSize = 1232
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -41,48 +38,38 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) removeOPT(msg *dns.Msg) *dns.Msg {
-	extra := make([]dns.RR, len(msg.Extra))
-	copy(extra, msg.Extra)
-
-	msg.Extra = []dns.RR{}
-
-	for _, rr := range extra {
-		switch rr.(type) {
-		case *dns.OPT:
-			continue
-		default:
-			msg.Extra = append(msg.Extra, rr)
-		}
-	}
-
-	return msg
-}
-
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
 
-	// remove any existing OPT flag and force the do flag (to get the RRSIG record)
-	req = qr.removeOPT(req)
-	req.SetEdns0(requestDefaultMsgSize, true)
+	utils.RemoveOPT(req)
+	req.SetEdns0(utils.MaxMsgSize, true)
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
+	noEdnsTried := false
 	for {
 		client := &dns.Client{
 			Timeout: dialTimeout,
 			Net:     network,
 		}
 
-		if slices.Contains(rootNSIPv4, ns.Addr) || slices.Contains(rootNSIPv6, ns.Addr) {
-			log.Printf("[recursor] quering ROOT ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
-		} else {
-			log.Printf("[recursor] quering ns=%s q=%s t=%s", ns.Addr, q.Name, dns.TypeToString[q.Qtype])
-		}
+		log.Debug().
+			Str("ns-ip", ns.Addr).
+			Str("ns-fqdn", ns.Fqdn).
+			Str("q", q.Name).
+			Str("type", dns.TypeToString[q.Qtype]).
+			Msg("[recursor]")
 
 		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
 		if err != nil {
 			return nil, err
+		}
+
+		// if the server reply with FORMERR, retry with no edns
+		if ans.Rcode == dns.RcodeFormatError && !noEdnsTried {
+			utils.RemoveOPT(req)
+			noEdnsTried = true
+			continue
 		}
 
 		if !ans.Truncated {
@@ -97,10 +84,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 }
 
 func (qr *queryRacer) run() (*dns.Msg, error) {
-	// log.Printf("--> racing on")
-	// for _, s := range qr.servers.List {
-	// 	log.Printf("%s", s.String())
-	// }
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	ansCH := make(chan *dns.Msg, len(qr.servers.List))

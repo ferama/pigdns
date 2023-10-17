@@ -42,7 +42,7 @@ func (c *nsCache) Set(as *authServers) error {
 		Data: packed.Bytes(),
 	}
 	i.SetTTL(time.Duration(ttl) * time.Second)
-	log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
+	// log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
 	return c.cache.Set(key, i)
 }
 

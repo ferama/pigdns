@@ -8,6 +8,7 @@ import (
 
 type nsServer struct {
 	Addr    string
+	Fqdn    string
 	Version pigdns.RequestFamily
 	TTL     uint32
 }
@@ -15,6 +16,7 @@ type nsServer struct {
 func (n *nsServer) Copy() *nsServer {
 	c := &nsServer{
 		Addr:    n.Addr,
+		Fqdn:    n.Fqdn,
 		Version: n.Version,
 		TTL:     n.TTL,
 	}

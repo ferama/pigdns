@@ -57,12 +57,16 @@ func NewFileCache(datadir string, name string) *FileCache {
 	}
 
 	var i uint64
+	loaded := false
 	for i = 0; i <= cacheNumBuckets; i++ {
 		cache.buckets[i] = &bucket{
 			data: make(map[string]*Item),
 			idx:  i,
 		}
-		cache.load(i)
+		loaded = cache.load(i)
+	}
+	if !loaded {
+		log.Warn().Msg("no cache loaded from disk")
 	}
 
 	go cache.setupJobs()
@@ -155,26 +159,22 @@ func (c *FileCache) dumpJob(bucketIdx uint64) {
 	fi.Write(buf.Bytes())
 }
 
-func (c *FileCache) load(bucketIdx uint64) {
+func (c *FileCache) load(bucketIdx uint64) bool {
 	// disable persistence if we don't have a datadir
 	if c.datadir == "" {
-		return
+		return false
 	}
 
 	path := filepath.Join(c.datadir, cacheSubDir, fmt.Sprintf("%d.bin", bucketIdx))
 	b, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("[%s cache] cannot read cache file %s", c.name, err)
-		return
+		// log.Printf("[%s cache] cannot read cache file %s", c.name, err)
+		return false
 	}
 
 	d := gob.NewDecoder(bytes.NewBuffer(b))
 	err = d.Decode(&c.buckets[bucketIdx].data)
-	if err != nil {
-		log.Printf("[%s cache] cannot load cache %s", c.name, err)
-	}
-	log.Printf("[%s cache] bucket '%d' loaded items %d/%d",
-		c.name, bucketIdx, len(c.buckets[bucketIdx].data), cacheMaxItemsPerBucket)
+	return err == nil
 }
 
 func (c *FileCache) checkExpiredJob(bucketIdx uint64) {

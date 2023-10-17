@@ -43,6 +43,7 @@ type recursorConf struct {
 	AllowedNets []string `koanf:"allowedNets"`
 	ServeOnUDP  bool     `koanf:"serveOnUDP"`
 	BlockLists  []string `koanf:"blockLists"`
+	WhiteLists  []string `koanf:"whiteLists"`
 }
 type conf struct {
 	LogLevel string `koanf:"logLevel"`

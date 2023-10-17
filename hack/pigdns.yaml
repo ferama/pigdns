@@ -18,6 +18,7 @@ recursor:
     - 192.168.10.0/24
   blockLists:
     - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
+  whiteLists: []
 
 zone:
   enabled: true

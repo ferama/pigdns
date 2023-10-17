@@ -1,43 +1,70 @@
 package utils
 
 import (
+	"strings"
+
 	"github.com/miekg/dns"
 )
 
 const (
-	MaxTTL     = 60 * 60 * 48 // 172800
+	MaxTTL = 60 * 60 * 48 // 172800
+
+	// https://www.netmeister.org/blog/dns-size.html
 	MaxMsgSize = 1232
 )
 
-// MsgGetAnswerByType detects if an answer contains a message type.
+// MsgExtractRRByType detects if an answer contains a message type.
 // If yes returns it, else returns nil
-// Usage: MsgGetAnswerByType(m, dns.TypeA)
-func MsgGetAnswerByType(msg *dns.Msg, typ uint16) dns.RR {
+// Usage:
+//
+//	do not filter by record name: MsgExtractRRByType(m, dns.TypeA, "")
+//	filter by record name: MsgExtractRRByType(m, dns.TypeA, "google.com")
+func MsgExtractByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
+	ret := []dns.RR{}
+
 	if msg == nil {
-		return nil
+		return ret
 	}
-	if len(msg.Answer) == 0 {
-		return nil
+	if len(msg.Answer) == 0 && len(msg.Extra) == 0 && len(msg.Ns) == 0 {
+		return ret
 	}
 	for _, rr := range msg.Answer {
-		switch typ {
-		case dns.TypeA:
-			if _, ok := rr.(*dns.A); ok {
-				return rr
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
 			}
-		case dns.TypeAAAA:
-			if _, ok := rr.(*dns.AAAA); ok {
-				return rr
-			}
-		case dns.TypeCNAME:
-			if _, ok := rr.(*dns.CNAME); ok {
-				return rr
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
 			}
 		}
-
 	}
 
-	return nil
+	for _, rr := range msg.Extra {
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
+			}
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
+			}
+		}
+	}
+
+	for _, rr := range msg.Ns {
+		if name == "" {
+			if rr.Header().Rrtype == typ {
+				ret = append(ret, rr)
+			}
+		} else {
+			if rr.Header().Rrtype == typ && strings.EqualFold(rr.Header().Name, name) {
+				ret = append(ret, rr)
+			}
+		}
+	}
+
+	return ret
 }
 
 func MsgGetMinTTL(m *dns.Msg) uint32 {
@@ -61,6 +88,24 @@ func MsgGetMinTTL(m *dns.Msg) uint32 {
 	return minTTL
 }
 
+func RemoveOPT(msg *dns.Msg) *dns.Msg {
+	extra := make([]dns.RR, len(msg.Extra))
+	copy(extra, msg.Extra)
+
+	msg.Extra = []dns.RR{}
+
+	for _, rr := range extra {
+		switch rr.(type) {
+		case *dns.OPT:
+			continue
+		default:
+			msg.Extra = append(msg.Extra, rr)
+		}
+	}
+
+	return msg
+}
+
 func MsgSetupEdns(m *dns.Msg) {
 
 	m.Compress = true
@@ -76,5 +121,6 @@ func MsgSetupEdns(m *dns.Msg) {
 		opt := m.IsEdns0()
 		opt.SetUDPSize(MaxMsgSize)
 	}
+
 	// log.Printf("####### len: %d", m.Len())
 }

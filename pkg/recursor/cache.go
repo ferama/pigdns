@@ -35,8 +35,7 @@ func (c *recursorCache) Set(key string, m *dns.Msg) error {
 		Data: packed,
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
-	log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
-	// log.Printf("[cache set] msg: %s", m)
+	// log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
 	return c.cache.Set(key, i)
 }
 
@@ -68,5 +67,7 @@ func (c *recursorCache) Get(key string) (*dns.Msg, error) {
 	for _, a := range msg.Ns {
 		a.Header().Ttl = ttl
 	}
+
+	log.Printf("[%s get] key=%s", c.name, key)
 	return msg, nil
 }

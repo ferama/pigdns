@@ -40,6 +40,7 @@ const (
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
 	resolverMaxLevel = 24
+	// resolverMaxLevel = 16
 )
 
 type Recursor struct {
@@ -72,26 +73,6 @@ func New(datadir string) *Recursor {
 	return r
 }
 
-func (r *Recursor) getDNSKEY(zone string) []dns.RR {
-	req := new(dns.Msg)
-	req.SetQuestion(zone, dns.TypeDNSKEY)
-	req.SetEdns0(requestDefaultMsgSize, true)
-
-	resp, err := r.Query(context.TODO(), req, false)
-	if err != nil {
-		log.Error().Msg(err.Error())
-		return nil
-	}
-	keys := []dns.RR{}
-	for _, rr := range resp.Answer {
-		if dnskey, ok := rr.(*dns.DNSKEY); ok {
-			keys = append(keys, dnskey)
-		}
-	}
-
-	return keys
-}
-
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	cc := &recursorContext{
 		RecursionCount: 0,
@@ -100,32 +81,15 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	ctx = context.WithValue(ctx, recursorContextKey, cc)
 
 	q := req.Question[0]
-	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 
-	// try to get the answer from cache if we have it
-	cached, cacheErr := r.ansCache.Get(cacheKey)
-	if cacheErr == nil {
-		cached = r.cleanMsg(cached, req)
-		return cached, nil
-	}
-
-	// if we don't have an answer in cache, run the query (only once concurrently
+	// run the query (only once concurrently
 	// against the upstream nameservers)
 	type retvalue struct {
 		Ans *dns.Msg
 		Err error
 	}
-	tmp := r.oneInFlight.Run(cacheKey, func(params ...any) any {
-		// Another goroutine (the non locked one) likely has filled the cache already
-		// so take the advantage here
-		ans, cacheErr := r.ansCache.Get(cacheKey)
-		if cacheErr == nil {
-			return &retvalue{
-				Ans: ans,
-				Err: nil,
-			}
-		}
-
+	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
 		return &retvalue{
 			Ans: ans,
@@ -139,19 +103,18 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	r.ansCache.Set(cacheKey, ans)
-
 	ans = r.cleanMsg(ans, req)
+
 	return ans, nil
 }
 
 func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
+	// return ans
 	q := req.Question[0]
 
-	cleaned := new(dns.Msg)
-
-	cleaned.Authoritative = false
-	cleaned.SetRcode(ans, ans.Rcode)
+	cleaned := ans.Copy()
+	cleaned.Answer = []dns.RR{}
+	cleaned.Ns = []dns.RR{}
 
 	opt := req.IsEdns0()
 
@@ -176,10 +139,16 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	for _, rr := range ans.Ns {
 		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {
 			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
 		}
 		if rr.Header().Rrtype == dns.TypeSOA {
 			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
 		}
+		if opt != nil && opt.Do() {
+			cleaned.Ns = append(cleaned.Ns, rr)
+		}
+
 	}
 	return cleaned
 }
@@ -194,7 +163,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		return nil, errNoNSfound
 	}
 
-	searchIp := func(e dns.RR) bool {
+	searchIp := func(e dns.RR, ns string) bool {
 		ret := false
 		switch e.Header().Rrtype {
 		case dns.TypeA:
@@ -202,6 +171,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			a := e.(*dns.A)
 			servers.List = append(servers.List, &nsServer{
 				Addr:    a.A.String(),
+				Fqdn:    ns,
 				Version: pigdns.FamilyIPv4,
 				TTL:     a.Hdr.Ttl,
 			})
@@ -210,6 +180,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			aaaa := e.(*dns.AAAA)
 			servers.List = append(servers.List, &nsServer{
 				Addr:    aaaa.AAAA.String(),
+				Fqdn:    ns,
 				Version: pigdns.FamilyIPv6,
 				TTL:     aaaa.Hdr.Ttl,
 			})
@@ -233,7 +204,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			searchIp(e)
+			searchIp(e, ns.Ns)
 		}
 	}
 
@@ -249,7 +220,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			ipFound = searchIp(e)
+			ipFound = searchIp(e, ns.Ns)
 		}
 
 		if !ipFound {
@@ -287,7 +258,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 
 		for _, e := range rans.Answer {
-			searchIp(e)
+			searchIp(e, ns)
 		}
 	}
 
@@ -339,6 +310,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
+	r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
+
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
 		if err == errRecursionMaxLevel {
@@ -371,6 +344,93 @@ func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 	return nil
 }
 
+func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, servers *authServers) []dns.RR {
+	req := new(dns.Msg)
+	req.SetQuestion(zone, dns.TypeDNSKEY)
+	// utils.MsgSetupEdns(req)
+
+	q := req.Question[0]
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+
+	// try to get the answer from cache if we have it
+	cached, cacheErr := r.ansCache.Get(cacheKey)
+	if cacheErr == nil {
+		return utils.MsgExtractByType(cached, dns.TypeDNSKEY, "")
+	}
+
+	keys := []dns.RR{}
+
+	qr := newQueryRacer(servers, req, isIPV6)
+	resp, err := qr.run()
+	if err != nil {
+		r.ansCache.Set(cacheKey, resp)
+		return keys
+	}
+
+	r.ansCache.Set(cacheKey, resp)
+	keys = utils.MsgExtractByType(resp, dns.TypeDNSKEY, "")
+	return keys
+}
+
+func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
+	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
+
+	var sig *dns.RRSIG
+	verified := false
+
+	if len(rrsigs) == 0 {
+		// nothing to verify
+		return true
+	}
+	for _, rrsig := range rrsigs {
+		sig = rrsig.(*dns.RRSIG)
+		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
+
+		errors := 0
+		for _, krr := range keys {
+			key := krr.(*dns.DNSKEY)
+			rrset := utils.MsgExtractByType(ans, sig.TypeCovered, q.Name)
+			if len(rrset) == 0 {
+				continue
+			}
+			err := sig.Verify(key, rrset)
+			if err == nil {
+				verified = true
+				break
+			} else {
+				errors++
+			}
+		}
+		if errors == 0 {
+			// nothing to verify
+			verified = true
+		}
+	}
+
+	if verified {
+		if sig != nil {
+			log.Debug().
+				Str("q", q.Name).
+				Str("signer", sig.SignerName).
+				Msg("[dnssec] verified")
+		}
+
+		return true
+	}
+
+	log.Debug().
+		Str("q", q.Name).
+		Msg("[dnssec] not valid")
+	return false
+}
+
+// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
+func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
+	rrsig := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
+
+	return rrsig
+}
+
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 	rc.RecursionCount++
@@ -382,11 +442,18 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	q := req.Question[0]
 
+	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+	cached, cacheErr := r.ansCache.Get(cacheKey)
+	if cacheErr == nil {
+		return cached, nil
+	}
+
 	resp, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
 	if err != nil {
 		if err == errNoNSfound && resp != nil && len(resp.Ns) > 0 {
 			soa := r.findSoa(resp)
 			if soa != nil {
+				r.ansCache.Set(cacheKey, soa)
 				return soa, nil
 			}
 		}
@@ -399,29 +466,35 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	loop := 0
-	// TODO: investigate the 3 here
-	// if I don't introduce it this will not work as expected (it should return a soa response)
-	// Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
-	for loop < 3 {
-		if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
-			// no asnwer from the previous query but we got nameservers instead
-			// Get nameservers ips and try to query them
-			servers, err := r.buildServers(ctx, ans, q.Name, isIPV6)
-			if err != nil {
-				// soa answer
-				return ans, nil
-			}
-			// log.Printf("%s", servers)
-
-			qr := newQueryRacer(servers, req, isIPV6)
-			ans, err = qr.run()
-			if err != nil {
-				return nil, err
-			}
+	// loop := 0
+	// // TODO: investigate the 3 here
+	// // if I don't introduce it this will not work as expected (it should return a soa response)
+	// // Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
+	// for loop < 3 {
+	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+		// no asnwer from the previous query but we got nameservers instead
+		// Get nameservers ips and try to query them
+		servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
+		if err != nil {
+			// soa answer
+			r.ansCache.Set(cacheKey, ans)
+			return ans, nil
 		}
-		loop++
+
+		qr := newQueryRacer(servers, req, isIPV6)
+		ans, err = qr.run()
+		if err != nil {
+			return nil, err
+		}
+
+		soa := r.findSoa(ans)
+		if soa != nil {
+			r.ansCache.Set(cacheKey, soa)
+			return soa, nil
+		}
 	}
+	// 	loop++
+	// }
 
 	haveAnswer := false
 	for _, rr := range ans.Answer {
@@ -435,7 +508,12 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		ans.Extra = []dns.RR{}
 		maxLoop := cnameChainMaxDeep
 		for {
-			rr := utils.MsgGetAnswerByType(ans.Copy(), dns.TypeCNAME)
+			ansCopy := ans.Copy()
+			var rr dns.RR
+			rset := utils.MsgExtractByType(ansCopy, dns.TypeCNAME, "")
+			if len(rset) > 0 {
+				rr = rset[0]
+			}
 			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
 
@@ -451,23 +529,29 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				newReq.SetQuestion(cname.Target, q.Qtype)
 
 				// run a new query here to solve the CNAME
-				resp, err := r.Query(ctx, newReq, isIPV6)
+				// TODO: this one easily escape the blocklist.
+				// it should traverse all the chain
+				resp, err := r.Query(context.TODO(), newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
+
 				if err == nil {
 					soa := r.findSoa(resp)
 					if soa != nil {
+						r.ansCache.Set(cacheKey, soa)
 						return soa, nil
 					}
 
-					ans.Answer = append([]dns.RR{rr}, resp.Answer...)
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
 						}
 					}
-
+					if !haveAnswer {
+						ans.Answer = []dns.RR{rr}
+						ans.Answer = append(ans.Answer, resp.Answer...)
+					}
 				}
 			}
 			if haveAnswer {
@@ -479,6 +563,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			}
 		}
 	}
+
+	r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
+
+	r.ansCache.Set(cacheKey, ans)
 
 	return ans, nil
 }
