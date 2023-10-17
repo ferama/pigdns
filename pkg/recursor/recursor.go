@@ -44,7 +44,7 @@ const (
 )
 
 type Recursor struct {
-	ansCache *recursorCache
+	ansCache *ansCache
 	nsCache  *nsCache
 
 	rootkeys []dns.RR
@@ -55,7 +55,7 @@ type Recursor struct {
 func New(datadir string) *Recursor {
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		ansCache:    newRecursorCache(filepath.Join(datadir, "cache", "addr"), "ipcache"),
+		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), "ipcache"),
 		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache"),
 	}
 

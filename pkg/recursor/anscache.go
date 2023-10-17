@@ -9,13 +9,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type recursorCache struct {
+type ansCache struct {
 	cache *cache.FileCache
 	name  string
 }
 
-func newRecursorCache(datadir string, name string) *recursorCache {
-	rc := &recursorCache{
+// this is a cache for answers in the dns.Msg form
+func newAnsCache(datadir string, name string) *ansCache {
+	rc := &ansCache{
 		cache: cache.NewFileCache(datadir, name),
 		name:  name,
 	}
@@ -23,7 +24,7 @@ func newRecursorCache(datadir string, name string) *recursorCache {
 	return rc
 }
 
-func (c *recursorCache) Set(key string, m *dns.Msg) error {
+func (c *ansCache) Set(key string, m *dns.Msg) error {
 	minTTL := utils.MsgGetMinTTL(m)
 
 	packed, err := m.Pack()
@@ -39,7 +40,7 @@ func (c *recursorCache) Set(key string, m *dns.Msg) error {
 	return c.cache.Set(key, i)
 }
 
-func (c *recursorCache) Get(key string) (*dns.Msg, error) {
+func (c *ansCache) Get(key string) (*dns.Msg, error) {
 	item, err := c.cache.Get(key)
 	if err != nil {
 		return nil, err
