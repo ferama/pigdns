@@ -91,6 +91,21 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
+
+		if err == nil {
+			isSOA := r.findSoa(ans) != nil
+
+			if !isSOA {
+				dsok := r.verifyDS(ctx, q, isIPV6)
+				if !dsok {
+					ans.SetRcode(ans, dns.RcodeServerFailure)
+					ans.Answer = nil
+					ans.Extra = nil
+					ans.Ns = nil
+				}
+			}
+		}
+
 		return &retvalue{
 			Ans: ans,
 			Err: err,
@@ -104,8 +119,82 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	ans = r.cleanMsg(ans, req)
-
 	return ans, nil
+}
+
+func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
+	name := q.Name
+	end := false
+
+	for {
+		var ds *dns.DS
+		if name == "." {
+			// DS is root DS
+			k, _ := dns.NewRR(rootKeys[0])
+			key := k.(*dns.DNSKEY)
+			ds = key.ToDS(dns.DH)
+		} else {
+			// resolve for DS
+			dsreq := new(dns.Msg)
+			dsreq.SetQuestion(name, dns.TypeDS)
+			dsans, err := r.resolve(ctx, dsreq, isIPV6)
+			if err != nil {
+				return false
+			}
+			dss := utils.MsgExtractByType(dsans, dns.TypeDS, "")
+			if len(dss) == 0 {
+				// No DS. Search into the upper zone
+				var i int
+				i, end = dns.NextLabel(name, 0)
+				name = dns.Fqdn(name[i:])
+				continue
+			}
+			ds = dss[0].(*dns.DS)
+		}
+
+		// get keys
+		kreq := new(dns.Msg)
+		kreq.SetQuestion(name, dns.TypeDNSKEY)
+		kans, err := r.resolve(ctx, kreq, isIPV6)
+		if err != nil {
+			return false
+		}
+		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, "")
+
+		// verify keys against DS
+		verified := false
+		for _, krr := range keys {
+			key := krr.(*dns.DNSKEY)
+
+			if ds != nil && ds.KeyTag == key.KeyTag() {
+				pds := key.ToDS(ds.DigestType)
+				if pds.Digest == ds.Digest {
+					verified = true
+					break
+				}
+			}
+		}
+		if verified {
+			log.Debug().
+				Str("q", name).
+				Str("ds-name", ds.Header().Name).
+				Msg("[dnssec] DS verified")
+		} else {
+			log.Debug().
+				Str("q", name).
+				Bool("has-ds", ds != nil).
+				Bool("has-keys", len(keys) > 0).
+				Msg("[dnssec] DS error: failed")
+			return false
+		}
+
+		if end {
+			return true
+		}
+		var i int
+		i, end = dns.NextLabel(name, 0)
+		name = dns.Fqdn(name[i:])
+	}
 }
 
 func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
@@ -307,6 +396,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		return resp, nil, err
 	}
 
+	// r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
+
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
 		if err == errRecursionMaxLevel {
@@ -379,45 +470,6 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 	return keys
 }
 
-func (r *Recursor) getDS(ctx context.Context, name string, isIPV6 bool, servers *authServers) *dns.DS {
-	if name == "" {
-		k, _ := dns.NewRR(rootKeys[0])
-		key := k.(*dns.DNSKEY)
-		return key.ToDS(dns.DH)
-	}
-
-	req := new(dns.Msg)
-	req.SetQuestion(name, dns.TypeDS)
-	// utils.MsgSetupEdns(req)
-
-	q := req.Question[0]
-	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
-
-	cached, cacheErr := r.ansCache.Get(cacheKey)
-	if cacheErr == nil {
-		rr := utils.MsgExtractByType(cached, dns.TypeDS, "")
-		if len(rr) > 0 {
-			return rr[0].(*dns.DS)
-		}
-		return nil
-	}
-
-	qr := newQueryRacer(servers, req, isIPV6)
-	resp, err := qr.run()
-	if err != nil {
-		// r.ansCache.Set(cacheKey, resp)
-		return nil
-	}
-
-	rr := utils.MsgExtractByType(resp, dns.TypeDS, "")
-
-	if len(rr) > 0 {
-		r.ansCache.Set(cacheKey, resp)
-		return rr[0].(*dns.DS)
-	}
-	return nil
-}
-
 func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
 
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
@@ -473,63 +525,7 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 	return false
 }
 
-func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
-	var ds *dns.DS
-	req := new(dns.Msg)
-	req.SetQuestion(q.Name, dns.TypeNS)
-	_, rservers, err := r.resolveNS(ctx, req, isIPV6, 0)
-	if err == nil {
-		ds = r.getDS(ctx, q.Name, isIPV6, rservers)
-	}
-	if ds == nil {
-		ds = r.getDS(ctx, q.Name, isIPV6, servers)
-	}
-
-	if ds == nil {
-		return true
-	}
-
-	keys := r.getDNSKEY(ctx, q.Name, isIPV6, servers)
-
-	verified := false
-	for _, krr := range keys {
-		key := krr.(*dns.DNSKEY)
-
-		if ds != nil && ds.KeyTag == key.KeyTag() {
-			pds := key.ToDS(ds.DigestType)
-			if pds.Digest == ds.Digest {
-				verified = true
-				break
-			}
-		}
-	}
-
-	if verified {
-		log.Debug().
-			Str("q", q.Name).
-			Str("type", dns.TypeToString[q.Qtype]).
-			Str("ds-name", ds.Header().Name).
-			Msg("[dnssec] DS verified")
-		return true
-	} else {
-		log.Debug().
-			Str("q", q.Name).
-			Str("type", dns.TypeToString[q.Qtype]).
-			Bool("has-ds", ds != nil).
-			Bool("has-keys", len(keys) > 0).
-			Msg("[dnssec] DS error: failed")
-	}
-
-	return false
-}
-
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
-func (r *Recursor) verifyDNSSEC(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
-	ds := r.verifyDS(ctx, ans, q, servers, isIPV6)
-	rrsig := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
-
-	return rrsig && ds
-}
 
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
@@ -664,8 +660,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 	}
 
-	// r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
-	dnssec := r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
+	// dnssec := r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
+	dnssec := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
 	if !dnssec {
 		ans.SetRcode(ans, dns.RcodeServerFailure)
 		ans.Answer = nil
