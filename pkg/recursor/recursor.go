@@ -126,6 +126,13 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 	name := q.Name
 	end := false
 
+	next := func(n string) (string, bool) {
+		var i int
+		i, end = dns.NextLabel(n, 0)
+		name = dns.Fqdn(n[i:])
+		return name, end
+	}
+
 	for {
 		var ds *dns.DS
 		if name == "." {
@@ -137,6 +144,20 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			// resolve for DS
 			dsreq := new(dns.Msg)
 			dsreq.SetQuestion(name, dns.TypeDS)
+
+			resp, _, err := r.resolveNS(ctx, dsreq, isIPV6, 0)
+			if err != nil {
+				return false
+			}
+
+			if resp != nil && r.findSoa(resp) != nil {
+				name, end = next(name)
+				if end {
+					return true
+				}
+				continue
+			}
+
 			dsans, err := r.resolve(ctx, dsreq, isIPV6)
 			if err != nil {
 				return false
@@ -144,9 +165,13 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			dss := utils.MsgExtractByType(dsans, dns.TypeDS, "")
 			if len(dss) == 0 {
 				// No DS. Search into the upper zone
-				var i int
-				i, end = dns.NextLabel(name, 0)
-				name = dns.Fqdn(name[i:])
+				// var i int
+				// i, end = dns.NextLabel(name, 0)
+				// name = dns.Fqdn(name[i:])
+				name, end = next(name)
+				if end {
+					return true
+				}
 				continue
 			}
 			ds = dss[0].(*dns.DS)
@@ -191,9 +216,11 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 		if end {
 			return true
 		}
-		var i int
-		i, end = dns.NextLabel(name, 0)
-		name = dns.Fqdn(name[i:])
+		name, end = next(name)
+
+		// var i int
+		// i, end = dns.NextLabel(name, 0)
+		// name = dns.Fqdn(name[i:])
 	}
 }
 
@@ -377,7 +404,16 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
-		return nil, cached, nil
+		// TODO: cache this response
+		nsReq := new(dns.Msg)
+		nsReq.SetQuestion(zone, dns.TypeNS)
+		nsq := nsReq.Question[0]
+		cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
+		resp, _ := r.ansCache.Get(cacheKey)
+		if err != nil {
+			return nil, cached, nil
+		}
+		return resp, cached, nil
 	}
 
 	// run recursively here. the recursion will end when we will
@@ -390,13 +426,18 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 	nsReq := new(dns.Msg)
 	nsReq.SetQuestion(zone, dns.TypeNS)
 
-	qr := newQueryRacer(rservers, nsReq, isIPV6)
-	resp, err = qr.run()
+	nsq := nsReq.Question[0]
+	cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
+	resp, err = r.ansCache.Get(cacheKey)
 	if err != nil {
-		return resp, nil, err
-	}
+		qr := newQueryRacer(rservers, nsReq, isIPV6)
+		resp, err = qr.run()
+		if err != nil {
+			return resp, nil, err
+		}
 
-	// r.verifyDNSSEC(ctx, resp, nsReq.Question[0], rservers, isIPV6)
+		r.ansCache.Set(cacheKey, resp)
+	}
 
 	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
