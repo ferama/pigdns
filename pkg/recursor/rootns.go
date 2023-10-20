@@ -85,14 +85,16 @@ var (
 )
 
 func getRootServers() *authServers {
-	severs := &authServers{}
+	servers := &authServers{
+		Zone: ".",
+	}
 	for _, s := range rootNS {
 		as := &nsServer{
 			Addr:    s.IPV4,
 			Fqdn:    s.Fqdn,
 			Version: pigdns.FamilyIPv4,
 		}
-		severs.List = append(severs.List, as)
+		servers.List = append(servers.List, as)
 	}
 
 	for _, s := range rootNS {
@@ -101,8 +103,8 @@ func getRootServers() *authServers {
 			Fqdn:    s.Fqdn,
 			Version: pigdns.FamilyIPv6,
 		}
-		severs.List = append(severs.List, as)
+		servers.List = append(servers.List, as)
 	}
 
-	return severs
+	return servers
 }

@@ -43,7 +43,7 @@ type authServers struct {
 func (a *authServers) String() string {
 	ret := fmt.Sprintf("\n=== ZONE: %s ===", a.Zone)
 	for _, i := range a.List {
-		ret = fmt.Sprintf("%s\n%s", ret, i.Addr)
+		ret = fmt.Sprintf("%s\nfqdn: %s, ip: %s", ret, i.Fqdn, i.Addr)
 	}
 	return ret
 }

@@ -2,12 +2,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "program": "${workspaceRoot}",
+            "program": "${workspaceRoot}/cmd/server",
             "name": "Launch Package",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "args": ["-s", "-d", "pig.io", "-z", "./hack/zone.conf"]
+            "args": ["${workspaceRoot}/pigdns.yaml"]
         }
     ]
 }

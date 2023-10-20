@@ -1,12 +1,16 @@
 package recursor
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
-	"github.com/rs/zerolog/log"
+)
+
+var (
+	errMsgIsNull = errors.New("recursion max level reached")
 )
 
 type ansCache struct {
@@ -25,6 +29,9 @@ func newAnsCache(datadir string, name string) *ansCache {
 }
 
 func (c *ansCache) Set(key string, m *dns.Msg) error {
+	if m == nil {
+		return errMsgIsNull
+	}
 	minTTL := utils.MsgGetMinTTL(m)
 
 	packed, err := m.Pack()
@@ -69,6 +76,6 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		a.Header().Ttl = ttl
 	}
 
-	log.Printf("[%s get] key=%s", c.name, key)
+	// log.Printf("[%s get] key=%s", c.name, key)
 	return msg, nil
 }
