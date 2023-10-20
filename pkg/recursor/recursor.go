@@ -186,7 +186,6 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 		// get keys
 		kreq := new(dns.Msg)
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
-
 		// this is not part of a previous recursion, I need to start a new context here
 		// to reset the recursorContext as a fresh query
 		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
@@ -194,11 +193,6 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			return false
 		}
 		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, name)
-		if len(keys) == 0 {
-			log.Print(kans)
-		}
-
-		// keys := r.getDNSKEY(ctx, name, isIPV6, servers)
 
 		// verify keys against DS
 		verified := false
@@ -493,7 +487,7 @@ func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 	return nil
 }
 
-func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, servers *authServers) []dns.RR {
+func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dns.RR {
 	req := new(dns.Msg)
 	req.SetQuestion(zone, dns.TypeDNSKEY)
 
@@ -508,9 +502,11 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 
 	keys := []dns.RR{}
 
-	// _, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
-	// log.Print(servers.String())
-	qr := newQueryRacer(servers, req, isIPV6)
+	_, rservers, err := r.resolveNS(ctx, req, isIPV6, 0)
+	if err != nil {
+		return keys
+	}
+	qr := newQueryRacer(rservers, req, isIPV6)
 	resp, err := qr.run()
 	if err != nil {
 		r.ansCache.Set(cacheKey, resp)
@@ -525,7 +521,6 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool, serv
 }
 
 func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
-
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
 	// log.Print(rrsigs)
 
@@ -539,7 +534,7 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 
 	for _, rrsig := range rrsigs {
 		sig = rrsig.(*dns.RRSIG)
-		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6, servers)
+		keys := r.getDNSKEY(ctx, sig.SignerName, isIPV6)
 
 		errors := 0
 		for _, krr := range keys {
