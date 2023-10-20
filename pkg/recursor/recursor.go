@@ -73,12 +73,16 @@ func New(datadir string) *Recursor {
 	return r
 }
 
-func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+func (r *Recursor) newContext(ctx context.Context) context.Context {
 	cc := &recursorContext{
 		RecursionCount: 0,
 		ToResolveList:  make([]string, 0),
 	}
-	ctx = context.WithValue(ctx, recursorContextKey, cc)
+	return context.WithValue(ctx, recursorContextKey, cc)
+}
+
+func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+	ctx = r.newContext(ctx)
 
 	q := req.Question[0]
 	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
@@ -122,6 +126,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	return ans, nil
 }
 
+// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
 func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
 	name := q.Name
 	end := false
@@ -135,6 +140,7 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 
 	for {
 		var ds *dns.DS
+		// servers := getRootServers()
 		if name == "." {
 			// DS is root DS
 			k, _ := dns.NewRR(rootKeys[0])
@@ -149,6 +155,7 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			if err != nil {
 				return false
 			}
+			// servers = s
 
 			if resp != nil && r.findSoa(resp) != nil {
 				name, end = next(name)
@@ -158,33 +165,40 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				continue
 			}
 
-			dsans, err := r.resolve(ctx, dsreq, isIPV6)
+			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
 			if err != nil {
 				return false
 			}
-			dss := utils.MsgExtractByType(dsans, dns.TypeDS, "")
+			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
+
 			if len(dss) == 0 {
 				// No DS. Search into the upper zone
-				// var i int
-				// i, end = dns.NextLabel(name, 0)
-				// name = dns.Fqdn(name[i:])
 				name, end = next(name)
 				if end {
 					return true
 				}
 				continue
 			}
+
 			ds = dss[0].(*dns.DS)
 		}
 
 		// get keys
 		kreq := new(dns.Msg)
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
-		kans, err := r.resolve(ctx, kreq, isIPV6)
+
+		// this is not part of a previous recursion, I need to start a new context here
+		// to reset the recursorContext as a fresh query
+		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
 		if err != nil {
 			return false
 		}
-		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, "")
+		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, name)
+		if len(keys) == 0 {
+			log.Print(kans)
+		}
+
+		// keys := r.getDNSKEY(ctx, name, isIPV6, servers)
 
 		// verify keys against DS
 		verified := false
@@ -404,7 +418,6 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
-		// TODO: cache this response
 		nsReq := new(dns.Msg)
 		nsReq.SetQuestion(zone, dns.TypeNS)
 		nsq := nsReq.Question[0]
@@ -566,8 +579,6 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 	return false
 }
 
-// https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
-
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 	rc.RecursionCount++
@@ -603,10 +614,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
+	// TODO: investigate the 3 here
+	// if I don't introduce it this will not work as expected (it should return a soa response)
+	// Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
 	// loop := 0
-	// // TODO: investigate the 3 here
-	// // if I don't introduce it this will not work as expected (it should return a soa response)
-	// // Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
 	// for loop < 3 {
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers instead
