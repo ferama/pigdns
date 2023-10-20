@@ -15,7 +15,7 @@ RUN set -eux; \
     apt install -y \
         ca-certificates \
         psmisc \
-        netcat \
+        netcat-openbsd \
         dnsutils \
     && \
     apt clean
