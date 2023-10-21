@@ -10,8 +10,10 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/worker"
 
 	"github.com/rs/zerolog/log"
@@ -21,9 +23,8 @@ const (
 	cacheExpiredCheckInterval = 10 * time.Second
 	cacheDumpInterval         = 5 * time.Minute
 
-	cacheMaxItemsPerBucket = 10000
-	cacheNumBuckets        = 128
-	cacheSubDir            = "cache"
+	cacheNumBuckets = 128
+	cacheSubDir     = "cache"
 
 	// this worker are go routines that do jobs like check for record expiration,
 	// cache dumps to disk and so on
@@ -41,17 +42,24 @@ type FileCache struct {
 	buckets map[uint64]*bucket
 	datadir string
 
+	maxMemorySize int64
+
 	name string
 
 	expireWorkerPool *worker.Pool
 	dumpWorkerPool   *worker.Pool
 }
 
-func NewFileCache(datadir string, name string) *FileCache {
+func NewFileCache(datadir string, name string, size int64) *FileCache {
+
+	// allow a minimum
+	memorySize := max(size, 1024*10)
+
 	cache := &FileCache{
 		buckets:          make(map[uint64]*bucket),
 		datadir:          datadir,
 		name:             name,
+		maxMemorySize:    memorySize,
 		expireWorkerPool: worker.NewPool(cacheMaxWorkers),
 		dumpWorkerPool:   worker.NewPool(cacheMaxWorkers),
 	}
@@ -74,10 +82,41 @@ func NewFileCache(datadir string, name string) *FileCache {
 	return cache
 }
 
+func (c *FileCache) getBucketSize(bucket *bucket) uint64 {
+	var size uint64
+	size = 0
+	size += uint64(unsafe.Sizeof(bucket))
+	size += uint64(unsafe.Sizeof(bucket.idx))
+	size += uint64(unsafe.Sizeof(bucket.mu))
+
+	for _, item := range bucket.data {
+		size += item.SizeOf()
+	}
+	return size
+}
+
+func (c *FileCache) getCacheSize() uint64 {
+	var i, size uint64
+	size = 0
+	for i = 0; i <= cacheNumBuckets; i++ {
+		bucket := c.buckets[i]
+		size += c.getBucketSize(bucket)
+	}
+
+	return size
+}
+
 func (c *FileCache) setupJobs() {
 
+	// Expire JOB
 	go func() {
 		for {
+
+			log.Debug().
+				Str("name", c.name).
+				Str("size", utils.ConverFromBytes(int64(c.getCacheSize()))).
+				Msg("[cache]")
+
 			time.Sleep(cacheExpiredCheckInterval)
 
 			// t := time.Now()
@@ -99,6 +138,7 @@ func (c *FileCache) setupJobs() {
 		}
 	}()
 
+	// Dump JOB
 	go func() {
 		for {
 			time.Sleep(cacheDumpInterval)
@@ -189,9 +229,8 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 	defer bucket.mu.Unlock()
 
 	for k, v := range bucket.data {
-		// log.Printf("[cache item] %s, ttl: %fs", k, time.Until(v.Expires).Seconds())
 		if time.Now().After(v.Expires) {
-			log.Printf("[%s cache] expired %s", c.name, k)
+			// log.Printf("[%s cache] expired %s", c.name, k)
 			delete(bucket.data, k)
 		}
 		s = append(s, struct {
@@ -200,18 +239,23 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 		}{key: k, expires: v.Expires})
 	}
 
-	// if bucket overflows evict items that are closer to their
-	// expire time
-	if len(bucket.data) > cacheMaxItemsPerBucket {
+	maxBucketSize := uint64(c.maxMemorySize / cacheNumBuckets)
+	bucketSize := c.getBucketSize(bucket)
+
+	// if bucketSize is greater than maxBucketSize
+	// drop its size by half evicting the closest to expire items
+	if bucketSize > maxBucketSize {
 		sort.Slice(s, func(i, j int) bool {
 			t1 := s[i].expires
 			t2 := s[j].expires
 			return t2.After(t1)
 		})
-
-		ei := len(s) - cacheMaxItemsPerBucket
-		for _, i := range s[:ei] {
-			log.Printf("[%s cache] evicted %s", c.name, i.key)
+		half := int(len(s) / 2)
+		for _, i := range s[:half] {
+			log.Info().
+				Str("name", c.name).
+				Str("key", i.key).
+				Msg("[cache] evicted")
 			delete(bucket.data, i.key)
 		}
 	}

@@ -28,7 +28,10 @@ func BuildDOHProxyHandler(serverURI string, serverAddr string) pigdns.Handler {
 
 // BuildRecursorHandler creates an handler that resolves recursively
 // starting from root NS
-func BuildRecursorHandler(datadir string, allowedNets []string, blocklists []string, whitelists []string) pigdns.Handler {
+func BuildRecursorHandler(
+	datadir string, allowedNets []string,
+	blocklists []string, whitelists []string, cacheSize int64) pigdns.Handler {
+
 	var chain pigdns.Handler
 
 	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
@@ -45,7 +48,7 @@ func BuildRecursorHandler(datadir string, allowedNets []string, blocklists []str
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = recursor.NewRecursorHandler(chain, datadir)
+	chain = recursor.NewRecursorHandler(chain, datadir, cacheSize)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
 	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}

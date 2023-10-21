@@ -34,7 +34,7 @@ var proxyCmd = &cobra.Command{
 		}
 
 		if dohServerAddr == "" {
-			r := recursor.New("")
+			r := recursor.New("", 0)
 			m := new(dns.Msg)
 			m.SetQuestion(dns.Fqdn(dohServerName), dns.TypeA)
 			resp, err := r.Query(context.Background(), m, false)

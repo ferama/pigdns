@@ -19,9 +19,9 @@ type ansCache struct {
 }
 
 // this is a cache for answers in the dns.Msg form
-func newAnsCache(datadir string, name string) *ansCache {
+func newAnsCache(datadir string, name string, size int64) *ansCache {
 	rc := &ansCache{
-		cache: cache.NewFileCache(datadir, name),
+		cache: cache.NewFileCache(datadir, name, size),
 		name:  name,
 	}
 

@@ -52,11 +52,14 @@ type Recursor struct {
 	oneInFlight *oneinflight.OneInFlight
 }
 
-func New(datadir string) *Recursor {
+func New(datadir string, cacheSize int64) *Recursor {
+	ipCacheSize := int64(cacheSize * 75 / 100)
+	nsCacheSize := int64(cacheSize * 25 / 100)
+
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), "ipcache"),
-		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache"),
+		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), "ipcache", ipCacheSize),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache", nsCacheSize),
 	}
 
 	r.rootkeys = []dns.RR{}

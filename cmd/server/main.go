@@ -9,6 +9,7 @@ import (
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/server"
+	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/web"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog"
@@ -71,11 +72,19 @@ var rootCmd = &cobra.Command{
 		dnsMux := dns.NewServeMux()
 		dohMux := dns.NewServeMux()
 		if conf.Recursor.Enabled {
+
+			cacheSizeBytes, err := utils.ConvertToBytes(conf.Recursor.CacheSize)
+			if err != nil {
+				log.Fatal().
+					Msgf("error while parsing conf. CacheSize: %s", conf.Recursor.CacheSize)
+			}
+
 			h := server.BuildRecursorHandler(
 				conf.DataDir,
 				conf.Recursor.AllowedNets,
 				conf.Recursor.BlockLists,
 				conf.Recursor.WhiteLists,
+				cacheSizeBytes,
 			)
 
 			if conf.Recursor.ServeOnUDP {
