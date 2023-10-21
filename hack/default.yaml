@@ -12,5 +12,6 @@ recursor:
   serveOnUDP: true
   allowedNets:
     - 0.0.0.0/0
+    - ::/0
   blockLists: []
   whiteLists: []

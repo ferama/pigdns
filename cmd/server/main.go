@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
 	"github.com/ferama/pigdns/pkg/pigdns"
@@ -38,7 +39,12 @@ var rootCmd = &cobra.Command{
 		info := strings.EqualFold(conf.LogLevel, "info")
 		error := strings.EqualFold(conf.LogLevel, "error")
 
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		output := zerolog.ConsoleWriter{Out: os.Stderr}
+		output.FormatTimestamp = func(i interface{}) string {
+			t, _ := time.Parse(time.RFC3339, i.(string))
+			return t.Format("2006-01-02 15:04:05")
+		}
+		log.Logger = log.Output(output)
 		if info {
 			zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		}
