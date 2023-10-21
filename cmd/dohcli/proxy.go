@@ -24,6 +24,9 @@ var proxyCmd = &cobra.Command{
 	Use:   "proxy",
 	Short: "Start a local dns proxy against a doh server",
 	Long:  "Start a local dns proxy against a doh server",
+	Example: `
+  doh proxy -s doh.yourpidns.com	
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		dohServerName, _ := cmd.Flags().GetString(ServerNameFlag)
 		dohServerAddr, _ := cmd.Flags().GetString(ServerAddrFlag)

@@ -1,5 +1,6 @@
 services:
   pigdns:
+    restart: always
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
     ports:

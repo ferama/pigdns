@@ -61,10 +61,9 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}
-
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Err(err)
+		log.Err(err).Send()
 		h.Next.ServeDNS(c, r)
 		return
 	}

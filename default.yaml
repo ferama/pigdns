@@ -1,5 +1,6 @@
 # sample config
 
+logLevel: info
 dataDir: "/var/lib/pigdns"
 
 netListener:
@@ -13,5 +14,6 @@ recursor:
   allowedNets:
     - 0.0.0.0/0
     - ::/0
+  cacheSize: 100MB
   blockLists: []
   whiteLists: []

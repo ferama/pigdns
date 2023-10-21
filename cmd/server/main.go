@@ -45,6 +45,7 @@ var rootCmd = &cobra.Command{
 			return t.Format("2006-01-02 15:04:05")
 		}
 		log.Logger = log.Output(output)
+
 		if info {
 			zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		}
