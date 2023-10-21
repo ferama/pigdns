@@ -22,6 +22,7 @@ const (
 
 var (
 	commentsRE = regexp.MustCompile(`^\s*#`)
+	isHTTPRE   = regexp.MustCompile(`^http(s)?:\/\/`)
 )
 
 type handler struct {
@@ -39,8 +40,10 @@ func NewBlocklistHandler(blocklists []string, whitelists []string, next pigdns.H
 
 	for _, u := range blocklists {
 		lowered := strings.ToLower(u)
-		if strings.HasPrefix(lowered, "http") {
+		if isHTTPRE.Match([]byte(lowered)) {
 			h.addHTTP(u)
+		} else {
+			h.addFile(u)
 		}
 	}
 
@@ -66,6 +69,27 @@ func (h *handler) removeFile(path string) {
 		delete(h.list, dns.Fqdn(line))
 	}
 	log.Info().Msgf("[blocklist] '%s' loaded as whitelist", path)
+}
+
+func (h *handler) addFile(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Warn().Msgf("[blocklist] '%s'", err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	// optionally, resize scanner's capacity for lines over 64K, see next example
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentsRE.Match([]byte(line)) {
+			key := strings.ToLower(line)
+			h.list[dns.Fqdn(key)] = true
+		}
+	}
+	log.Info().Msgf("[blocklist] '%s' loaded as blacklist", path)
 }
 
 func (h *handler) addHTTP(uri string) {
