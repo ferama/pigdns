@@ -22,6 +22,7 @@ import (
 const (
 	cacheExpiredCheckInterval = 10 * time.Second
 	cacheDumpInterval         = 5 * time.Minute
+	cacheEvictionInterval     = 1 * time.Minute
 
 	cacheNumBuckets = 128
 	cacheSubDir     = "cache"
@@ -47,6 +48,7 @@ type FileCache struct {
 	name string
 
 	expireWorkerPool *worker.Pool
+	evictWorkerPool  *worker.Pool
 	dumpWorkerPool   *worker.Pool
 }
 
@@ -61,6 +63,7 @@ func NewFileCache(datadir string, name string, size int64) *FileCache {
 		name:             name,
 		maxMemorySize:    memorySize,
 		expireWorkerPool: worker.NewPool(cacheMaxWorkers),
+		evictWorkerPool:  worker.NewPool(cacheMaxWorkers),
 		dumpWorkerPool:   worker.NewPool(cacheMaxWorkers),
 	}
 
@@ -111,12 +114,6 @@ func (c *FileCache) setupJobs() {
 	// Expire JOB
 	go func() {
 		for {
-
-			log.Debug().
-				Str("name", c.name).
-				Str("size", utils.ConverFromBytes(int64(c.getCacheSize()))).
-				Msg("[cache]")
-
 			time.Sleep(cacheExpiredCheckInterval)
 
 			// t := time.Now()
@@ -129,12 +126,35 @@ func (c *FileCache) setupJobs() {
 
 				// check expired
 				c.expireWorkerPool.Enqueue(func() {
-					c.checkExpiredJob(n)
+					c.expireJob(n)
 				})
 			}
 
 			c.expireWorkerPool.Wait()
 			// log.Printf("[%s cache] expire job ended. took %s", c.name, time.Since(t))
+		}
+	}()
+
+	// Evict JOB
+	go func() {
+		for {
+			log.Debug().
+				Str("name", c.name).
+				Str("size", utils.ConverFromBytes(int64(c.getCacheSize()))).
+				Msg("[cache]")
+
+			time.Sleep(cacheEvictionInterval)
+			var i uint64
+			for i = 0; i <= cacheNumBuckets; i++ {
+				// this is needed to be sure that the value of i doesn't change
+				// while is read from the checkExpired function
+				n := i
+				// dump cache to disk
+				c.evictWorkerPool.Enqueue(func() {
+					c.evictJob(n)
+				})
+			}
+			c.evictWorkerPool.Wait()
 		}
 	}()
 
@@ -217,8 +237,7 @@ func (c *FileCache) load(bucketIdx uint64) bool {
 	return err == nil
 }
 
-func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
-	// temp struct to hold key, expires couples
+func (c *FileCache) evictJob(bucketIdx uint64) {
 	s := make([]struct {
 		key     string
 		expires time.Time
@@ -229,10 +248,6 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 	defer bucket.mu.Unlock()
 
 	for k, v := range bucket.data {
-		if time.Now().After(v.Expires) {
-			// log.Printf("[%s cache] expired %s", c.name, k)
-			delete(bucket.data, k)
-		}
 		s = append(s, struct {
 			key     string
 			expires time.Time
@@ -257,6 +272,19 @@ func (c *FileCache) checkExpiredJob(bucketIdx uint64) {
 				Str("key", i.key).
 				Msg("[cache] evicted")
 			delete(bucket.data, i.key)
+		}
+	}
+}
+
+func (c *FileCache) expireJob(bucketIdx uint64) {
+	bucket := c.buckets[bucketIdx]
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
+
+	for k, v := range bucket.data {
+		if time.Now().After(v.Expires) {
+			// log.Printf("[%s cache] expired %s", c.name, k)
+			delete(bucket.data, k)
 		}
 	}
 }
