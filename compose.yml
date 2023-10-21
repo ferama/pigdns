@@ -1,6 +1,6 @@
 services:
   pigdns:
-    image: elasticsearch:7.16.1
+    image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
     ports:
       - "0.0.0.0:53:53/udp"
