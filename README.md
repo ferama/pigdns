@@ -12,14 +12,8 @@
 
 ## Setup
 
-Start with a basic conf file
-```yaml
-zone:
-  enabled: true
-  regexIPEnabled: true
-  zoneFilePath: ./hack/zone.conf
-
-  name: <your-domain>
+```sh
+docker compose up -d
 ```
 
 Delegate a subdomain to pigdns.

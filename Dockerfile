@@ -24,7 +24,7 @@ RUN set -eux; \
 RUN mkdir -p /var/lib/pigdns
 
 COPY --from=gobuilder /pigdns /usr/local/bin/pigdns
-COPY ./hack/default.yaml /etc/pigdns.yaml
+COPY ./default.yaml /etc/pigdns.yaml
 
 VOLUME /var/lib/pigdns
 
