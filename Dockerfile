@@ -15,6 +15,7 @@ RUN set -eux; \
     apt install -y \
         ca-certificates \
         psmisc \
+        procps \
         netcat-openbsd \
         dnsutils \
     && \
