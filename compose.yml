@@ -3,8 +3,8 @@ services:
     restart: always
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
-    ports:
-      - "0.0.0.0:53:53/udp"
+    # port mappings doesn't work with ipv6
+    network_mode: host
     volumes:
       - data:/var/lib/pigdns
       - ./default.yaml:/etc/pigdns.yaml 

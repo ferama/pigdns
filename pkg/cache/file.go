@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -26,10 +27,6 @@ const (
 
 	cacheNumBuckets = 128
 	cacheSubDir     = "cache"
-
-	// this worker are go routines that do jobs like check for record expiration,
-	// cache dumps to disk and so on
-	cacheMaxWorkers = 5
 )
 
 type bucket struct {
@@ -57,14 +54,19 @@ func NewFileCache(datadir string, name string, size int64) *FileCache {
 	// allow a minimum
 	memorySize := max(size, 1024*10)
 
+	// this worker are go routines that do jobs like check for record expiration,
+	// cache dumps to disk and so on
+	workers := int(runtime.NumCPU() / 3)
+	maxWorkers := max(1, workers)
+
 	cache := &FileCache{
 		buckets:          make(map[uint64]*bucket),
 		datadir:          datadir,
 		name:             name,
 		maxMemorySize:    memorySize,
-		expireWorkerPool: worker.NewPool(cacheMaxWorkers),
-		evictWorkerPool:  worker.NewPool(cacheMaxWorkers),
-		dumpWorkerPool:   worker.NewPool(cacheMaxWorkers),
+		expireWorkerPool: worker.NewPool(maxWorkers),
+		evictWorkerPool:  worker.NewPool(maxWorkers),
+		dumpWorkerPool:   worker.NewPool(maxWorkers),
 	}
 
 	var i uint64
