@@ -12,8 +12,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	errQueryRacerTimeout = errors.New("query timeout")
+)
+
 const (
-	nextNSTimeout = 150 * time.Millisecond
+	queryRacerTimeout = 10 * time.Second
+	nextNSTimeout     = 150 * time.Millisecond
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -148,6 +153,8 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	// If I'm out of loop and I'm here is because all the timeout occurred
 	// and I still don't have an answer so wait here for it
 	select {
+	case <-time.After(queryRacerTimeout):
+		return nil, errQueryRacerTimeout
 	case ans = <-ansCH:
 		return ans, nil
 

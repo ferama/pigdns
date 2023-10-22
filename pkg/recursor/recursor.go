@@ -280,7 +280,7 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	return cleaned
 }
 
-func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, isIPV6 bool) (*authServers, error) {
+func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) (*authServers, error) {
 
 	servers := &authServers{
 		Zone: zone,
@@ -369,40 +369,34 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 
+		// get the A record
 		ra := new(dns.Msg)
-		if isIPV6 {
-			ra.SetQuestion(ns, dns.TypeAAAA)
-		} else {
-			ra.SetQuestion(ns, dns.TypeA)
-		}
-		rans, err := r.resolve(ctx, ra, isIPV6)
+		ra.SetQuestion(ns, dns.TypeA)
+		rans, err := r.resolve(ctx, ra, false)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
 			}
 			continue
 		}
-
-		haveIP := false
 		for _, e := range rans.Answer {
-			haveIP = searchIp(e, ns)
+			searchIp(e, ns)
 		}
 
-		// try again request the A record instead of AAAA
-		if !haveIP && isIPV6 {
-			ra := new(dns.Msg)
-			ra.SetQuestion(ns, dns.TypeA)
-			rans, err := r.resolve(ctx, ra, isIPV6)
-			if err != nil {
-				if err == errRecursionMaxLevel {
-					break
-				}
-				continue
-			}
-			for _, e := range rans.Answer {
-				searchIp(e, ns)
-			}
-		}
+		// get the AAAA record
+		// raaaa := new(dns.Msg)
+		// raaaa.SetQuestion(ns, dns.TypeAAAA)
+		// raaaans, err := r.resolve(ctx, raaaa, true)
+		// if err != nil {
+		// 	if err == errRecursionMaxLevel {
+		// 		break
+		// 	}
+		// 	continue
+		// }
+		// for _, e := range raaaans.Answer {
+		// 	searchIp(e, ns)
+		// }
+
 	}
 
 	// if we are here we don't have any place to search anymore
@@ -465,7 +459,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		r.ansCache.Set(cacheKey, resp)
 	}
 
-	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
+	servers, err := r.buildServers(ctx, resp, zone)
 	if err != nil {
 		if err == errRecursionMaxLevel {
 			return resp, servers, err
@@ -636,7 +630,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
-		servers, err = r.buildServers(ctx, ans, q.Name, isIPV6)
+		servers, err = r.buildServers(ctx, ans, q.Name)
 		if err != nil {
 			// soa answer
 			r.ansCache.Set(cacheKey, ans)
