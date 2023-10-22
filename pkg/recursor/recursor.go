@@ -376,7 +376,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			ra.SetQuestion(ns, dns.TypeA)
 		}
 		rans, err := r.resolve(ctx, ra, isIPV6)
-
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -384,8 +383,25 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 			continue
 		}
 
+		haveIP := false
 		for _, e := range rans.Answer {
-			searchIp(e, ns)
+			haveIP = searchIp(e, ns)
+		}
+
+		// try again request the A record instead of AAAA
+		if !haveIP && isIPV6 {
+			ra := new(dns.Msg)
+			ra.SetQuestion(ns, dns.TypeA)
+			rans, err := r.resolve(ctx, ra, isIPV6)
+			if err != nil {
+				if err == errRecursionMaxLevel {
+					break
+				}
+				continue
+			}
+			for _, e := range rans.Answer {
+				searchIp(e, ns)
+			}
 		}
 	}
 
@@ -648,8 +664,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			haveAnswer = true
 		}
 	}
+
 	// deal with CNAMES
 	if !haveAnswer {
+
 		ans.Ns = []dns.RR{}
 		ans.Extra = []dns.RR{}
 		maxLoop := cnameChainMaxDeep
@@ -660,6 +678,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			if len(rset) > 0 {
 				rr = rset[0]
 			}
+
 			if rr != nil && strings.EqualFold(rr.Header().Name, q.Name) {
 				cname := rr.(*dns.CNAME)
 
