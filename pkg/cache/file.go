@@ -249,15 +249,15 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 	}, 0)
 
 	bucket := c.buckets[bucketIdx]
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
 
+	bucket.mu.Lock()
 	for k, v := range bucket.data {
 		s = append(s, struct {
 			key     string
 			expires time.Time
 		}{key: k, expires: v.Expires})
 	}
+	bucket.mu.Unlock()
 
 	maxBucketSize := uint64(c.maxMemorySize / cacheNumBuckets)
 	bucketSize := c.getBucketSize(bucket)
