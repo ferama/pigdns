@@ -143,7 +143,6 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 
 	for {
 		var ds *dns.DS
-		// servers := getRootServers()
 		if name == "." {
 			// DS is root DS
 			k, _ := dns.NewRR(rootKeys[0])
@@ -158,7 +157,6 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			if err != nil {
 				return false
 			}
-			// servers = s
 
 			if resp != nil && r.findSoa(resp) != nil {
 				name, end = next(name)
@@ -228,10 +226,6 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			return true
 		}
 		name, end = next(name)
-
-		// var i int
-		// i, end = dns.NextLabel(name, 0)
-		// name = dns.Fqdn(name[i:])
 	}
 }
 
@@ -535,7 +529,6 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 
 func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
-	// log.Print(rrsigs)
 
 	var sig *dns.RRSIG
 	verified := false
@@ -723,7 +716,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 	}
 
-	// dnssec := r.verifyDNSSEC(ctx, ans, q, servers, isIPV6)
 	dnssec := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
 	if !dnssec {
 		ans.SetRcode(ans, dns.RcodeServerFailure)
