@@ -19,6 +19,8 @@ import (
 var (
 	errNoNSfound         = errors.New("can't find auth nameservers")
 	errRecursionMaxLevel = errors.New("recursion max level reached")
+
+	errNameserversLoop = errors.New("nameservers loop detected")
 )
 
 type contextKey string
@@ -168,7 +170,8 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 
 			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
 			if err != nil {
-				return false
+				// if error is nameserversLoop, no DS record exists
+				return err == errNameserversLoop
 			}
 			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
 
@@ -615,20 +618,39 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	// TODO: investigate the 3 here
-	// if I don't introduce it this will not work as expected (it should return a soa response)
-	// Ex: dig @127.0.0.1 dprodmgd104.aa-rt.sharepoint.com
-	// loop := 0
-	// for loop < 3 {
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
-		servers, err = r.buildServers(ctx, ans, q.Name)
+		nextServers, err := r.buildServers(ctx, ans, q.Name)
 		if err != nil {
 			// soa answer
 			r.ansCache.Set(cacheKey, ans)
 			return ans, nil
 		}
+
+		// detect loops
+		newFqdns := false
+		newAddrs := false
+		nsFqdns := []string{}
+		nsAddr := []string{}
+		for _, i := range nextServers.List {
+			nsFqdns = append(nsFqdns, i.Fqdn)
+			nsAddr = append(nsAddr, i.Addr)
+		}
+		for _, j := range servers.List {
+			if !slices.Contains(nsFqdns, j.Fqdn) {
+				newFqdns = true
+			}
+			if !slices.Contains(nsAddr, j.Addr) {
+				newAddrs = true
+			}
+		}
+		if !newFqdns || !newAddrs {
+			return nil, errNameserversLoop
+		}
+
+		// no loop detected, use the nextServers
+		servers = nextServers
 
 		qr := newQueryRacer(servers, req, isIPV6)
 		ans, err = qr.run()
@@ -642,8 +664,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			return soa, nil
 		}
 	}
-	// 	loop++
-	// }
 
 	haveAnswer := false
 	for _, rr := range ans.Answer {
