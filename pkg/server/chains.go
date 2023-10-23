@@ -3,10 +3,10 @@ package server
 import (
 	"context"
 
-	"github.com/ferama/pigdns/pkg/blocklist"
 	"github.com/ferama/pigdns/pkg/handlers/acl"
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
 	"github.com/ferama/pigdns/pkg/handlers/any"
+	"github.com/ferama/pigdns/pkg/handlers/blocklist"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
 	"github.com/ferama/pigdns/pkg/handlers/recursor"
