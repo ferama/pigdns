@@ -88,6 +88,9 @@ func NewFileCache(datadir string, name string, size int64) *FileCache {
 }
 
 func (c *FileCache) getBucketSize(bucket *bucket) uint64 {
+	bucket.mu.RLock()
+	defer bucket.mu.RUnlock()
+
 	var size uint64
 	size = 0
 	size += uint64(unsafe.Sizeof(bucket))
