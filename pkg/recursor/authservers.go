@@ -2,6 +2,7 @@ package recursor
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ferama/pigdns/pkg/pigdns"
 )
@@ -35,6 +36,8 @@ func (n *nsServer) withPort() string {
 }
 
 type authServers struct {
+	sync.RWMutex
+
 	Zone string
 
 	List []*nsServer

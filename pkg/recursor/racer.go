@@ -91,8 +91,10 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 func (qr *queryRacer) run() (*dns.Msg, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 
+	qr.servers.RLock()
 	ansCH := make(chan *dns.Msg, len(qr.servers.List))
 	errCH := make(chan error, len(qr.servers.List))
+	qr.servers.RUnlock()
 
 	var wg sync.WaitGroup
 
@@ -126,11 +128,27 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	nextNSTimer := time.NewTimer(nextNSTimeout)
 	defer nextNSTimer.Stop()
 
+	ipV6S := []*nsServer{}
+	ipV4S := []*nsServer{}
+	qr.servers.RLock()
 	for _, s := range qr.servers.List {
-		if !qr.isIPV6 && s.Version == pigdns.FamilyIPv6 {
-			continue
+		if s.Version == pigdns.FamilyIPv4 {
+			ipV4S = append(ipV4S, s)
+		} else {
+			ipV6S = append(ipV6S, s)
 		}
+	}
+	qr.servers.RUnlock()
 
+	servers := ipV4S
+
+	if qr.isIPV6 {
+		// we can query the ipv6 nameservers too
+		// put them into the head of the list
+		servers = append(ipV6S, servers...)
+	}
+
+	for _, s := range servers {
 		wg.Add(1)
 		go worker(s, &wg)
 		nextNSTimer.Reset(nextNSTimeout)

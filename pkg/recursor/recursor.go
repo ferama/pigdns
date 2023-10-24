@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ferama/pigdns/pkg/oneinflight"
@@ -28,6 +29,8 @@ type contextKey string
 const recursorContextKey contextKey = "recursor-context"
 
 type recursorContext struct {
+	sync.RWMutex
+
 	RecursionCount int
 	ToResolveList  []string
 }
@@ -277,7 +280,7 @@ func (r *Recursor) cleanMsg(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	return cleaned
 }
 
-func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) (*authServers, error) {
+func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, isIPV6 bool) (*authServers, error) {
 
 	servers := &authServers{
 		Zone: zone,
@@ -287,7 +290,10 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 		return nil, errNoNSfound
 	}
 
-	searchIp := func(e dns.RR, ns string) bool {
+	searchIp := func(e dns.RR, ns string, servers *authServers) bool {
+		servers.Lock()
+		defer servers.Unlock()
+
 		ret := false
 		switch e.Header().Rrtype {
 		case dns.TypeA:
@@ -328,7 +334,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			searchIp(e, ns.Ns)
+			searchIp(e, ns.Ns, servers)
 		}
 	}
 
@@ -344,7 +350,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			if !strings.EqualFold(e.Header().Name, ns.Ns) {
 				continue
 			}
-			ipFound = searchIp(e, ns.Ns)
+			ipFound = searchIp(e, ns.Ns, servers)
 		}
 
 		if !ipFound {
@@ -361,15 +367,18 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 
 		// prevents loops. if this ns was already in context in a previous
 		// recursion, do not put it again in loop.
+		rc.Lock()
 		if slices.Contains(rc.ToResolveList, ns) {
+			rc.Unlock()
 			break
 		}
 		rc.ToResolveList = append(rc.ToResolveList, ns)
+		rc.Unlock()
 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := r.resolve(ctx, ra, false)
+		rans, err := r.resolve(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -377,26 +386,46 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string) 
 			continue
 		}
 		for _, e := range rans.Answer {
-			searchIp(e, ns)
+			searchIp(e, ns, servers)
 		}
 
 		// get the AAAA record
-		// raaaa := new(dns.Msg)
-		// raaaa.SetQuestion(ns, dns.TypeAAAA)
-		// raaaans, err := r.resolve(ctx, raaaa, true)
-		// if err != nil {
-		// 	if err == errRecursionMaxLevel {
-		// 		break
-		// 	}
-		// 	continue
-		// }
-		// for _, e := range raaaans.Answer {
-		// 	searchIp(e, ns)
-		// }
+		go func(ctx context.Context, ns string) {
+			// reset the recursion count, we are starting a new journey here
+			rc := ctx.Value(recursorContextKey).(*recursorContext)
+			rc.Lock()
+			rc.RecursionCount = 0
+			rc.Unlock()
+			ctx = context.WithValue(ctx, recursorContextKey, rc)
+
+			raaaa := new(dns.Msg)
+			raaaa.SetQuestion(ns, dns.TypeAAAA)
+			raaaans, err := r.resolve(ctx, raaaa, isIPV6)
+			if err != nil {
+				return
+			}
+
+			s, err := r.nsCache.Get(zone)
+			if err == nil {
+				servers.Lock()
+				servers.List = s.List
+				servers.Unlock()
+			}
+			haveNew := false
+			for _, e := range raaaans.Answer {
+				haveNew = searchIp(e, ns, servers)
+			}
+			if haveNew {
+				// update cache including the discovered ipv6 addresses
+				r.nsCache.Set(servers)
+			}
+		}(ctx, ns)
 
 	}
 
 	// if we are here we don't have any place to search anymore
+	servers.RLock()
+	defer servers.RUnlock()
 	if len(servers.List) == 0 {
 		return nil, errNoNSfound
 	}
@@ -456,7 +485,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, off
 		r.ansCache.Set(cacheKey, resp)
 	}
 
-	servers, err := r.buildServers(ctx, resp, zone)
+	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
 		if err == errRecursionMaxLevel {
 			return resp, servers, err
@@ -585,11 +614,14 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 
 func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
+	rc.Lock()
 	rc.RecursionCount++
 	if rc.RecursionCount >= resolverMaxLevel {
 		log.Printf("///////// RecursionLimit %d", rc.RecursionCount)
+		rc.Unlock()
 		return nil, errRecursionMaxLevel
 	}
+	rc.Unlock()
 	ctx = context.WithValue(ctx, recursorContextKey, rc)
 
 	q := req.Question[0]
@@ -621,7 +653,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
-		nextServers, err := r.buildServers(ctx, ans, q.Name)
+		nextServers, err := r.buildServers(ctx, ans, q.Name, isIPV6)
 		if err != nil {
 			// soa answer
 			r.ansCache.Set(cacheKey, ans)
@@ -633,10 +665,15 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		newAddrs := false
 		nsFqdns := []string{}
 		nsAddr := []string{}
+
+		nextServers.RLock()
 		for _, i := range nextServers.List {
 			nsFqdns = append(nsFqdns, i.Fqdn)
 			nsAddr = append(nsAddr, i.Addr)
 		}
+		nextServers.RUnlock()
+
+		servers.RLock()
 		for _, j := range servers.List {
 			if !slices.Contains(nsFqdns, j.Fqdn) {
 				newFqdns = true
@@ -645,12 +682,19 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				newAddrs = true
 			}
 		}
+		servers.RUnlock()
+
 		if !newFqdns || !newAddrs {
 			return nil, errNameserversLoop
 		}
 
 		// no loop detected, use the nextServers
-		servers = nextServers
+		// servers = nextServers
+		servers.Lock()
+		nextServers.RLock()
+		servers.List = nextServers.List
+		nextServers.RUnlock()
+		servers.Unlock()
 
 		qr := newQueryRacer(servers, req, isIPV6)
 		ans, err = qr.run()
@@ -695,7 +739,9 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				if slices.Contains(rc.ToResolveList, cname.Target) {
 					break
 				}
+				rc.Lock()
 				rc.ToResolveList = append(rc.ToResolveList, cname.Target)
+				rc.Unlock()
 
 				newReq := new(dns.Msg)
 				newReq.SetQuestion(cname.Target, q.Qtype)
