@@ -176,6 +176,12 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
 			}
+
+			// err = nsecVerifyNODATA(dsans)
+			// if err != nil {
+			// 	return false
+			// }
+
 			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
 
 			if len(dss) == 0 {
@@ -642,6 +648,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 			}
 		}
 		return nil, err
+	}
+	secerr := nsecCheck(resp, servers)
+	if secerr != nil {
+		return nil, secerr
 	}
 
 	qr := newQueryRacer(servers, req, isIPV6)
