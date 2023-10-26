@@ -177,6 +177,15 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				return err == errNameserversLoop
 			}
 
+			nsec3Set := utils.MsgExtractByType(dsans, dns.TypeNSEC3, "")
+			if len(nsec3Set) > 0 {
+				secerr := nsecVerifyNODATA(dsans, nsec3Set)
+				if secerr != nil {
+					log.Error().Msg(secerr.Error())
+					return false
+				}
+			}
+
 			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
 
 			if len(dss) == 0 {

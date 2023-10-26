@@ -3,7 +3,6 @@ package recursor
 import (
 	"errors"
 
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 )
 
@@ -53,19 +52,13 @@ func nsecGetDnameTarget(msg *dns.Msg) string {
 	return target
 }
 
-func nsecVerifyNODATA(msg *dns.Msg) error {
-	nsec := utils.MsgExtractByType(msg, dns.TypeNSEC3, "")
-	if len(nsec) == 0 {
-		return nil
-	}
-
+func nsecVerifyNODATA(msg *dns.Msg, nsec []dns.RR) error {
 	q := msg.Question[0]
 	qname := q.Name
 
 	if dname := nsecGetDnameTarget(msg); dname != "" {
 		qname = dname
 	}
-
 	types, err := nsecFindMatching(qname, nsec)
 	if err != nil {
 		if q.Qtype != dns.TypeDS {
