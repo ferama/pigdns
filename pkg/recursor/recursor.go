@@ -105,16 +105,12 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans, err := r.resolve(ctx, req, isIPV6)
 
 		if err == nil {
-			isSOA := r.findSoa(ans) != nil
-
-			if !isSOA {
-				dsok := r.verifyDS(ctx, q, isIPV6)
-				if !dsok {
-					ans.SetRcode(ans, dns.RcodeServerFailure)
-					ans.Answer = nil
-					ans.Extra = nil
-					ans.Ns = nil
-				}
+			dsok := r.verifyDS(ctx, q, isIPV6)
+			if !dsok {
+				ans.SetRcode(ans, dns.RcodeServerFailure)
+				ans.Answer = nil
+				ans.Extra = nil
+				ans.Ns = nil
 			}
 		}
 
@@ -647,6 +643,13 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
 			soa := r.findSoa(nsResp)
 			if soa != nil {
+				dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+				if !dnssec {
+					soa.SetRcode(soa, dns.RcodeServerFailure)
+					soa.Answer = nil
+					soa.Extra = nil
+					soa.Ns = nil
+				}
 				r.ansCache.Set(cacheKey, soa)
 				return soa, nil
 			}
@@ -714,6 +717,14 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 		soa := r.findSoa(ans)
 		if soa != nil {
+			dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+			if !dnssec {
+				soa.SetRcode(soa, dns.RcodeServerFailure)
+				soa.Answer = nil
+				soa.Extra = nil
+				soa.Ns = nil
+			}
+
 			r.ansCache.Set(cacheKey, soa)
 			return soa, nil
 		}
