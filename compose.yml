@@ -6,7 +6,5 @@ services:
     # port mappings doesn't work with ipv6
     network_mode: host
     volumes:
-      - data:/var/lib/pigdns
+      - ./data:/data
       - ./default.yaml:/etc/pigdns.yaml 
-volumes:
-  data:

@@ -10,15 +10,23 @@
 * Automagic Let's Encrypt certificate management for the handled domain and DOH (using the DNS01 challenge)
 * Special cases handling using a standard zone file
 
-## Setup
+## Getting started
+
 
 ```sh
 docker compose up -d
 ```
 
-Delegate a subdomain to pigdns.
+This brings up a local full recursor whit a blocklist enabled
 
-### Example:
+You can already query it with:
+
+```sh
+$ dig @127.0.0.1 google.com
+```
+
+
+### Example: Delegate a subdomain to pigdns.
 
 Delegate `pig.yourdomain.io.` On your domain nameserver:
 
