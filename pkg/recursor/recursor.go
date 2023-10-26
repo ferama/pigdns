@@ -105,16 +105,12 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans, err := r.resolve(ctx, req, isIPV6)
 
 		if err == nil {
-			isSOA := r.findSoa(ans) != nil
-
-			if !isSOA {
-				dsok := r.verifyDS(ctx, q, isIPV6)
-				if !dsok {
-					ans.SetRcode(ans, dns.RcodeServerFailure)
-					ans.Answer = nil
-					ans.Extra = nil
-					ans.Ns = nil
-				}
+			dsok := r.verifyDS(ctx, q, isIPV6)
+			if !dsok {
+				ans.SetRcode(ans, dns.RcodeServerFailure)
+				ans.Answer = nil
+				ans.Extra = nil
+				ans.Ns = nil
 			}
 		}
 
@@ -176,6 +172,16 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
 			}
+
+			nsec3Set := utils.MsgExtractByType(dsans, dns.TypeNSEC3, "")
+			if len(nsec3Set) > 0 {
+				secerr := nsecVerifyNODATA(dsans, nsec3Set)
+				if secerr != nil {
+					log.Error().Msg(secerr.Error())
+					return false
+				}
+			}
+
 			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
 
 			if len(dss) == 0 {
@@ -632,11 +638,18 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return cached, nil
 	}
 
-	resp, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
+	nsResp, servers, err := r.resolveNS(ctx, req, isIPV6, 0)
 	if err != nil {
-		if err == errNoNSfound && resp != nil && len(resp.Ns) > 0 {
-			soa := r.findSoa(resp)
+		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
+			soa := r.findSoa(nsResp)
 			if soa != nil {
+				dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+				if !dnssec {
+					soa.SetRcode(soa, dns.RcodeServerFailure)
+					soa.Answer = nil
+					soa.Extra = nil
+					soa.Ns = nil
+				}
 				r.ansCache.Set(cacheKey, soa)
 				return soa, nil
 			}
@@ -704,6 +717,14 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 		soa := r.findSoa(ans)
 		if soa != nil {
+			dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+			if !dnssec {
+				soa.SetRcode(soa, dns.RcodeServerFailure)
+				soa.Answer = nil
+				soa.Extra = nil
+				soa.Ns = nil
+			}
+
 			r.ansCache.Set(cacheKey, soa)
 			return soa, nil
 		}
@@ -788,6 +809,21 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		ans.Answer = nil
 		ans.Extra = nil
 		ans.Ns = nil
+	}
+
+	if nsResp != nil {
+		soa := r.findSoa(nsResp)
+		if soa == nil {
+			nsec3Set := utils.MsgExtractByType(nsResp, dns.TypeNSEC3, "")
+			if len(nsec3Set) > 0 && len(nsResp.Ns) > 0 {
+				secerr := nsecVerifyDelegation(nsResp.Ns[0].Header().Name, nsec3Set)
+				if secerr != nil {
+					return nil, secerr
+				}
+				log.Debug().
+					Msg("[dnssec] NSEC3 verified")
+			}
+		}
 	}
 
 	r.ansCache.Set(cacheKey, ans)
