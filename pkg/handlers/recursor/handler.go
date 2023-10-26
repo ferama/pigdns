@@ -7,6 +7,7 @@ import (
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/recursor"
 	"github.com/ferama/pigdns/pkg/utils"
+	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,13 +33,22 @@ func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int64) *h
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
 	if err != nil {
-		log.Err(err).
+		log.Error().
 			Str("query", r.Name()).
 			Str("type", r.Type()).
+			Str("err", err.Error()).
 			Msg("recursor error")
 
 		h.Next.ServeDNS(c, r)
 		return
+	}
+
+	if m.Rcode != dns.RcodeSuccess {
+		log.Error().
+			Str("query", r.Name()).
+			Str("type", r.Type()).
+			Str("rcode", dns.RcodeToString[m.Rcode]).
+			Msg("query error")
 	}
 
 	if len(m.Answer) != 0 || len(m.Ns) != 0 {
