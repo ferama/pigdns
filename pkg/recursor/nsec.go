@@ -5,7 +5,6 @@ import (
 
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -56,6 +55,9 @@ func nsecGetDnameTarget(msg *dns.Msg) string {
 
 func nsecVerifyNODATA(msg *dns.Msg) error {
 	nsec := utils.MsgExtractByType(msg, dns.TypeNSEC3, "")
+	if len(nsec) == 0 {
+		return nil
+	}
 
 	q := msg.Question[0]
 	qname := q.Name
@@ -124,10 +126,10 @@ func nsecFindCoverer(name string, nsec []dns.RR) ([]uint16, bool, error) {
 	return nil, false, errNSECMissingCoverage
 }
 
-func nsecVerifyNameServer(nsfqdn string, nsec []dns.RR) error {
-	types, err := nsecFindMatching(nsfqdn, nsec)
+func nsecVerifyDelegation(delegation string, nsec []dns.RR) error {
+	types, err := nsecFindMatching(delegation, nsec)
 	if err != nil {
-		ce, nc := nsecFindClosestEncloser(nsfqdn, nsec)
+		ce, nc := nsecFindClosestEncloser(delegation, nsec)
 		if ce == "" {
 			return errNSECMissingCoverage
 		}
@@ -147,24 +149,4 @@ func nsecVerifyNameServer(nsfqdn string, nsec []dns.RR) error {
 		return errNSECBadDelegation
 	}
 	return nil
-}
-
-func nsecCheck(ans *dns.Msg, server *authServers) error {
-	nsec3Set := utils.MsgExtractByType(ans, dns.TypeNSEC3, "")
-	if len(nsec3Set) == 0 {
-		log.Debug().
-			Msg("[dnssec] NSEC3 verified")
-		return nil
-	}
-	for _, s := range server.List {
-		err := nsecVerifyNameServer(s.Fqdn, nsec3Set)
-		if err != nil {
-			return err
-		}
-	}
-
-	log.Debug().
-		Msg("[dnssec] NSEC3 verified")
-	return nil
-
 }
