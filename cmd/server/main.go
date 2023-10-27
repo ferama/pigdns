@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/certman"
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/server"
 	"github.com/ferama/pigdns/pkg/utils"
@@ -133,6 +134,8 @@ var rootCmd = &cobra.Command{
 				wg.Done()
 			}()
 		}
+
+		go metrics.RunServer()
 
 		wg.Wait()
 	},

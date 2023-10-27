@@ -55,6 +55,8 @@ type Recursor struct {
 	rootkeys []dns.RR
 
 	oneInFlight *oneinflight.OneInFlight
+
+	metricsMU sync.Mutex
 }
 
 func New(datadir string, cacheSize int64) *Recursor {
@@ -89,11 +91,37 @@ func (r *Recursor) newContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, recursorContextKey, cc)
 }
 
+func (r *Recursor) cacheHit(ctx context.Context) {
+	r.metricsMU.Lock()
+	defer r.metricsMU.Unlock()
+
+	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.CacheHits++
+}
+func (r *Recursor) cacheMiss(ctx context.Context) {
+	r.metricsMU.Lock()
+	defer r.metricsMU.Unlock()
+
+	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.CacheMiss++
+}
+
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	ctx = r.newContext(ctx)
 
 	q := req.Question[0]
 	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+
+	cached, cacheErr := r.ansCache.Get(reqKey)
+	if cacheErr == nil {
+		r.cacheHit(ctx)
+		ans := r.cleanMsg(cached, req)
+
+		pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+		pc.Rcode = ans.Rcode
+		return ans, nil
+	}
+	r.cacheMiss(ctx)
 
 	// run the query (only once concurrently
 	// against the upstream nameservers)
@@ -127,6 +155,8 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	ans = r.cleanMsg(ans, req)
+	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.Rcode = ans.Rcode
 	return ans, nil
 }
 
@@ -770,7 +800,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// run a new query here to solve the CNAME
 				// TODO: this one easily escape the blocklist.
 				// it should traverse all the chain
-				resp, err := r.Query(context.TODO(), newReq, isIPV6)
+				// resp, err := r.Query(context.TODO(), newReq, isIPV6)
+				resp, err := r.resolve(r.newContext(ctx), newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
