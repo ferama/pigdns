@@ -28,14 +28,12 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	totalLatency := time.Since(cc.StartTime)
 
 	isDOH := false
-	cacheHits := 0
-	cacheMiss := 0
+	cacheHit := false
 	rcode := 0
 	if c.Value(pigdns.PigContextKey) != nil {
 		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
 		isDOH = pc.IsDOH
-		cacheHits = pc.CacheHits
-		cacheMiss = pc.CacheMiss
+		cacheHit = pc.CacheHit
 		rcode = pc.Rcode
 	}
 
@@ -57,15 +55,18 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 			Str("protocol", r.Proto()).
 			Bool("isDOH", isDOH).
-			Bool("cacheHit", cacheHits > 0).
+			Bool("cacheHit", cacheHit).
 			Str("answerFrom", cc.AnweredBy).
 			Str("client", r.IP())
 	}
 
 	event.Send()
 
-	metrics.Instance().QueriesProcessedCacheHit.Add(float64(cacheHits))
-	metrics.Instance().QueriesProcessedNoCache.Add(float64(cacheMiss))
+	if cacheHit {
+		metrics.Instance().QueriesProcessedCacheHit.Inc()
+	} else {
+		metrics.Instance().QueriesProcessedCacheMiss.Inc()
+	}
 
 	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
 

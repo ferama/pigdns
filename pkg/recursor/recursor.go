@@ -91,21 +91,6 @@ func (r *Recursor) newContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, recursorContextKey, cc)
 }
 
-func (r *Recursor) cacheHit(ctx context.Context) {
-	r.metricsMU.Lock()
-	defer r.metricsMU.Unlock()
-
-	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-	pc.CacheHits++
-}
-func (r *Recursor) cacheMiss(ctx context.Context) {
-	r.metricsMU.Lock()
-	defer r.metricsMU.Unlock()
-
-	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-	pc.CacheMiss++
-}
-
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	ctx = r.newContext(ctx)
 
@@ -114,14 +99,13 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 	cached, cacheErr := r.ansCache.Get(reqKey)
 	if cacheErr == nil {
-		r.cacheHit(ctx)
 		ans := r.cleanMsg(cached, req)
 
 		pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
 		pc.Rcode = ans.Rcode
+		pc.CacheHit = true
 		return ans, nil
 	}
-	r.cacheMiss(ctx)
 
 	// run the query (only once concurrently
 	// against the upstream nameservers)

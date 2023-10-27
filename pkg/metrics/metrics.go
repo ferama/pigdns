@@ -24,8 +24,8 @@ func Instance() *metrics {
 type metrics struct {
 	CounterByRcode map[int]prometheus.Counter
 
-	QueriesProcessedNoCache  prometheus.Counter
-	QueriesProcessedCacheHit prometheus.Counter
+	QueriesProcessedCacheHit  prometheus.Counter
+	QueriesProcessedCacheMiss prometheus.Counter
 
 	QueryLatency prometheus.Histogram
 }
@@ -34,22 +34,21 @@ func newMetrics() *metrics {
 	m := &metrics{
 		CounterByRcode: make(map[int]prometheus.Counter),
 
-		QueriesProcessedNoCache: promauto.NewCounter(prometheus.CounterOpts{
+		QueriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "hit"},
 		}),
 
-		QueriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
+		QueriesProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "miss"},
 		}),
 
 		QueryLatency: promauto.NewHistogram(prometheus.HistogramOpts{
-			Name:    "pigdns_latency",
-			Help:    "Request latency",
-			Buckets: []float64{0.2, 0.5, 3},
+			Name: "pigdns_latency",
+			Help: "Request latency",
 		}),
 	}
 
