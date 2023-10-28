@@ -8,7 +8,10 @@ import (
 )
 
 func RunServer() {
-	log.Info().Msg("metrics on ':9090/metrics'")
+	log.Info().Msg("metrics on ':8080/metrics'")
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":9090", nil)
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
 }
