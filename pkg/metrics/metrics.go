@@ -21,6 +21,34 @@ func Instance() *metrics {
 	return instance
 }
 
+// for tests that attempts to register metrics more than once
+func Reset() {
+	m := Instance()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for k, v := range m.cacheSize {
+		prometheus.DefaultRegisterer.Unregister(v)
+		delete(m.cacheSize, k)
+	}
+
+	for k, v := range m.cacheCapacity {
+		prometheus.DefaultRegisterer.Unregister(v)
+		delete(m.cacheCapacity, k)
+	}
+
+	for k, v := range m.CounterByRcode {
+		prometheus.DefaultRegisterer.Unregister(v)
+		delete(m.CounterByRcode, k)
+	}
+
+	prometheus.DefaultRegisterer.Unregister(m.QueriesProcessedCacheHit)
+	prometheus.DefaultRegisterer.Unregister(m.QueriesProcessedCacheMiss)
+
+	prometheus.DefaultRegisterer.Unregister(m.QueriesBlocked)
+	prometheus.DefaultRegisterer.Unregister(m.QueryLatency)
+}
+
 type metrics struct {
 	mu sync.Mutex
 

@@ -4,18 +4,25 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ferama/pigdns/pkg/metrics"
+	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 )
 
-func TestQuery(t *testing.T) {
+func testCtx() context.Context {
+	metrics.Reset()
 
+	return context.WithValue(context.Background(), pigdns.PigContextKey, &pigdns.PigContext{})
+}
+
+func TestQuery(t *testing.T) {
 	recursor := New(t.TempDir(), 1024*100)
 
 	fqdn := dns.Fqdn("example.com")
 	req := new(dns.Msg)
 	req.SetQuestion(fqdn, dns.TypeA)
-	ans, err := recursor.Query(context.TODO(), req, false)
+	ans, err := recursor.Query(testCtx(), req, false)
 	if err != nil {
 		t.Fail()
 	}
@@ -39,7 +46,7 @@ func TestBadDNSSEC(t *testing.T) {
 		fqdn := dns.Fqdn(site)
 		req := new(dns.Msg)
 		req.SetQuestion(fqdn, dns.TypeA)
-		ans, err := recursor.Query(context.TODO(), req, false)
+		ans, err := recursor.Query(testCtx(), req, false)
 		if err != nil {
 			t.Fail()
 		}
@@ -50,6 +57,7 @@ func TestBadDNSSEC(t *testing.T) {
 }
 
 func TestGoodDNSSEC(t *testing.T) {
+
 	recursor := New(t.TempDir(), 1024*100)
 
 	sites := []string{
@@ -61,7 +69,7 @@ func TestGoodDNSSEC(t *testing.T) {
 		fqdn := dns.Fqdn(site)
 		req := new(dns.Msg)
 		req.SetQuestion(fqdn, dns.TypeA)
-		ans, err := recursor.Query(context.TODO(), req, false)
+		ans, err := recursor.Query(testCtx(), req, false)
 		if err != nil {
 			t.Fail()
 		}
