@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/oneinflight"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
@@ -46,6 +47,9 @@ const (
 	// count cannot be greater than resolverMaxLevel
 	resolverMaxLevel = 24
 	// resolverMaxLevel = 16
+
+	ansCacheName = "anscache"
+	nsCacheName  = "nscache"
 )
 
 type Recursor struct {
@@ -55,19 +59,23 @@ type Recursor struct {
 	rootkeys []dns.RR
 
 	oneInFlight *oneinflight.OneInFlight
-
-	metricsMU sync.Mutex
 }
 
 func New(datadir string, cacheSize int64) *Recursor {
-	ipCacheSize := int64(cacheSize * 75 / 100)
+	ansCacheSize := int64(cacheSize * 75 / 100)
 	nsCacheSize := int64(cacheSize * 25 / 100)
 
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), "ipcache", ipCacheSize),
-		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache", nsCacheSize),
+		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), ansCacheName, ansCacheSize),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, nsCacheSize),
 	}
+
+	metrics.Instance().RegisterCache(ansCacheName)
+	metrics.Instance().RegisterCache(nsCacheName)
+
+	metrics.Instance().GetCacheCapacityMetric(ansCacheName).Set(float64(ansCacheSize))
+	metrics.Instance().GetCacheCapacityMetric(nsCacheName).Set(float64(nsCacheSize))
 
 	r.rootkeys = []dns.RR{}
 	for _, k := range rootKeys {

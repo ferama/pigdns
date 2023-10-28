@@ -22,6 +22,11 @@ func Instance() *metrics {
 }
 
 type metrics struct {
+	mu sync.Mutex
+
+	cacheSize     map[string]prometheus.Gauge
+	cacheCapacity map[string]prometheus.Gauge
+
 	CounterByRcode map[int]prometheus.Counter
 
 	QueriesProcessedCacheHit  prometheus.Counter
@@ -33,6 +38,8 @@ type metrics struct {
 func newMetrics() *metrics {
 	m := &metrics{
 		CounterByRcode: make(map[int]prometheus.Counter),
+		cacheSize:      make(map[string]prometheus.Gauge),
+		cacheCapacity:  make(map[string]prometheus.Gauge),
 
 		QueriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_processed_total",
@@ -54,6 +61,43 @@ func newMetrics() *metrics {
 
 	m.rcodeMetrics()
 	return m
+}
+
+func (m *metrics) RegisterCache(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cacheSize[name] = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:        "pigdns_cache_size",
+		Help:        "Cache size in bytes",
+		ConstLabels: prometheus.Labels{"cache": name},
+	})
+
+	m.cacheCapacity[name] = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:        "pigdns_cache_capacity",
+		Help:        "Cache size in bytes",
+		ConstLabels: prometheus.Labels{"cache": name},
+	})
+}
+
+func (m *metrics) GetCacheSizeMetric(name string) prometheus.Gauge {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.cacheSize[name]; ok {
+		return m.cacheSize[name]
+	}
+	return nil
+}
+
+func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.cacheCapacity[name]; ok {
+		return m.cacheCapacity[name]
+	}
+	return nil
 }
 
 func (m *metrics) rcodeMetrics() {

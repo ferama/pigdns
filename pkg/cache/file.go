@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/worker"
 
@@ -109,6 +110,11 @@ func (c *FileCache) getCacheSize() uint64 {
 	for i = 0; i <= cacheNumBuckets; i++ {
 		bucket := c.buckets[i]
 		size += c.getBucketSize(bucket)
+	}
+
+	m := metrics.Instance().GetCacheSizeMetric(c.name)
+	if m != nil {
+		m.Set(float64(size))
 	}
 
 	return size
