@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/ferama/pigdns/pkg/handlers/collector"
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/miekg/dns"
 )
@@ -125,6 +126,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	}
 
 	if !allowed {
+		metrics.Instance().QueriesBlocked.Inc()
 		log.Printf("[blocklist] domain '%s' is not allowed", r.Name())
 		if c.Value(collector.CollectorContextKey) != nil {
 			cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)

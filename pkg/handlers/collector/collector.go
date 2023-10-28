@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,11 +28,13 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	totalLatency := time.Since(cc.StartTime)
 
 	isDOH := false
+	cacheHit := false
+	rcode := 0
 	if c.Value(pigdns.PigContextKey) != nil {
 		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-		if pc.IsDOH {
-			isDOH = true
-		}
+		isDOH = pc.IsDOH
+		cacheHit = pc.CacheHit
+		rcode = pc.Rcode
 	}
 
 	isDOHproxy := cc.AnweredBy == "doh-proxy"
@@ -52,12 +55,22 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 			Str("protocol", r.Proto()).
 			Bool("isDOH", isDOH).
+			Bool("cacheHit", cacheHit).
 			Str("answerFrom", cc.AnweredBy).
 			Str("client", r.IP())
 	}
 
 	event.Send()
 
+	if cacheHit {
+		metrics.Instance().QueriesProcessedCacheHit.Inc()
+	} else {
+		metrics.Instance().QueriesProcessedCacheMiss.Inc()
+	}
+
+	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
+
+	metrics.Instance().CounterByRcode[rcode].Inc()
 }
 
 func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/oneinflight"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
@@ -46,6 +47,9 @@ const (
 	// count cannot be greater than resolverMaxLevel
 	resolverMaxLevel = 24
 	// resolverMaxLevel = 16
+
+	ansCacheName = "anscache"
+	nsCacheName  = "nscache"
 )
 
 type Recursor struct {
@@ -58,14 +62,20 @@ type Recursor struct {
 }
 
 func New(datadir string, cacheSize int64) *Recursor {
-	ipCacheSize := int64(cacheSize * 75 / 100)
+	ansCacheSize := int64(cacheSize * 75 / 100)
 	nsCacheSize := int64(cacheSize * 25 / 100)
 
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), "ipcache", ipCacheSize),
-		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), "nscache", nsCacheSize),
+		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), ansCacheName, ansCacheSize),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, nsCacheSize),
 	}
+
+	metrics.Instance().RegisterCache(ansCacheName)
+	metrics.Instance().RegisterCache(nsCacheName)
+
+	metrics.Instance().GetCacheCapacityMetric(ansCacheName).Set(float64(ansCacheSize))
+	metrics.Instance().GetCacheCapacityMetric(nsCacheName).Set(float64(nsCacheSize))
 
 	r.rootkeys = []dns.RR{}
 	for _, k := range rootKeys {
@@ -94,6 +104,16 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 	q := req.Question[0]
 	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
+
+	cached, cacheErr := r.ansCache.Get(reqKey)
+	if cacheErr == nil {
+		ans := r.cleanMsg(cached, req)
+
+		pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+		pc.Rcode = ans.Rcode
+		pc.CacheHit = true
+		return ans, nil
+	}
 
 	// run the query (only once concurrently
 	// against the upstream nameservers)
@@ -127,6 +147,8 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 
 	ans = r.cleanMsg(ans, req)
+	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.Rcode = ans.Rcode
 	return ans, nil
 }
 
@@ -770,7 +792,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// run a new query here to solve the CNAME
 				// TODO: this one easily escape the blocklist.
 				// it should traverse all the chain
-				resp, err := r.Query(context.TODO(), newReq, isIPV6)
+				// resp, err := r.Query(context.TODO(), newReq, isIPV6)
+				resp, err := r.resolve(r.newContext(ctx), newReq, isIPV6)
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}

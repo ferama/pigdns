@@ -11,12 +11,15 @@ type contextKey string
 const PigContextKey contextKey = "pig-context"
 
 type PigContext struct {
-	IsDOH bool
+	IsDOH    bool
+	CacheHit bool
+	Rcode    int
 }
 
 func newContext(w dns.ResponseWriter, m *dns.Msg, isDOH bool) context.Context {
 	ctx := context.WithValue(context.Background(), PigContextKey, &PigContext{
-		IsDOH: isDOH,
+		IsDOH:    isDOH,
+		CacheHit: false,
 	})
 
 	return ctx
