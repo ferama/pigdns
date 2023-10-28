@@ -32,6 +32,8 @@ type metrics struct {
 	QueriesProcessedCacheHit  prometheus.Counter
 	QueriesProcessedCacheMiss prometheus.Counter
 
+	QueriesBlocked prometheus.Counter
+
 	QueryLatency prometheus.Histogram
 }
 
@@ -51,6 +53,11 @@ func newMetrics() *metrics {
 			Name:        "pigdns_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "miss"},
+		}),
+
+		QueriesBlocked: promauto.NewCounter(prometheus.CounterOpts{
+			Name: "pigdns_blocked_counter",
+			Help: "Total blocked queries",
 		}),
 
 		QueryLatency: promauto.NewHistogram(prometheus.HistogramOpts{
