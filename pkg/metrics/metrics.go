@@ -37,6 +37,11 @@ func Reset() {
 		delete(m.cacheCapacity, k)
 	}
 
+	for k, v := range m.cacheItems {
+		prometheus.DefaultRegisterer.Unregister(v)
+		delete(m.cacheItems, k)
+	}
+
 	for k, v := range m.CounterByRcode {
 		prometheus.DefaultRegisterer.Unregister(v)
 		delete(m.CounterByRcode, k)
@@ -54,6 +59,7 @@ type metrics struct {
 
 	cacheSize     map[string]prometheus.Gauge
 	cacheCapacity map[string]prometheus.Gauge
+	cacheItems    map[string]prometheus.Gauge
 
 	CounterByRcode map[int]prometheus.Counter
 
@@ -70,26 +76,27 @@ func newMetrics() *metrics {
 		CounterByRcode: make(map[int]prometheus.Counter),
 		cacheSize:      make(map[string]prometheus.Gauge),
 		cacheCapacity:  make(map[string]prometheus.Gauge),
+		cacheItems:     make(map[string]prometheus.Gauge),
 
 		QueriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
-			Name:        "pigdns_processed_total",
+			Name:        "pigdns_query_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "hit"},
 		}),
 
 		QueriesProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
-			Name:        "pigdns_processed_total",
+			Name:        "pigdns_query_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "miss"},
 		}),
 
 		QueriesBlocked: promauto.NewCounter(prometheus.CounterOpts{
-			Name: "pigdns_blocked_counter",
+			Name: "pigdns_query_blocked_total",
 			Help: "Total blocked queries",
 		}),
 
 		QueryLatency: promauto.NewHistogram(prometheus.HistogramOpts{
-			Name: "pigdns_latency",
+			Name: "pigdns_query_latency",
 			Help: "Request latency",
 		}),
 	}
@@ -103,14 +110,20 @@ func (m *metrics) RegisterCache(name string) {
 	defer m.mu.Unlock()
 
 	m.cacheSize[name] = promauto.NewGauge(prometheus.GaugeOpts{
-		Name:        "pigdns_cache_size",
+		Name:        "pigdns_cache_size_bytes",
 		Help:        "Cache size in bytes",
 		ConstLabels: prometheus.Labels{"cache": name},
 	})
 
 	m.cacheCapacity[name] = promauto.NewGauge(prometheus.GaugeOpts{
-		Name:        "pigdns_cache_capacity",
+		Name:        "pigdns_cache_capacity_bytes",
 		Help:        "Cache size in bytes",
+		ConstLabels: prometheus.Labels{"cache": name},
+	})
+
+	m.cacheItems[name] = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:        "pigdns_cached_items_count",
+		Help:        "Cache items count",
 		ConstLabels: prometheus.Labels{"cache": name},
 	})
 }
@@ -135,10 +148,20 @@ func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {
 	return nil
 }
 
+func (m *metrics) GetCacheItemsCountMetric(name string) prometheus.Gauge {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.cacheItems[name]; ok {
+		return m.cacheItems[name]
+	}
+	return nil
+}
+
 func (m *metrics) rcodeMetrics() {
 	for k, r := range dns.RcodeToString {
 		m.CounterByRcode[k] = promauto.NewCounter(prometheus.CounterOpts{
-			Name:        "pigdns_rcode_counter",
+			Name:        "pigdns_query_rcode_counter",
 			Help:        "Counter by rcode",
 			ConstLabels: prometheus.Labels{"rcode": r},
 		})

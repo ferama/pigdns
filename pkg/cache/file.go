@@ -107,14 +107,21 @@ func (c *FileCache) getBucketSize(bucket *bucket) uint64 {
 func (c *FileCache) getCacheSize() uint64 {
 	var i, size uint64
 	size = 0
+	itemsCount := 0
 	for i = 0; i <= cacheNumBuckets; i++ {
 		bucket := c.buckets[i]
 		size += c.getBucketSize(bucket)
+		itemsCount += len(bucket.data)
 	}
 
 	m := metrics.Instance().GetCacheSizeMetric(c.name)
 	if m != nil {
 		m.Set(float64(size))
+	}
+
+	m = metrics.Instance().GetCacheItemsCountMetric(c.name)
+	if m != nil {
+		m.Set(float64(itemsCount))
 	}
 
 	return size
@@ -126,6 +133,8 @@ func (c *FileCache) setupJobs() {
 	go func() {
 		for {
 			time.Sleep(cacheExpiredCheckInterval)
+
+			c.getCacheSize()
 
 			// t := time.Now()
 			// log.Printf("[%s cache] expire job started", c.name)
