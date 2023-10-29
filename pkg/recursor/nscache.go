@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
+	"github.com/ferama/pigdns/pkg/metrics"
 )
 
 type nsCacheItem struct {
@@ -62,6 +63,8 @@ func (c *nsCache) Set(as *authServers) error {
 		Data: packed.Bytes(),
 	}
 	i.SetTTL(time.Duration(ttl) * time.Second)
+
+	metrics.Instance().QueryCacheMiss()
 	// log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
 	return c.cache.Set(key, i)
 }
@@ -84,5 +87,6 @@ func (c *nsCache) Get(zone string) (*authServers, error) {
 	as.Zone = nsItem.Zone
 	// log.Printf("[%s get] zone=%s", c.name, as.Zone)
 
+	metrics.Instance().QueryCacheHit()
 	return &as, nil
 }

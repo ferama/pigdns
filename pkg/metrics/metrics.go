@@ -24,8 +24,8 @@ func Instance() *metrics {
 // for tests that attempts to register metrics more than once
 func Reset() {
 	m := Instance()
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	for k, v := range m.cacheSize {
 		prometheus.DefaultRegisterer.Unregister(v)
@@ -47,15 +47,15 @@ func Reset() {
 		delete(m.CounterByRcode, k)
 	}
 
-	prometheus.DefaultRegisterer.Unregister(m.QueriesProcessedCacheHit)
-	prometheus.DefaultRegisterer.Unregister(m.QueriesProcessedCacheMiss)
+	prometheus.DefaultRegisterer.Unregister(m.queriesProcessedCacheHit)
+	prometheus.DefaultRegisterer.Unregister(m.queriesProcessedCacheMiss)
 
 	prometheus.DefaultRegisterer.Unregister(m.QueriesBlocked)
 	prometheus.DefaultRegisterer.Unregister(m.QueryLatency)
 }
 
 type metrics struct {
-	mu sync.Mutex
+	sync.RWMutex
 
 	cacheSize     map[string]prometheus.Gauge
 	cacheCapacity map[string]prometheus.Gauge
@@ -63,8 +63,8 @@ type metrics struct {
 
 	CounterByRcode map[int]prometheus.Counter
 
-	QueriesProcessedCacheHit  prometheus.Counter
-	QueriesProcessedCacheMiss prometheus.Counter
+	queriesProcessedCacheHit  prometheus.Counter
+	queriesProcessedCacheMiss prometheus.Counter
 
 	QueriesBlocked prometheus.Counter
 
@@ -78,13 +78,13 @@ func newMetrics() *metrics {
 		cacheCapacity:  make(map[string]prometheus.Gauge),
 		cacheItems:     make(map[string]prometheus.Gauge),
 
-		QueriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
+		queriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_query_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "hit"},
 		}),
 
-		QueriesProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
+		queriesProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_query_processed_total",
 			Help:        "The total number of processed events",
 			ConstLabels: prometheus.Labels{"cache": "miss"},
@@ -106,8 +106,8 @@ func newMetrics() *metrics {
 }
 
 func (m *metrics) RegisterCache(name string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	m.cacheSize[name] = promauto.NewGauge(prometheus.GaugeOpts{
 		Name:        "pigdns_cache_size_bytes",
@@ -128,9 +128,23 @@ func (m *metrics) RegisterCache(name string) {
 	})
 }
 
+func (m *metrics) QueryCacheHit() {
+	m.Lock()
+	defer m.Unlock()
+
+	m.queriesProcessedCacheHit.Inc()
+}
+
+func (m *metrics) QueryCacheMiss() {
+	m.Lock()
+	defer m.Unlock()
+
+	m.queriesProcessedCacheMiss.Inc()
+}
+
 func (m *metrics) GetCacheSizeMetric(name string) prometheus.Gauge {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if _, ok := m.cacheSize[name]; ok {
 		return m.cacheSize[name]
@@ -139,8 +153,8 @@ func (m *metrics) GetCacheSizeMetric(name string) prometheus.Gauge {
 }
 
 func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if _, ok := m.cacheCapacity[name]; ok {
 		return m.cacheCapacity[name]
@@ -149,8 +163,8 @@ func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {
 }
 
 func (m *metrics) GetCacheItemsCountMetric(name string) prometheus.Gauge {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if _, ok := m.cacheItems[name]; ok {
 		return m.cacheItems[name]

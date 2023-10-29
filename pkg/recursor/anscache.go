@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ferama/pigdns/pkg/cache"
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 )
@@ -44,6 +45,8 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
 	// log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
+
+	metrics.Instance().QueryCacheMiss()
 	return c.cache.Set(key, i)
 }
 
@@ -76,6 +79,7 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		a.Header().Ttl = ttl
 	}
 
+	metrics.Instance().QueryCacheHit()
 	// log.Printf("[%s get] key=%s", c.name, key)
 	return msg, nil
 }

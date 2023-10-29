@@ -55,18 +55,12 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 			Str("protocol", r.Proto()).
 			Bool("isDOH", isDOH).
-			Bool("cacheHit", cacheHit).
+			Bool("cached", cacheHit).
 			Str("answerFrom", cc.AnweredBy).
 			Str("client", r.IP())
 	}
 
 	event.Send()
-
-	if cacheHit {
-		metrics.Instance().QueriesProcessedCacheHit.Inc()
-	} else {
-		metrics.Instance().QueriesProcessedCacheMiss.Inc()
-	}
 
 	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
 
