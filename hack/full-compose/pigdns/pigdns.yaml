@@ -1,0 +1,20 @@
+dataDir: "/data"
+
+logLevel: "info"
+
+netListener:
+  enabled: true
+  address: ":53"
+
+recursor:
+  enabled: true
+  # by default the recursor is served on DOH only
+  serveOnUDP: true
+  allowedNets:
+    - 0.0.0.0/0
+    - ::/0
+  cacheSize: 10MB
+  blockLists:
+    - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
+  whiteLists:
+    - /data/whitelist

@@ -1,0 +1,47 @@
+services:
+  pigdns:
+    restart: always
+    image: ghcr.io/ferama/pigdns:main
+    container_name: pigdns
+    network_mode: host
+    volumes:
+      - ./pigdns/data:/data
+      - ./pigdns/whitelist:/data/whitelist
+      - ./pigdns/pigdns.yaml:/etc/pigdns.yaml
+  
+  node-exporter:
+    restart: unless-stopped
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    network_mode: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  prometheus:
+    restart: unless-stopped
+    image: prom/prometheus
+    container_name: prometheus
+    network_mode: host
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  
+  grafana:
+    restart: unless-stopped
+    image: ghcr.io/ferama/grafana:v10.2.0
+    container_name: grafana
+    network_mode: host
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-storage:/var/lib/grafana
+
+
+volumes:
+  grafana-storage:
