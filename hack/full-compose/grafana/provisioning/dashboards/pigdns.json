@@ -61,7 +61,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
+  "id": 4,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -81,7 +81,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus_datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -138,8 +138,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 12,
+        "h": 7,
+        "w": 8,
         "x": 0,
         "y": 1
       },
@@ -163,7 +163,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(pigdns_query_blocked_total)",
+          "expr": "rate(pigdns_query_blocked_total[3m])",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -175,7 +175,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(pigdns_query_processed_total)",
+          "expr": "sum(rate(pigdns_query_processed_total[3m]))",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -187,9 +187,102 @@
       "type": "timeseries"
     },
     {
+      "datasource": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "right",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "pigdns_query_latency_sum / pigdns_query_latency_count",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Avg Latency",
+      "type": "timeseries"
+    },
+    {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "prometheus_datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -247,12 +340,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
+        "h": 7,
+        "w": 8,
+        "x": 16,
         "y": 1
       },
-      "id": 6,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [],
@@ -269,17 +362,17 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "prometheus_datasource"
           },
           "editorMode": "code",
-          "expr": "pigdns_query_latency_sum / pigdns_query_latency_count",
+          "expr": "sum (\n  increase(\n    pigdns_query_latency_bucket[$__interval]\n  )\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Avg Latency",
+      "title": "Query Latency",
       "type": "timeseries"
     },
     {
@@ -288,7 +381,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 8
       },
       "id": 2,
       "panels": [],
@@ -296,10 +389,7 @@
       "type": "row"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -358,7 +448,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 9
       },
       "id": 1,
       "options": {
@@ -391,10 +481,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -415,7 +502,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 8
+        "y": 9
       },
       "id": 3,
       "options": {
@@ -462,10 +549,7 @@
       "type": "piechart"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -494,7 +578,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 8
+        "y": 9
       },
       "id": 5,
       "options": {
@@ -542,8 +626,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "PigDNS",
-  "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
-  "version": 7,
+  "title": "PigDNS2",
+  "uid": "db201439-d8cf-44bc-a991-a0e92b9a05a2",
+  "version": 2,
   "weekStart": ""
 }
