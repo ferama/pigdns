@@ -11,11 +11,9 @@ import (
 	"sort"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/ferama/pigdns/pkg/metrics"
-	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/ferama/pigdns/pkg/worker"
 
 	"github.com/rs/zerolog/log"
@@ -41,7 +39,7 @@ type FileCache struct {
 	buckets map[uint64]*bucket
 	datadir string
 
-	maxMemorySize int64
+	maxItems int
 
 	name string
 
@@ -50,10 +48,10 @@ type FileCache struct {
 	dumpWorkerPool   *worker.Pool
 }
 
-func NewFileCache(datadir string, name string, size int64) *FileCache {
+func NewFileCache(datadir string, name string, size int) *FileCache {
 
 	// allow a minimum
-	memorySize := max(size, 1024*10)
+	memorySize := max(size, 1000)
 
 	// this worker are go routines that do jobs like check for record expiration,
 	// cache dumps to disk and so on
@@ -64,7 +62,7 @@ func NewFileCache(datadir string, name string, size int64) *FileCache {
 		buckets:          make(map[uint64]*bucket),
 		datadir:          datadir,
 		name:             name,
-		maxMemorySize:    memorySize,
+		maxItems:         memorySize,
 		expireWorkerPool: worker.NewPool(maxWorkers),
 		evictWorkerPool:  worker.NewPool(maxWorkers),
 		dumpWorkerPool:   worker.NewPool(maxWorkers),
@@ -88,43 +86,20 @@ func NewFileCache(datadir string, name string, size int64) *FileCache {
 	return cache
 }
 
-func (c *FileCache) getBucketSize(bucket *bucket) uint64 {
-	bucket.mu.RLock()
-	defer bucket.mu.RUnlock()
-
-	var size uint64
-	size = 0
-	size += uint64(unsafe.Sizeof(bucket))
-	size += uint64(unsafe.Sizeof(bucket.idx))
-	size += uint64(unsafe.Sizeof(bucket.mu))
-
-	for _, item := range bucket.data {
-		size += item.SizeOf()
-	}
-	return size
-}
-
-func (c *FileCache) getCacheSize() uint64 {
-	var i, size uint64
-	size = 0
+func (c *FileCache) getCacheSize() int {
+	var i uint64
 	itemsCount := 0
 	for i = 0; i <= cacheNumBuckets; i++ {
 		bucket := c.buckets[i]
-		size += c.getBucketSize(bucket)
 		itemsCount += len(bucket.data)
 	}
 
-	m := metrics.Instance().GetCacheSizeMetric(c.name)
-	if m != nil {
-		m.Set(float64(size))
-	}
-
-	m = metrics.Instance().GetCacheItemsCountMetric(c.name)
+	m := metrics.Instance().GetCacheItemsCountMetric(c.name)
 	if m != nil {
 		m.Set(float64(itemsCount))
 	}
 
-	return size
+	return itemsCount
 }
 
 func (c *FileCache) setupJobs() {
@@ -160,7 +135,7 @@ func (c *FileCache) setupJobs() {
 		for {
 			log.Debug().
 				Str("name", c.name).
-				Str("size", utils.ConverFromBytes(int64(c.getCacheSize()))).
+				Int("size", c.getCacheSize()).
 				Msg("[cache]")
 
 			time.Sleep(cacheEvictionInterval)
@@ -274,8 +249,8 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 	}
 	bucket.mu.Unlock()
 
-	maxBucketSize := uint64(c.maxMemorySize / cacheNumBuckets)
-	bucketSize := c.getBucketSize(bucket)
+	maxBucketSize := c.maxItems / cacheNumBuckets
+	bucketSize := len(bucket.data)
 
 	// if bucketSize is greater than maxBucketSize
 	// drop its size by half evicting the closest to expire items

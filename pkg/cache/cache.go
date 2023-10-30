@@ -2,7 +2,6 @@ package cache
 
 import (
 	"time"
-	"unsafe"
 )
 
 type Item struct {
@@ -14,12 +13,6 @@ type Item struct {
 // Sets the Expires field more conveniently
 func (i *Item) SetTTL(ttl time.Duration) {
 	i.Expires = time.Now().Add(ttl)
-}
-
-func (i *Item) SizeOf() uint64 {
-	return uint64(unsafe.Sizeof(i.Expires)) +
-		uint64(unsafe.Sizeof(i.Data)) +
-		uint64(unsafe.Sizeof(i))
 }
 
 type Cache interface {

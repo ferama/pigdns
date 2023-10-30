@@ -30,7 +30,7 @@ func BuildDOHProxyHandler(serverURI string, serverAddr string) pigdns.Handler {
 // starting from root NS
 func BuildRecursorHandler(
 	datadir string, allowedNets []string,
-	blocklists []string, whitelists []string, cacheSize int64) pigdns.Handler {
+	blocklists []string, whitelists []string, cacheSize int) pigdns.Handler {
 
 	var chain pigdns.Handler
 

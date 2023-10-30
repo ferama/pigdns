@@ -27,11 +27,6 @@ func Reset() {
 	m.Lock()
 	defer m.Unlock()
 
-	for k, v := range m.cacheSize {
-		prometheus.DefaultRegisterer.Unregister(v)
-		delete(m.cacheSize, k)
-	}
-
 	for k, v := range m.cacheCapacity {
 		prometheus.DefaultRegisterer.Unregister(v)
 		delete(m.cacheCapacity, k)
@@ -57,7 +52,6 @@ func Reset() {
 type metrics struct {
 	sync.RWMutex
 
-	cacheSize     map[string]prometheus.Gauge
 	cacheCapacity map[string]prometheus.Gauge
 	cacheItems    map[string]prometheus.Gauge
 
@@ -74,7 +68,6 @@ type metrics struct {
 func newMetrics() *metrics {
 	m := &metrics{
 		CounterByRcode: make(map[int]prometheus.Counter),
-		cacheSize:      make(map[string]prometheus.Gauge),
 		cacheCapacity:  make(map[string]prometheus.Gauge),
 		cacheItems:     make(map[string]prometheus.Gauge),
 
@@ -109,12 +102,6 @@ func (m *metrics) RegisterCache(name string) {
 	m.Lock()
 	defer m.Unlock()
 
-	m.cacheSize[name] = promauto.NewGauge(prometheus.GaugeOpts{
-		Name:        "pigdns_cache_size_bytes",
-		Help:        "Cache size in bytes",
-		ConstLabels: prometheus.Labels{"cache": name},
-	})
-
 	m.cacheCapacity[name] = promauto.NewGauge(prometheus.GaugeOpts{
 		Name:        "pigdns_cache_capacity_bytes",
 		Help:        "Cache size in bytes",
@@ -140,16 +127,6 @@ func (m *metrics) QueryCacheMiss() {
 	defer m.Unlock()
 
 	m.queriesProcessedCacheMiss.Inc()
-}
-
-func (m *metrics) GetCacheSizeMetric(name string) prometheus.Gauge {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, ok := m.cacheSize[name]; ok {
-		return m.cacheSize[name]
-	}
-	return nil
 }
 
 func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {

@@ -61,9 +61,9 @@ type Recursor struct {
 	oneInFlight *oneinflight.OneInFlight
 }
 
-func New(datadir string, cacheSize int64) *Recursor {
-	ansCacheSize := int64(cacheSize * 75 / 100)
-	nsCacheSize := int64(cacheSize * 25 / 100)
+func New(datadir string, cacheSize int) *Recursor {
+	ansCacheSize := cacheSize * 75 / 100
+	nsCacheSize := cacheSize * 25 / 100
 
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),

@@ -44,7 +44,7 @@ type recursorConf struct {
 	ServeOnUDP  bool     `koanf:"serveOnUDP"`
 	BlockLists  []string `koanf:"blockLists"`
 	WhiteLists  []string `koanf:"whiteLists"`
-	CacheSize   string   `koanf:"cacheSize"`
+	CacheSize   int      `koanf:"cacheSize"`
 }
 type conf struct {
 	LogLevel string `koanf:"logLevel"`
@@ -86,7 +86,7 @@ func loadConf(path string) *conf {
 				"127.0.0.1/32",
 				"::1",
 			},
-			CacheSize: "100MB",
+			CacheSize: 10000,
 		},
 
 		Certman: certm{
