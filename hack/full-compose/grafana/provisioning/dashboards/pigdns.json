@@ -61,7 +61,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 3,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -89,7 +89,7 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
+            "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -97,7 +97,7 @@
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 25,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -105,13 +105,16 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "percent"
@@ -120,6 +123,7 @@
               "mode": "off"
             }
           },
+          "fieldMinMax": false,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -626,8 +630,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "PigDNS2",
-  "uid": "db201439-d8cf-44bc-a991-a0e92b9a05a2",
-  "version": 2,
+  "title": "PigDNS",
+  "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
+  "version": 11,
   "weekStart": ""
 }
