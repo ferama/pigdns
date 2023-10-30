@@ -103,8 +103,8 @@ func (m *metrics) RegisterCache(name string) {
 	defer m.Unlock()
 
 	m.cacheCapacity[name] = promauto.NewGauge(prometheus.GaugeOpts{
-		Name:        "pigdns_cache_capacity_bytes",
-		Help:        "Cache size in bytes",
+		Name:        "pigdns_cache_capacity",
+		Help:        "Cache max allowed items",
 		ConstLabels: prometheus.Labels{"cache": name},
 	})
 

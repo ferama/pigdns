@@ -62,6 +62,7 @@ type Recursor struct {
 }
 
 func New(datadir string, cacheSize int) *Recursor {
+	log.Print(cacheSize)
 	ansCacheSize := cacheSize * 75 / 100
 	nsCacheSize := cacheSize * 25 / 100
 

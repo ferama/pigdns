@@ -51,7 +51,7 @@ type FileCache struct {
 func NewFileCache(datadir string, name string, size int) *FileCache {
 
 	// allow a minimum
-	memorySize := max(size, 1000)
+	maxItems := max(size, 1000)
 
 	// this worker are go routines that do jobs like check for record expiration,
 	// cache dumps to disk and so on
@@ -62,7 +62,7 @@ func NewFileCache(datadir string, name string, size int) *FileCache {
 		buckets:          make(map[uint64]*bucket),
 		datadir:          datadir,
 		name:             name,
-		maxItems:         memorySize,
+		maxItems:         maxItems,
 		expireWorkerPool: worker.NewPool(maxWorkers),
 		evictWorkerPool:  worker.NewPool(maxWorkers),
 		dumpWorkerPool:   worker.NewPool(maxWorkers),
@@ -81,17 +81,25 @@ func NewFileCache(datadir string, name string, size int) *FileCache {
 		log.Warn().Msg("no cache loaded from disk")
 	}
 
+	log.Info().
+		Str("cache", name).
+		Int("size", maxItems).
+		Msg("cache started")
+
 	go cache.setupJobs()
 
 	return cache
 }
 
 func (c *FileCache) getCacheSize() int {
+
 	var i uint64
 	itemsCount := 0
 	for i = 0; i <= cacheNumBuckets; i++ {
 		bucket := c.buckets[i]
+		bucket.mu.RLock()
 		itemsCount += len(bucket.data)
+		bucket.mu.RUnlock()
 	}
 
 	m := metrics.Instance().GetCacheItemsCountMetric(c.name)
@@ -136,6 +144,7 @@ func (c *FileCache) setupJobs() {
 			log.Debug().
 				Str("name", c.name).
 				Int("size", c.getCacheSize()).
+				Int("capacity", c.maxItems).
 				Msg("[cache]")
 
 			time.Sleep(cacheEvictionInterval)

@@ -86,7 +86,7 @@ func loadConf(path string) *conf {
 				"127.0.0.1/32",
 				"::1",
 			},
-			CacheSize: 10000,
+			CacheSize: 100000,
 		},
 
 		Certman: certm{
