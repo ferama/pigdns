@@ -36,64 +36,11 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		return
 	}
 
-	qname := strings.ToLower(r.QName())
-
 	msg := new(dns.Msg)
-	// msg.SetReply(req)
 	msg.Authoritative = true
 	msg.RecursionAvailable = true
 
-	soaHeader := dns.RR_Header{
-		Name:   r.Name(),
-		Rrtype: dns.TypeSOA,
-		Class:  dns.ClassINET,
-		Ttl:    86400,
-	}
-	soa := &dns.SOA{
-		Hdr:     soaHeader,
-		Ns:      zone,
-		Mbox:    ".",
-		Serial:  0,
-		Refresh: 28800,
-		Retry:   7200,
-		Expire:  604800,
-		Minttl:  86400,
-	}
-
-	switch r.QType() {
-	case dns.TypeNS:
-		if zone == qname {
-			nsHeader := dns.RR_Header{
-				Name:   r.QName(),
-				Rrtype: dns.TypeNS,
-				Class:  dns.ClassINET,
-				Ttl:    0,
-			}
-			ns := &dns.NS{
-				Hdr: nsHeader,
-				Ns:  zone,
-			}
-			msg.Answer = append(msg.Answer, ns)
-		} else {
-			msg.Ns = append(msg.Ns, soa)
-		}
-	case dns.TypeSOA:
-		if zone == qname {
-			msg.Answer = append(msg.Answer, soa)
-		} else {
-			msg.Ns = append(msg.Ns, soa)
-		}
-	default:
-		msg.Ns = append(msg.Ns, soa)
-	}
-
-	if zone != qname {
-		msg.Rcode = dns.RcodeNameError
-	}
-
-	r.Reply(msg)
-
-	// h.Next.ServeDNS(c, r)
+	r.ReplyWithStatus(msg, dns.RcodeNameError)
 }
 
 func (h *Handler) Match(name string, qtype uint16) string {
