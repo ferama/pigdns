@@ -1,4 +1,4 @@
-dataDir: "/data"
+dataDir: "/var/lib/pigdns"
 
 logLevel: "info"
 
