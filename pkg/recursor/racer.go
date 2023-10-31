@@ -14,6 +14,7 @@ import (
 
 var (
 	errQueryRacerTimeout = errors.New("query timeout")
+	errQnameEqNs         = errors.New("query name is equal to ns fqdn")
 )
 
 const (
@@ -45,6 +46,10 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
 	q := req.Question[0]
+
+	if q.Name == ns.Fqdn {
+		return nil, errQnameEqNs
+	}
 
 	utils.RemoveOPT(req)
 	req.SetEdns0(utils.MaxMsgSize, true)
@@ -110,6 +115,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 
 	worker := func(ns *nsServer, wg *sync.WaitGroup) {
 		defer wg.Done()
+
 		// Copy is needed here, to prevent race conditions
 		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
 
@@ -161,22 +167,34 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 
 		case err = <-errCH:
 			countErrors++
+			qr.servers.RLock()
 			// no more nameservers to query
 			if countErrors == len(qr.servers.List) {
+				qr.servers.RUnlock()
 				return nil, err
 			}
+			qr.servers.RUnlock()
 		}
 	}
 
 	// If I'm out of loop and I'm here is because all the timeout occurred
 	// and I still don't have an answer so wait here for it
-	select {
-	case <-time.After(queryRacerTimeout):
-		return nil, errQueryRacerTimeout
-	case ans = <-ansCH:
-		return ans, nil
+	for {
+		select {
+		case <-time.After(queryRacerTimeout):
+			return nil, errQueryRacerTimeout
+		case ans = <-ansCH:
+			return ans, nil
 
-	case err = <-errCH:
-		return nil, err
+		case err = <-errCH:
+			countErrors++
+			qr.servers.RLock()
+			if countErrors == len(qr.servers.List) {
+				qr.servers.RUnlock()
+				// log.Print(qr.servers)
+				return nil, err
+			}
+			qr.servers.RUnlock()
+		}
 	}
 }

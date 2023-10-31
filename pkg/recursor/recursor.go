@@ -62,7 +62,6 @@ type Recursor struct {
 }
 
 func New(datadir string, cacheSize int) *Recursor {
-	log.Print(cacheSize)
 	ansCacheSize := cacheSize * 75 / 100
 	nsCacheSize := cacheSize * 25 / 100
 
@@ -389,7 +388,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
 
-	// if we have NS not resolved in Extra section, resolve them
+	// // if we have NS not resolved in Extra section, resolve them
 	for _, ns := range toResolve {
 
 		// prevents loops. if this ns was already in context in a previous
@@ -447,7 +446,6 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 				r.nsCache.Set(servers)
 			}
 		}(ctx, ns)
-
 	}
 
 	// if we are here we don't have any place to search anymore
@@ -676,6 +674,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 		return nil, err
 	}
+	// log.Print(servers)
 
 	// this cover cases on which ns return a cname
 	// ex: edge-114.defra2.icloud-content.com
