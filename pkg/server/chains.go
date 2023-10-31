@@ -6,6 +6,7 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/acl"
 	"github.com/ferama/pigdns/pkg/handlers/acmec"
 	"github.com/ferama/pigdns/pkg/handlers/any"
+	"github.com/ferama/pigdns/pkg/handlers/as112"
 	"github.com/ferama/pigdns/pkg/handlers/blocklist"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
@@ -53,6 +54,7 @@ func BuildRecursorHandler(
 	chain = &any.Handler{Next: chain}
 	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}
 	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
+	chain = &as112.Handler{Next: chain}
 	chain = &collector.Handler{Next: chain}
 
 	return chain

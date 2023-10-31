@@ -32,9 +32,6 @@ func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int) *han
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
-	pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-	pc.Rcode = m.Rcode
-
 	if err != nil {
 		log.Error().
 			Str("query", r.Name()).
@@ -45,6 +42,9 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		h.Next.ServeDNS(c, r)
 		return
 	}
+
+	pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.Rcode = m.Rcode
 
 	if m.Rcode != dns.RcodeSuccess {
 		log.Error().
