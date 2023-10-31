@@ -39,18 +39,17 @@ var rootCmd = &cobra.Command{
 		info := strings.EqualFold(conf.LogLevel, "info")
 		error := strings.EqualFold(conf.LogLevel, "error")
 
-		output := zerolog.ConsoleWriter{Out: os.Stderr}
-		output.FormatTimestamp = func(i interface{}) string {
-			t, _ := time.Parse(time.RFC3339, i.(string))
-			return t.Format("2006-01-02 15:04:05")
+		if debug {
+			output := zerolog.ConsoleWriter{Out: os.Stderr}
+			output.FormatTimestamp = func(i interface{}) string {
+				t, _ := time.Parse(time.RFC3339, i.(string))
+				return t.Format("2006-01-02 15:04:05")
+			}
+			log.Logger = log.Output(output)
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		}
-		log.Logger = log.Output(output)
-
 		if info {
 			zerolog.SetGlobalLevel(zerolog.InfoLevel)
-		}
-		if debug {
-			zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		}
 		if error {
 			zerolog.SetGlobalLevel(zerolog.ErrorLevel)

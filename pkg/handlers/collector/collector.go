@@ -6,6 +6,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/miekg/dns"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -56,14 +57,14 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			Str("protocol", r.Proto()).
 			Bool("isDOH", isDOH).
 			Bool("cached", cacheHit).
-			Str("answerFrom", cc.AnweredBy).
+			Str("handler", cc.AnweredBy).
+			Str("rcode", dns.RcodeToString[rcode]).
 			Str("client", r.IP())
 	}
 
 	event.Send()
 
 	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
-
 	metrics.Instance().CounterByRcode[rcode].Inc()
 }
 
