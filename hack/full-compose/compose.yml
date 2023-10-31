@@ -1,9 +1,11 @@
 services:
   pigdns:
-    restart: always
+    restart: unless-stopped
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
-    network_mode: host
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
     volumes:
       - ./pigdns/data:/data
       - ./pigdns/whitelist:/data/whitelist
@@ -13,7 +15,6 @@ services:
     restart: unless-stopped
     image: prom/node-exporter:latest
     container_name: node-exporter
-    network_mode: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -28,7 +29,6 @@ services:
     restart: unless-stopped
     image: prom/prometheus
     container_name: prometheus
-    network_mode: host
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
   
@@ -36,12 +36,12 @@ services:
     restart: unless-stopped
     image: ghcr.io/ferama/grafana:v10.2.0
     container_name: grafana
-    network_mode: host
+    ports:
+      - "3000:3000"
     volumes:
       - ./grafana/grafana.ini:/etc/grafana/grafana.ini
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana-storage:/var/lib/grafana
-
 
 volumes:
   grafana-storage:
