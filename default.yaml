@@ -1,7 +1,7 @@
 # sample config
 
 logLevel: info
-dataDir: "/data"
+dataDir: "/var/lib/pigdns"
 
 netListener:
   enabled: true
@@ -14,7 +14,7 @@ recursor:
   allowedNets:
     - 0.0.0.0/0
     - ::/0
-  cacheSize: 10MB
+  cacheSize: 10000
   blockLists:
     - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
   whiteLists: []
