@@ -7,9 +7,10 @@ services:
       - "53:53/udp"
       - "53:53/tcp"
     volumes:
-      - ./pigdns/data:/data
-      - ./pigdns/whitelist:/data/whitelist
-      - ./pigdns/pigdns.yaml:/etc/pigdns.yaml
+      volumes:
+      - pigdns-storage:/var/lib/pigdns
+      - ./pigdns/whitelist:/etc/pigdns/whitelist
+      - ./pigdns/pigdns.yaml:/etc/pigdns/pigdns.yaml
   
   node-exporter:
     restart: unless-stopped
@@ -45,3 +46,4 @@ services:
 
 volumes:
   grafana-storage:
+  pigdns-storage:

@@ -22,11 +22,11 @@ RUN set -eux; \
     && \
     apt clean
 
-RUN mkdir -p /var/lib/pigdns
+RUN mkdir -p /var/lib/pigdns && mkdir -p /etc/pigdns
 
 COPY --from=gobuilder /pigdns /usr/local/bin/pigdns
-COPY ./default.yaml /etc/pigdns.yaml
+COPY ./default.yaml /etc/pigdns/pigdns.yaml
 
 VOLUME /var/lib/pigdns
 
-ENTRYPOINT ["/usr/local/bin/pigdns", "/etc/pigdns.yaml"]
+ENTRYPOINT ["/usr/local/bin/pigdns", "/etc/pigdns/pigdns.yaml"]

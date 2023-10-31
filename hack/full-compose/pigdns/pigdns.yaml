@@ -17,4 +17,4 @@ recursor:
   blockLists:
     - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
   whiteLists:
-    - /data/whitelist
+    - /etc/pigdns/whitelist
