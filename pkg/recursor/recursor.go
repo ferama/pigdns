@@ -111,7 +111,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans := r.cleanMsg(cached, req)
 
 		pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-		// pc.Rcode = ans.Rcode
 		pc.CacheHit = true
 		return ans, nil
 	}

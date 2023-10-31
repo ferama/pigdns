@@ -134,6 +134,9 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		}
 		m := new(dns.Msg)
 		r.ReplyWithStatus(m, dns.RcodeRefused)
+
+		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+		pc.Rcode = m.Rcode
 		return
 	}
 	h.Next.ServeDNS(c, r)
