@@ -566,6 +566,8 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 	offset, _ = dns.PrevLabel(q.Name, depth)
 	zone := dns.Fqdn(q.Name[offset:])
 
+	_, end := dns.PrevLabel(q.Name, depth+1)
+
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
 		nsReq := new(dns.Msg)
@@ -573,16 +575,14 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 		nsq := nsReq.Question[0]
 		cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
 		resp, _ := r.ansCache.Get(cacheKey)
-		if err != nil {
-			return nil, cached, nil
+
+		if end {
+			return resp, cached, nil
 		}
-		return resp, cached, nil
+
+		_, nextServers, _ := r.resolveNS(ctx, req, isIPV6, depth+1, cached)
+		return resp, nextServers, nil
 	}
-
-	// log.Print("=================================")
-	// log.Print(zone)
-
-	_, end := dns.PrevLabel(q.Name, depth+1)
 
 	nsqName := dns.Fqdn(zone)
 	nsReq := new(dns.Msg)
@@ -590,14 +590,15 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 
 	nsq := nsReq.Question[0]
 	cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
-
-	qr := newQueryRacer(servers, nsReq, isIPV6)
-	resp, err := qr.run()
+	resp, err := r.ansCache.Get(cacheKey)
 	if err != nil {
-		return resp, servers, err
+		qr := newQueryRacer(servers, nsReq, isIPV6)
+		resp, err = qr.run()
+		if err != nil {
+			return resp, servers, err
+		}
+		r.ansCache.Set(cacheKey, resp)
 	}
-
-	r.ansCache.Set(cacheKey, resp)
 
 	var toResolve []string
 	var nextServers *authServers
@@ -614,11 +615,18 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 			Zone: nsqName,
 		}
 		r.resolveExtraNs(ctx, toResolve, nsqName, nextServers, isIPV6)
+		nextServers.Lock()
+		servers.RLock()
+		nextServers.List = append(nextServers.List, servers.List...)
+		servers.RUnlock()
+		nextServers.Unlock()
 		// log.Print("##########################")
 		// log.Print(toResolve)
-		if len(nextServers.List) != 0 {
+		if len(servers.List) != 0 {
 			return resp, nextServers, nil
 		} else {
+			// log.Printf("CACHING %s", servers.Zone)
+			r.nsCache.Set(servers)
 			return resp, servers, err
 		}
 	}
@@ -627,6 +635,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 	// }
 
 	if end {
+		r.nsCache.Set(nextServers)
 		return resp, nextServers, nil
 	}
 
@@ -765,12 +774,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if cacheErr == nil {
 		return cached, nil
 	}
-
-	// _, s2, _ := r.resolveNS2(ctx, req, getRootServers(), isIPV6, 0)
-	// _, s2, _ := r.resolveNS2(ctx, req, isIPV6, 0, nil)
-	// if s2 != nil {
-	// 	log.Print(s2.String())
-	// }
 
 	nsResp, servers, err := r.resolveNS(ctx, req, isIPV6, 0, nil)
 	if err != nil {

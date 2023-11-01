@@ -19,7 +19,7 @@ var (
 
 const (
 	queryRacerTimeout = 5 * time.Second
-	nextNSTimeout     = 150 * time.Millisecond
+	nextNSTimeout     = 50 * time.Millisecond
 )
 
 // the query racer, given a list of authoritative nameservers
