@@ -154,7 +154,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
 func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
-	return true
+	// return true
 	name := q.Name
 	end := false
 
@@ -561,28 +561,43 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 	}
 
 	q := req.Question[0]
-
-	// end := false
 	offset := 0
 
 	offset, _ = dns.PrevLabel(q.Name, depth)
 	zone := dns.Fqdn(q.Name[offset:])
 
-	log.Print("=================================")
-	log.Print(zone)
+	cached, err := r.nsCache.Get(zone)
+	if err == nil {
+		nsReq := new(dns.Msg)
+		nsReq.SetQuestion(zone, dns.TypeNS)
+		nsq := nsReq.Question[0]
+		cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
+		resp, _ := r.ansCache.Get(cacheKey)
+		if err != nil {
+			return nil, cached, nil
+		}
+		return resp, cached, nil
+	}
+
+	// log.Print("=================================")
+	// log.Print(zone)
 
 	_, end := dns.PrevLabel(q.Name, depth+1)
 
 	nsqName := dns.Fqdn(zone)
-	// nsqName := dns.Fqdn(q.Name[nextOffset:])
 	nsReq := new(dns.Msg)
 	nsReq.SetQuestion(nsqName, dns.TypeNS)
-	// nsq := nsReq.Question[0]
+
+	nsq := nsReq.Question[0]
+	cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
+
 	qr := newQueryRacer(servers, nsReq, isIPV6)
 	resp, err := qr.run()
 	if err != nil {
 		return resp, servers, err
 	}
+
+	r.ansCache.Set(cacheKey, resp)
 
 	var toResolve []string
 	var nextServers *authServers
@@ -595,13 +610,17 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 				return soa, servers, nil
 			}
 		}
-		// nextServers = &authServers{
-		// 	Zone: nsqName,
-		// }
-		// r.resolveExtraNs(ctx, toResolve, nsqName, nextServers, isIPV6)
-		log.Print("##########################")
-		log.Print(toResolve)
-		return resp, servers, err
+		nextServers = &authServers{
+			Zone: nsqName,
+		}
+		r.resolveExtraNs(ctx, toResolve, nsqName, nextServers, isIPV6)
+		// log.Print("##########################")
+		// log.Print(toResolve)
+		if len(nextServers.List) != 0 {
+			return resp, nextServers, nil
+		} else {
+			return resp, servers, err
+		}
 	}
 	// if servers != nil {
 	// 	log.Print(servers.String())
@@ -612,10 +631,10 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 	}
 
 	_, nextServers, err = r.resolveNS(ctx, req, isIPV6, depth+1, nextServers)
-	if err != nil {
-		log.Print(err)
-	}
 
+	if err == nil {
+		r.nsCache.Set(nextServers)
+	}
 	return resp, nextServers, nil
 }
 
@@ -674,7 +693,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 }
 
 func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
-	return true
+	// return true
 	rrsigs := utils.MsgExtractByType(ans, dns.TypeRRSIG, "")
 
 	var sig *dns.RRSIG
