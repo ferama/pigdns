@@ -18,7 +18,7 @@ var (
 )
 
 const (
-	queryRacerTimeout = 10 * time.Second
+	queryRacerTimeout = 5 * time.Second
 	nextNSTimeout     = 150 * time.Millisecond
 )
 
@@ -44,7 +44,7 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
+func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, zone string) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	if q.Name == ns.Fqdn {
@@ -66,6 +66,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 		log.Debug().
 			Str("ns-ip", ns.Addr).
 			Str("ns-fqdn", ns.Fqdn).
+			Str("zone", zone).
 			Str("q", q.Name).
 			Str("type", dns.TypeToString[q.Qtype]).
 			Msg("[recursor]")
@@ -117,7 +118,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		defer wg.Done()
 
 		// Copy is needed here, to prevent race conditions
-		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
+		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy(), qr.servers.Zone)
 
 		if err == nil {
 			ansCH <- ans
