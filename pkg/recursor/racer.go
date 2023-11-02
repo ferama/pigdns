@@ -19,7 +19,7 @@ var (
 
 const (
 	queryRacerTimeout = 2 * time.Second
-	nextNSTimeout     = 50 * time.Millisecond
+	nextNSTimeout     = 150 * time.Millisecond
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -51,10 +51,10 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 	defer func() {
 		l := time.Since(st)
 		log.Debug().
-			Str("ns-ip", ns.Addr).
-			Str("ns-fqdn", ns.Fqdn).
+			// Str("ns-ip", ns.Addr).
+			Str(".q", q.Name).
 			Str("zone", zone).
-			Str("q", q.Name).
+			Str("ns-fqdn", ns.Fqdn).
 			Str("t", l.Round(1*time.Millisecond).String()).
 			Str("type", dns.TypeToString[q.Qtype]).
 			Msg("[recursor]")
@@ -189,7 +189,6 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	for {
 		select {
 		case <-time.After(queryRacerTimeout):
-			cancel()
 			return nil, errQueryRacerTimeout
 		case ans = <-ansCH:
 			return ans, nil
