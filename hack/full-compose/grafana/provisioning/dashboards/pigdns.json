@@ -61,7 +61,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
+  "id": 1,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -77,6 +77,70 @@
       "panels": [],
       "title": "Queries",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_datasource"
+          },
+          "editorMode": "code",
+          "expr": "sum (\n  rate(\n    pigdns_query_processed_total[1m]\n  )\n)",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Queries rate",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -143,9 +207,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 8,
+        "w": 12,
         "x": 0,
-        "y": 1
+        "y": 7
       },
       "id": 4,
       "options": {
@@ -191,14 +255,17 @@
       "type": "timeseries"
     },
     {
-      "datasource": {},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_datasource"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "axisBorderShow": false,
+            "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -220,7 +287,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -249,9 +316,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 1
+        "w": 12,
+        "x": 12,
+        "y": 7
       },
       "id": 6,
       "options": {
@@ -273,7 +340,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pigdns_query_latency_sum / pigdns_query_latency_count",
+          "expr": "(rate(pigdns_query_latency_sum[5m]) / rate(pigdns_query_latency_count[5m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -284,108 +351,12 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus_datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-GrYlRd"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 3,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 16,
-        "y": 1
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "hidden",
-          "placement": "right",
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus_datasource"
-          },
-          "editorMode": "code",
-          "expr": "sum (\n  increase(\n    pigdns_query_latency_bucket[$__interval]\n  )\n)",
-          "instant": false,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Query Time per $__interval window",
-      "type": "timeseries"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 14
       },
       "id": 2,
       "panels": [],
@@ -400,7 +371,7 @@
             "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "axisBorderShow": false,
+            "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -422,7 +393,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -452,7 +423,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 15
       },
       "id": 1,
       "options": {
@@ -506,7 +477,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 9
+        "y": 15
       },
       "id": 3,
       "options": {
@@ -582,7 +553,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 9
+        "y": 15
       },
       "id": 5,
       "options": {
@@ -623,7 +594,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 23
       },
       "id": 9,
       "panels": [],
@@ -641,7 +612,7 @@
             "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "axisBorderShow": false,
+            "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -663,7 +634,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -677,8 +648,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -694,7 +664,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 24
       },
       "id": 10,
       "options": {
@@ -737,7 +707,7 @@
             "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "axisBorderShow": false,
+            "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -759,7 +729,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -773,8 +743,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -789,7 +758,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 24
       },
       "id": 11,
       "options": {
@@ -836,6 +805,6 @@
   "timezone": "",
   "title": "PigDNS",
   "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
-  "version": 14,
+  "version": 5,
   "weekStart": ""
 }

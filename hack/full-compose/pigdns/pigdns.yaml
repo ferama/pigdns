@@ -15,6 +15,8 @@ recursor:
     - ::/0
   cacheSize: 5000
   blockLists:
-    - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
+    - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/multi.txt
+    # The pro list is more aggressive and may need more whitelist tweks
+    #- https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
   whiteLists:
     - /etc/pigdns/whitelist
