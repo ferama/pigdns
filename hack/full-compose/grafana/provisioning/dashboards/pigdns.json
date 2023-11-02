@@ -340,14 +340,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(rate(pigdns_query_latency_sum[5m]) / rate(pigdns_query_latency_count[5m]))",
+          "expr": "histogram_quantile(0.95, sum(rate(pigdns_query_latency_bucket[$__rate_interval])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Avg Latency",
+      "title": "Latency",
       "type": "timeseries"
     },
     {
@@ -805,6 +805,6 @@
   "timezone": "",
   "title": "PigDNS",
   "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
-  "version": 5,
+  "version": 8,
   "weekStart": ""
 }
