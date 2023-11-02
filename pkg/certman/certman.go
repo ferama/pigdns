@@ -38,6 +38,10 @@ var CertmanMU sync.Mutex
 
 func writeFile(datadir string, name string, content []byte) {
 	path := filepath.Join(datadir, name)
+	err := os.MkdirAll(datadir, os.ModePerm)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
 
 	f, err := os.Create(path)
 	if err != nil {
