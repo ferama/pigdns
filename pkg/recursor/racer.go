@@ -14,12 +14,12 @@ import (
 
 var (
 	errQueryRacerTimeout = errors.New("query timeout")
-	errQnameEqNs         = errors.New("query name is equal to ns fqdn")
+	// errQnameEqNs         = errors.New("query name is equal to ns fqdn")
 )
 
 const (
-	queryRacerTimeout = 10 * time.Second
-	nextNSTimeout     = 150 * time.Millisecond
+	queryRacerTimeout = 2 * time.Second
+	nextNSTimeout     = 100 * time.Millisecond
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -44,12 +44,26 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (*dns.Msg, error) {
+func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, zone string) (*dns.Msg, error) {
 	q := req.Question[0]
 
-	if q.Name == ns.Fqdn {
-		return nil, errQnameEqNs
-	}
+	st := time.Now()
+	defer func() {
+		l := time.Since(st)
+		log.Debug().
+			// Str("ns-ip", ns.Addr).
+			Str(".q", q.Name).
+			Str("zone", zone).
+			Str("ns-fqdn", ns.Fqdn).
+			Str("t", l.Round(1*time.Millisecond).String()).
+			Str("type", dns.TypeToString[q.Qtype]).
+			Msg("[recursor]")
+
+	}()
+
+	// if q.Name == ns.Fqdn {
+	// 	return nil, errQnameEqNs
+	// }
 
 	utils.RemoveOPT(req)
 	req.SetEdns0(utils.MaxMsgSize, true)
@@ -62,13 +76,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer) (
 			Timeout: dialTimeout,
 			Net:     network,
 		}
-
-		log.Debug().
-			Str("ns-ip", ns.Addr).
-			Str("ns-fqdn", ns.Fqdn).
-			Str("q", q.Name).
-			Str("type", dns.TypeToString[q.Qtype]).
-			Msg("[recursor]")
 
 		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
 		if err != nil {
@@ -117,7 +124,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		defer wg.Done()
 
 		// Copy is needed here, to prevent race conditions
-		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
+		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy(), qr.servers.Zone)
 
 		if err == nil {
 			ansCH <- ans
@@ -187,6 +194,7 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 			return ans, nil
 
 		case err = <-errCH:
+			// return nil, err
 			countErrors++
 			qr.servers.RLock()
 			if countErrors == len(qr.servers.List) {
