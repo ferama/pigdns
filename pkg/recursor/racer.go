@@ -14,12 +14,12 @@ import (
 
 var (
 	errQueryRacerTimeout = errors.New("query timeout")
-	errQnameEqNs         = errors.New("query name is equal to ns fqdn")
+	// errQnameEqNs         = errors.New("query name is equal to ns fqdn")
 )
 
 const (
 	queryRacerTimeout = 2 * time.Second
-	nextNSTimeout     = 150 * time.Millisecond
+	nextNSTimeout     = 100 * time.Millisecond
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -61,9 +61,9 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 
 	}()
 
-	if q.Name == ns.Fqdn {
-		return nil, errQnameEqNs
-	}
+	// if q.Name == ns.Fqdn {
+	// 	return nil, errQnameEqNs
+	// }
 
 	utils.RemoveOPT(req)
 	req.SetEdns0(utils.MaxMsgSize, true)

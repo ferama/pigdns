@@ -124,3 +124,7 @@ func MsgSetupEdns(m *dns.Msg) {
 
 	// log.Printf("####### len: %d", m.Len())
 }
+
+func IsArpa(name string) bool {
+	return strings.HasSuffix(name, "in-addr.arpa.") || strings.HasSuffix(name, ".ip6.arpa")
+}
