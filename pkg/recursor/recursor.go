@@ -154,7 +154,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
 func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
-	// return true
+	return true
 	name := q.Name
 	end := false
 
@@ -177,7 +177,7 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 			dsreq := new(dns.Msg)
 			dsreq.SetQuestion(name, dns.TypeDS)
 
-			resp, _, err := r.resolveNS(ctx, dsreq, isIPV6, 0, nil)
+			resp, _, err := r.resolveNS(ctx, dsreq.Question[0], isIPV6, 0, nil)
 			if err != nil {
 				return false
 			}
@@ -493,7 +493,7 @@ func (r *Recursor) resolveNSOld(ctx context.Context, req *dns.Msg, isIPV6 bool, 
 
 	// run recursively here. the recursion will end when we will
 	// encounter the root zone
-	resp, rservers, err := r.resolveNS(ctx, req, isIPV6, i, nil)
+	resp, rservers, err := r.resolveNS(ctx, q, isIPV6, i, nil)
 	if err != nil {
 		return resp, nil, err
 	}
@@ -548,7 +548,7 @@ func (r *Recursor) resolveNSOld(ctx context.Context, req *dns.Msg, isIPV6 bool, 
 	return resp, servers, err
 }
 
-func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, depth int, servers *authServers) (*dns.Msg, *authServers, error) {
+func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, depth int, servers *authServers) (*dns.Msg, *authServers, error) {
 	// ALGO:
 	// starts from root
 	// dig . ns
@@ -560,7 +560,6 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 		servers = getRootServers()
 	}
 
-	q := req.Question[0]
 	offset := 0
 
 	offset, _ = dns.PrevLabel(q.Name, depth)
@@ -580,7 +579,7 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 			return resp, cached, nil
 		}
 
-		_, nextServers, _ := r.resolveNS(ctx, req, isIPV6, depth+1, cached)
+		_, nextServers, _ := r.resolveNS(ctx, q, isIPV6, depth+1, cached)
 		return resp, nextServers, nil
 	}
 
@@ -604,42 +603,39 @@ func (r *Recursor) resolveNS(ctx context.Context, req *dns.Msg, isIPV6 bool, dep
 	var nextServers *authServers
 	nextServers, toResolve, err = r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
-		if err == errNoNSfound && len(toResolve) == 0 {
-			// log.Print(resp)
-			soa := r.findSoa(resp)
-			if soa != nil {
-				return soa, servers, nil
-			}
+		// if err == errNoNSfound && len(toResolve) == 0 {
+		// log.Print(resp)
+		soa := r.findSoa(resp)
+		if soa != nil {
+			return soa, servers, nil
 		}
+		// }
 		nextServers = &authServers{
 			Zone: nsqName,
 		}
 		r.resolveExtraNs(ctx, toResolve, nsqName, nextServers, isIPV6)
+
 		nextServers.Lock()
 		servers.RLock()
 		nextServers.List = append(nextServers.List, servers.List...)
 		servers.RUnlock()
 		nextServers.Unlock()
-		// log.Print("##########################")
-		// log.Print(toResolve)
+
 		if len(servers.List) != 0 {
+			r.nsCache.Set(nextServers)
 			return resp, nextServers, nil
 		} else {
-			// log.Printf("CACHING %s", servers.Zone)
 			r.nsCache.Set(servers)
 			return resp, servers, err
 		}
 	}
-	// if servers != nil {
-	// 	log.Print(servers.String())
-	// }
 
 	if end {
 		r.nsCache.Set(nextServers)
 		return resp, nextServers, nil
 	}
 
-	_, nextServers, err = r.resolveNS(ctx, req, isIPV6, depth+1, nextServers)
+	resp, nextServers, err = r.resolveNS(ctx, q, isIPV6, depth+1, nextServers)
 
 	if err == nil {
 		r.nsCache.Set(nextServers)
@@ -683,7 +679,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 
 	keys := []dns.RR{}
 
-	_, rservers, err := r.resolveNS(ctx, req, isIPV6, 0, nil)
+	_, rservers, err := r.resolveNS(ctx, q, isIPV6, 0, nil)
 	if err != nil {
 		return keys
 	}
@@ -775,7 +771,23 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return cached, nil
 	}
 
-	nsResp, servers, err := r.resolveNS(ctx, req, isIPV6, 0, nil)
+	// query upper servers if we are asking for DS
+	query := dns.Question{
+		Qtype:  q.Qtype,
+		Qclass: q.Qclass,
+		Name:   q.Name,
+	}
+	if q.Qtype == dns.TypeDS {
+		idx, end := dns.NextLabel(q.Name, 0)
+		name := "."
+		if !end {
+			name = q.Name[idx:]
+
+		}
+		query.Name = name
+	}
+
+	nsResp, servers, err := r.resolveNS(ctx, query, isIPV6, 0, nil)
 	if err != nil {
 		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
 			soa := r.findSoa(nsResp)
@@ -795,6 +807,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	// log.Print("================================")
+	// log.Print(nsResp)
 	// log.Print(servers.String())
 	// log.Print(req.Question)
 	// log.Print("////////////////////////////")
@@ -829,6 +842,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if err != nil {
 		return nil, err
 	}
+	// log.Print(servers)
+	// log.Print(ans)
 
 	if len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		// no asnwer from the previous query but we got nameservers instead

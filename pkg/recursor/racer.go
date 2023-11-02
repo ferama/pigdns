@@ -18,7 +18,7 @@ var (
 )
 
 const (
-	queryRacerTimeout = 5 * time.Second
+	queryRacerTimeout = 2 * time.Second
 	nextNSTimeout     = 50 * time.Millisecond
 )
 
@@ -47,6 +47,20 @@ func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer 
 func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, zone string) (*dns.Msg, error) {
 	q := req.Question[0]
 
+	st := time.Now()
+	defer func() {
+		l := time.Since(st)
+		log.Debug().
+			Str("ns-ip", ns.Addr).
+			Str("ns-fqdn", ns.Fqdn).
+			Str("zone", zone).
+			Str("q", q.Name).
+			Str("t", l.Round(1*time.Millisecond).String()).
+			Str("type", dns.TypeToString[q.Qtype]).
+			Msg("[recursor]")
+
+	}()
+
 	if q.Name == ns.Fqdn {
 		return nil, errQnameEqNs
 	}
@@ -62,14 +76,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 			Timeout: dialTimeout,
 			Net:     network,
 		}
-
-		log.Debug().
-			Str("ns-ip", ns.Addr).
-			Str("ns-fqdn", ns.Fqdn).
-			Str("zone", zone).
-			Str("q", q.Name).
-			Str("type", dns.TypeToString[q.Qtype]).
-			Msg("[recursor]")
 
 		ans, _, err := client.ExchangeContext(ctx, req, ns.withPort())
 		if err != nil {
@@ -183,11 +189,13 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	for {
 		select {
 		case <-time.After(queryRacerTimeout):
+			cancel()
 			return nil, errQueryRacerTimeout
 		case ans = <-ansCH:
 			return ans, nil
 
 		case err = <-errCH:
+			// return nil, err
 			countErrors++
 			qr.servers.RLock()
 			if countErrors == len(qr.servers.List) {
