@@ -154,6 +154,8 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
 func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
+	// return true
+
 	name := q.Name
 
 	if utils.IsArpa(name) {
@@ -394,9 +396,11 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		}
 	}
 
+	// Resolve Extra Servers
 	extraServers := &authServers{
 		Zone: zone,
 	}
+
 	r.resolveExtraNs(ctx, toResolve, zone, extraServers, isIPV6)
 	extraServers.RLock()
 	if len(extraServers.List) > 0 {
@@ -521,6 +525,7 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 	nsReq.SetQuestion(zone, dns.TypeNS)
 
 	nsq := nsReq.Question[0]
+
 	cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
 	resp, err = r.ansCache.Get(cacheKey)
 
@@ -531,12 +536,11 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 			return resp, nil, err
 		}
 
+		// take advantage of the extra secion and store some ips into cache
+		// if any
 		types := []uint16{
 			dns.TypeA,
 			dns.TypeAAAA,
-			// dns.TypeDS,
-			// dns.TypeRRSIG,
-			// dns.TypeDNSKEY,
 		}
 
 		for _, t := range types {
@@ -557,13 +561,25 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 		if err == errRecursionMaxLevel {
 			return resp, servers, err
 		}
-
 		// no nameservers found
 		// return the latest servers found (rserver), and hope
 		// for an answer there
 		servers = rservers
 		// reset error
 		err = nil
+	}
+
+	// Add parent servers too
+	serversFqdns := []string{}
+	for _, s := range servers.List {
+		serversFqdns = append(serversFqdns, s.Fqdn)
+	}
+	if dns.CountLabel(servers.Zone) > 2 {
+		for _, i := range rservers.List {
+			if !slices.Contains(serversFqdns, i.Fqdn) {
+				servers.List = append(servers.List, i)
+			}
+		}
 	}
 
 	if err == nil {
@@ -727,28 +743,29 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	// this cover cases on which ns return a cname
 	// ex: edge-114.defra2.icloud-content.com
-	cnamerr := utils.MsgExtractByType(nsResp, dns.TypeCNAME, "")
-	if len(cnamerr) > 0 {
-		nsCname := cnamerr[0].(*dns.CNAME)
-		n := dns.CompareDomainName(nsCname.Header().Name, q.Name)
-		prevLabel, _ := dns.PrevLabel(q.Name, n)
-		newQ := fmt.Sprintf("%s%s", q.Name[:prevLabel], nsCname.Target)
-		cnameReq := new(dns.Msg)
-		cnameReq.SetQuestion(newQ, q.Qtype)
+	// TODO: it seems to be no more needed
+	// cnamerr := utils.MsgExtractByType(nsResp, dns.TypeCNAME, "")
+	// if len(cnamerr) > 0 {
+	// 	nsCname := cnamerr[0].(*dns.CNAME)
+	// 	n := dns.CompareDomainName(nsCname.Header().Name, q.Name)
+	// 	prevLabel, _ := dns.PrevLabel(q.Name, n)
+	// 	newQ := fmt.Sprintf("%s%s", q.Name[:prevLabel], nsCname.Target)
+	// 	cnameReq := new(dns.Msg)
+	// 	cnameReq.SetQuestion(newQ, q.Qtype)
 
-		qr := newQueryRacer(servers, cnameReq, isIPV6)
-		ans, err := qr.run()
-		if err == nil {
-			nsCname.Target = newQ
-			nsCname.Hdr.Name = q.Name
-			ans.Answer = append([]dns.RR{nsCname}, ans.Answer...)
-			for _, rr := range ans.Answer {
-				if rr.Header().Rrtype == q.Qtype {
-					return ans, nil
-				}
-			}
-		}
-	}
+	// 	qr := newQueryRacer(servers, cnameReq, isIPV6)
+	// 	ans, err := qr.run()
+	// 	if err == nil {
+	// 		nsCname.Target = newQ
+	// 		nsCname.Hdr.Name = q.Name
+	// 		ans.Answer = append([]dns.RR{nsCname}, ans.Answer...)
+	// 		for _, rr := range ans.Answer {
+	// 			if rr.Header().Rrtype == q.Qtype {
+	// 				return ans, nil
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	qr := newQueryRacer(servers, req, isIPV6)
 	ans, err := qr.run()

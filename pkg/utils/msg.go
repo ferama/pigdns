@@ -128,3 +128,14 @@ func MsgSetupEdns(m *dns.Msg) {
 func IsArpa(name string) bool {
 	return strings.HasSuffix(name, "in-addr.arpa.") || strings.HasSuffix(name, ".ip6.arpa")
 }
+
+func AnsIsError(ans *dns.Msg) bool {
+	switch ans.Rcode {
+	case dns.RcodeServerFailure:
+		fallthrough
+	case dns.RcodeRefused:
+		return true
+	default:
+		return false
+	}
+}

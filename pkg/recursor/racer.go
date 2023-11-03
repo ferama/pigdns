@@ -170,7 +170,10 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		case <-nextNSTimer.C:
 			continue
 		case ans = <-ansCH:
-			return ans, nil
+			if !utils.AnsIsError(ans) {
+				return ans, nil
+			}
+			countErrors++
 
 		case err = <-errCH:
 			countErrors++
@@ -191,7 +194,10 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		case <-time.After(queryRacerTimeout):
 			return nil, errQueryRacerTimeout
 		case ans = <-ansCH:
-			return ans, nil
+			if !utils.AnsIsError(ans) {
+				return ans, nil
+			}
+			countErrors++
 
 		case err = <-errCH:
 			// return nil, err
