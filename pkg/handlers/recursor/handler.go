@@ -58,7 +58,13 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
 		m.RecursionAvailable = true
+		m.Authoritative = false
 		utils.MsgSetupEdns(m)
+
+		// set the do flag
+		if r.IsDo() {
+			utils.MsgSetDo(m, true)
+		}
 
 		r.ReplyWithStatus(m, m.Rcode)
 		return

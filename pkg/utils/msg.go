@@ -106,23 +106,35 @@ func RemoveOPT(msg *dns.Msg) *dns.Msg {
 	return msg
 }
 
+func MsgSetAuthenticated(m *dns.Msg, auth bool) {
+
+	m.AuthenticatedData = auth
+}
+
+func MsgSetDo(m *dns.Msg, do bool) {
+	if m.IsEdns0() != nil {
+		m.IsEdns0().SetDo(do)
+	}
+}
+
+func MsgGetDo(m *dns.Msg) bool {
+	if m.IsEdns0() != nil {
+		return m.IsEdns0().Do()
+	}
+	return false
+}
+
 func MsgSetupEdns(m *dns.Msg) {
+	RemoveOPT(m)
 
 	m.Compress = true
 
-	if m.IsEdns0() == nil {
-		opt := new(dns.OPT)
-		opt.Hdr.Name = "."
-		opt.Hdr.Rrtype = dns.TypeOPT
-		opt.SetUDPSize(MaxMsgSize)
+	opt := new(dns.OPT)
+	opt.Hdr.Name = "."
+	opt.Hdr.Rrtype = dns.TypeOPT
+	opt.SetUDPSize(MaxMsgSize)
 
-		m.Extra = append(m.Extra, opt)
-	} else {
-		opt := m.IsEdns0()
-		opt.SetUDPSize(MaxMsgSize)
-	}
-
-	// log.Printf("####### len: %d", m.Len())
+	m.Extra = append(m.Extra, opt)
 }
 
 func IsArpa(name string) bool {

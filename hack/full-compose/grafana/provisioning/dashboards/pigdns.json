@@ -196,7 +196,7 @@
             "uid": "prometheus_datasource"
           },
           "editorMode": "code",
-          "expr": "sum (\n  rate(\n    pigdns_query_processed_total[1m]\n  )\n)",
+          "expr": "sum (\n  rate(\n    pigdns_query_processed_total[$__range]\n  )\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -260,7 +260,7 @@
             "uid": "prometheus_datasource"
           },
           "editorMode": "code",
-          "expr": "sum (\n  rate(\n    pigdns_exchange_processed_total[1m]\n  )\n)",
+          "expr": "sum (\n  rate(\n    pigdns_exchange_processed_total[$__range]\n  )\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1002,13 +1002,13 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "PigDNS",
   "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
-  "version": 10,
+  "version": 11,
   "weekStart": ""
 }

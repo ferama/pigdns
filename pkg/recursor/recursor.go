@@ -124,12 +124,14 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans, err := r.resolve(ctx, req, isIPV6)
 
 		if err == nil {
-			dsok := r.verifyDS(ctx, q, isIPV6)
-			if !dsok {
-				ans.SetRcode(ans, dns.RcodeServerFailure)
-				ans.Answer = nil
-				ans.Extra = nil
-				ans.Ns = nil
+			if utils.MsgGetDo(ans) {
+				dsok := r.verifyDS(ctx, ans, q, isIPV6)
+				if !dsok {
+					ans.SetRcode(ans, dns.RcodeServerFailure)
+					ans.Answer = nil
+					ans.Extra = nil
+					ans.Ns = nil
+				}
 			}
 		}
 
@@ -145,7 +147,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		return nil, res.Err
 	}
 
-	// log.Print(ans)
 	ans = r.cleanMsg(ans, req)
 	pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
 	pc.Rcode = ans.Rcode
@@ -153,13 +154,14 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 }
 
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
-func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bool {
+func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, isIPV6 bool) bool {
 	// return true
 
 	name := q.Name
 
+	// TODO: it make sense?
 	if utils.IsArpa(name) {
-		// TODO: it make sense?
+		utils.MsgSetAuthenticated(ans, false)
 		return true
 	}
 
@@ -250,6 +252,7 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				}
 			}
 		}
+
 		if verified {
 			log.Debug().
 				Str("q", name).
@@ -261,6 +264,7 @@ func (r *Recursor) verifyDS(ctx context.Context, q dns.Question, isIPV6 bool) bo
 				Bool("has-ds", ds != nil).
 				Bool("has-keys", len(keys) > 0).
 				Msg("[dnssec] DS error: failed")
+
 			return false
 		}
 
@@ -647,6 +651,8 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 	// return true
 	if utils.IsArpa(q.Name) {
 		// TODO: it make sense?
+
+		utils.MsgSetAuthenticated(ans, false)
 		return true
 	}
 
@@ -657,6 +663,7 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 
 	if len(rrsigs) == 0 {
 		// nothing to verify
+		utils.MsgSetAuthenticated(ans, false)
 		return true
 	}
 
@@ -693,12 +700,15 @@ func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question
 				Msg("[dnssec] verified")
 		}
 
+		utils.MsgSetAuthenticated(ans, true)
 		return true
 	}
 
 	log.Debug().
 		Str("q", q.Name).
 		Msg("[dnssec] not valid")
+
+	utils.MsgSetAuthenticated(ans, false)
 	return false
 }
 
@@ -942,6 +952,5 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	r.ansCache.Set(cacheKey, ans)
-
 	return ans, nil
 }

@@ -132,6 +132,13 @@ func (r *Request) Question() (dns.Question, error) {
 	return r.Msg.Question[0], nil
 }
 
+func (r *Request) IsDo() bool {
+	if r.Msg.IsEdns0() != nil {
+		return r.Msg.IsEdns0().Do()
+	}
+	return false
+}
+
 // QName returns the name of the question in the request.
 // If the request is malformed the root zone is returned.
 func (r *Request) QName() string {

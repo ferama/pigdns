@@ -61,6 +61,8 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		return nil, err
 	}
 
+	do := utils.MsgGetDo(msg)
+
 	ts := time.Until(item.Expires).Seconds()
 	// if item is still not deleted from cache (the go routine
 	// runs once each cacheExpiredCheckInterval seconds)
@@ -77,6 +79,10 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 	}
 	for _, a := range msg.Ns {
 		a.Header().Ttl = ttl
+	}
+
+	if do {
+		utils.MsgSetAuthenticated(msg, true)
 	}
 
 	metrics.Instance().ExchangeCacheHit()

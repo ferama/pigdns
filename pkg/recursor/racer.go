@@ -66,6 +66,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 	// }
 
 	utils.RemoveOPT(req)
+	// I need the do flag set here, otherwise no RRSIG record will be returned
 	req.SetEdns0(utils.MaxMsgSize, true)
 
 	// If we are here, there is no cached answer. Do query upstream
@@ -137,6 +138,14 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	countErrors := 0
 	var err error
 	var ans *dns.Msg
+
+	defer func() {
+		if ans != nil {
+			// always remove the do flag here. It will eventually set
+			// after DNSSEC verification
+			utils.MsgSetAuthenticated(ans, false)
+		}
+	}()
 
 	nextNSTimer := time.NewTimer(nextNSTimeout)
 	defer nextNSTimer.Stop()
