@@ -124,7 +124,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans, err := r.resolve(ctx, req, isIPV6)
 
 		if err == nil {
-			if utils.MsgGetDo(ans) {
+			if ans.AuthenticatedData {
 				dsok := r.verifyDS(ctx, ans, q, isIPV6)
 				if !dsok {
 					ans.SetRcode(ans, dns.RcodeServerFailure)

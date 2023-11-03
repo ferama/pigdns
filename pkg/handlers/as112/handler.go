@@ -24,7 +24,7 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		cc.AnweredBy = handlerName
 	}
 
-	if !strings.HasSuffix(r.QName(), "arpa.") {
+	if !strings.HasSuffix(r.Name(), "arpa.") {
 		h.Next.ServeDNS(c, r)
 		return
 	}
@@ -58,12 +58,13 @@ func (h *Handler) Match(name string, qtype uint16) string {
 	i := 0
 	end := false
 	for {
+		if _, ok := as112Zones[name[i:]]; ok {
+			return name[i:]
+		}
+
 		i, end = dns.NextLabel(name, i)
 		if end {
 			break
-		}
-		if _, ok := as112Zones[name[i:]]; ok {
-			return name[i:]
 		}
 	}
 
