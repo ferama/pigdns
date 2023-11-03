@@ -42,8 +42,11 @@ func Reset() {
 		delete(m.CounterByRcode, k)
 	}
 
-	prometheus.DefaultRegisterer.Unregister(m.queriesProcessedCacheHit)
-	prometheus.DefaultRegisterer.Unregister(m.queriesProcessedCacheMiss)
+	prometheus.DefaultRegisterer.Unregister(m.exchangeProcessedCacheHit)
+	prometheus.DefaultRegisterer.Unregister(m.exchangeProcessedCacheMiss)
+
+	prometheus.DefaultRegisterer.Unregister(m.queryProcessedCacheHit)
+	prometheus.DefaultRegisterer.Unregister(m.queryProcessedCacheMiss)
 
 	prometheus.DefaultRegisterer.Unregister(m.QueriesBlocked)
 	prometheus.DefaultRegisterer.Unregister(m.QueryLatency)
@@ -57,12 +60,14 @@ type metrics struct {
 
 	CounterByRcode map[int]prometheus.Counter
 
-	queriesProcessedCacheHit  prometheus.Counter
-	queriesProcessedCacheMiss prometheus.Counter
+	exchangeProcessedCacheHit  prometheus.Counter
+	exchangeProcessedCacheMiss prometheus.Counter
+
+	queryProcessedCacheHit  prometheus.Counter
+	queryProcessedCacheMiss prometheus.Counter
 
 	QueriesBlocked prometheus.Counter
-
-	QueryLatency prometheus.Histogram
+	QueryLatency   prometheus.Histogram
 }
 
 func newMetrics() *metrics {
@@ -71,15 +76,27 @@ func newMetrics() *metrics {
 		cacheCapacity:  make(map[string]prometheus.Gauge),
 		cacheItems:     make(map[string]prometheus.Gauge),
 
-		queriesProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
-			Name:        "pigdns_query_processed_total",
-			Help:        "The total number of processed events",
+		exchangeProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
+			Name:        "pigdns_exchange_processed_total",
+			Help:        "The total number of exchange events",
 			ConstLabels: prometheus.Labels{"cache": "hit"},
 		}),
 
-		queriesProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
+		exchangeProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
+			Name:        "pigdns_exchange_processed_total",
+			Help:        "The total number of exchange events",
+			ConstLabels: prometheus.Labels{"cache": "miss"},
+		}),
+
+		queryProcessedCacheHit: promauto.NewCounter(prometheus.CounterOpts{
 			Name:        "pigdns_query_processed_total",
-			Help:        "The total number of processed events",
+			Help:        "The total number of query events",
+			ConstLabels: prometheus.Labels{"cache": "hit"},
+		}),
+
+		queryProcessedCacheMiss: promauto.NewCounter(prometheus.CounterOpts{
+			Name:        "pigdns_query_processed_total",
+			Help:        "The total number of query events",
 			ConstLabels: prometheus.Labels{"cache": "miss"},
 		}),
 
@@ -115,18 +132,32 @@ func (m *metrics) RegisterCache(name string) {
 	})
 }
 
+func (m *metrics) ExchangeCacheHit() {
+	m.Lock()
+	defer m.Unlock()
+
+	m.exchangeProcessedCacheHit.Inc()
+}
+
+func (m *metrics) ExchangeCacheMiss() {
+	m.Lock()
+	defer m.Unlock()
+
+	m.exchangeProcessedCacheMiss.Inc()
+}
+
 func (m *metrics) QueryCacheHit() {
 	m.Lock()
 	defer m.Unlock()
 
-	m.queriesProcessedCacheHit.Inc()
+	m.queryProcessedCacheHit.Inc()
 }
 
 func (m *metrics) QueryCacheMiss() {
 	m.Lock()
 	defer m.Unlock()
 
-	m.queriesProcessedCacheMiss.Inc()
+	m.queryProcessedCacheMiss.Inc()
 }
 
 func (m *metrics) GetCacheCapacityMetric(name string) prometheus.Gauge {

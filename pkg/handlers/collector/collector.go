@@ -66,6 +66,12 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 
 	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
 	metrics.Instance().CounterByRcode[rcode].Inc()
+
+	if cacheHit {
+		metrics.Instance().QueryCacheHit()
+	} else {
+		metrics.Instance().QueryCacheMiss()
+	}
 }
 
 func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {

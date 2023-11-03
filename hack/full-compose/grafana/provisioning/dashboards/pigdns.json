@@ -132,7 +132,7 @@
             "uid": "prometheus_datasource"
           },
           "editorMode": "code",
-          "expr": "sum (\n  rate(\n    pigdns_query_processed_total[1m]\n  )\n)",
+          "expr": "sum (\n  rate(\n    pigdns_exchange_processed_total[1m]\n  )\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -243,7 +243,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(pigdns_query_processed_total[3m]))",
+          "expr": "sum(rate(pigdns_exchange_processed_total[3m]))",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -513,7 +513,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(pigdns_query_processed_total[5m])",
+          "expr": "rate(pigdns_exchange_processed_total[5m])",
           "instant": false,
           "legendFormat": "{{cache}}",
           "range": true,

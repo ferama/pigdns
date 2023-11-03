@@ -46,7 +46,7 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 	i.SetTTL(time.Duration(minTTL) * time.Second)
 	// log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
 
-	metrics.Instance().QueryCacheMiss()
+	metrics.Instance().ExchangeCacheMiss()
 	return c.cache.Set(key, i)
 }
 
@@ -79,7 +79,7 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		a.Header().Ttl = ttl
 	}
 
-	metrics.Instance().QueryCacheHit()
+	metrics.Instance().ExchangeCacheHit()
 	// log.Printf("[%s get] key=%s", c.name, key)
 	return msg, nil
 }

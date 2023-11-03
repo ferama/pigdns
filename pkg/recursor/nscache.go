@@ -64,7 +64,7 @@ func (c *nsCache) Set(as *authServers) error {
 	}
 	i.SetTTL(time.Duration(ttl) * time.Second)
 
-	metrics.Instance().QueryCacheMiss()
+	metrics.Instance().ExchangeCacheMiss()
 	// log.Printf("[%s set] zone=%s, TTL: %d", c.name, key, ttl)
 	return c.cache.Set(key, i)
 }
@@ -87,6 +87,6 @@ func (c *nsCache) Get(zone string) (*authServers, error) {
 	as.Zone = nsItem.Zone
 	// log.Printf("[%s get] zone=%s", c.name, as.Zone)
 
-	metrics.Instance().QueryCacheHit()
+	metrics.Instance().ExchangeCacheHit()
 	return &as, nil
 }
