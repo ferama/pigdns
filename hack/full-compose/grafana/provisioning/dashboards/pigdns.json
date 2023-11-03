@@ -278,6 +278,79 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "fixedColor": "blue",
+            "mode": "shades"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 15,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "text"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus_datasource"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "increase(pigdns_query_rcode_counter[$__range]) != 0",
+          "format": "time_series",
+          "instant": false,
+          "legendFormat": "{{rcode}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "By Rcode",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "palette-classic"
           },
           "custom": {
@@ -337,7 +410,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 14
       },
       "id": 4,
       "options": {
@@ -446,7 +519,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 14
       },
       "id": 6,
       "options": {
@@ -484,7 +557,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 21
       },
       "id": 2,
       "panels": [],
@@ -516,7 +589,7 @@
         "h": 8,
         "w": 9,
         "x": 0,
-        "y": 17
+        "y": 22
       },
       "id": 3,
       "options": {
@@ -587,7 +660,7 @@
         "h": 8,
         "w": 9,
         "x": 9,
-        "y": 17
+        "y": 22
       },
       "id": 14,
       "options": {
@@ -663,7 +736,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 17
+        "y": 22
       },
       "id": 5,
       "options": {
@@ -758,7 +831,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 30
       },
       "id": 1,
       "options": {
@@ -796,7 +869,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 38
       },
       "id": 9,
       "panels": [],
@@ -867,7 +940,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 39
       },
       "id": 10,
       "options": {
@@ -962,7 +1035,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 39
       },
       "id": 11,
       "options": {
@@ -1002,13 +1075,13 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "PigDNS",
   "uid": "b435f4cd-dae6-4b33-87bd-3b8fc289a75f",
-  "version": 11,
+  "version": 13,
   "weekStart": ""
 }

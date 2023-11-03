@@ -3,6 +3,7 @@ package blocklist
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -133,7 +134,15 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			cc.AnweredBy = handlerName
 		}
 		m := new(dns.Msg)
-		r.ReplyWithStatus(m, dns.RcodeRefused)
+
+		null, _ := dns.NewRR(fmt.Sprintf("%s IN A 0.0.0.0", r.Name()))
+		if r.QType() == dns.TypeAAAA {
+			null, _ = dns.NewRR(fmt.Sprintf("%s IN AAAA ::", r.Name()))
+		}
+		null.Header().Ttl = 3600 * 3
+
+		m.Answer = append(m.Answer, null)
+		r.Reply(m)
 
 		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
 		pc.Rcode = m.Rcode
