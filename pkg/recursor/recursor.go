@@ -586,7 +586,7 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 		}
 	}
 
-	if err == nil {
+	if err == nil && servers.Zone == zone {
 		r.nsCache.Set(servers)
 	}
 
@@ -750,32 +750,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 		return nil, err
 	}
-
-	// this cover cases on which ns return a cname
-	// ex: edge-114.defra2.icloud-content.com
-	// TODO: it seems to be no more needed
-	// cnamerr := utils.MsgExtractByType(nsResp, dns.TypeCNAME, "")
-	// if len(cnamerr) > 0 {
-	// 	nsCname := cnamerr[0].(*dns.CNAME)
-	// 	n := dns.CompareDomainName(nsCname.Header().Name, q.Name)
-	// 	prevLabel, _ := dns.PrevLabel(q.Name, n)
-	// 	newQ := fmt.Sprintf("%s%s", q.Name[:prevLabel], nsCname.Target)
-	// 	cnameReq := new(dns.Msg)
-	// 	cnameReq.SetQuestion(newQ, q.Qtype)
-
-	// 	qr := newQueryRacer(servers, cnameReq, isIPV6)
-	// 	ans, err := qr.run()
-	// 	if err == nil {
-	// 		nsCname.Target = newQ
-	// 		nsCname.Hdr.Name = q.Name
-	// 		ans.Answer = append([]dns.RR{nsCname}, ans.Answer...)
-	// 		for _, rr := range ans.Answer {
-	// 			if rr.Header().Rrtype == q.Qtype {
-	// 				return ans, nil
-	// 			}
-	// 		}
-	// 	}
-	// }
 
 	qr := newQueryRacer(servers, req, isIPV6)
 	ans, err := qr.run()
