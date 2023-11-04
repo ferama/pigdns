@@ -410,11 +410,15 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 	if len(extraServers.List) > 0 {
 		servers.RLock()
 		servers.List = append(servers.List, extraServers.List...)
-		if currServers != nil {
-			currServers.Lock()
-			servers.List = append(servers.List, currServers.List...)
-			currServers.Unlock()
-		}
+
+		// TODO: disabled for now. Add a test if it is needed
+		//
+		// if currServers != nil {
+		// 	currServers.Lock()
+		// 	servers.List = append(servers.List, currServers.List...)
+		// 	currServers.Unlock()
+		// }
+
 		servers.RUnlock()
 		extraServers.RUnlock()
 	}

@@ -16,6 +16,7 @@ var domainCases = []string{
 	"incanto.ru",
 	"c0551612.cdn.cloudfiles.rackspacecloud.com",
 	"ib.adnxs.com",
+	"eu-auth2.samsungosp.com",
 }
 
 type testHandler struct {
