@@ -3,7 +3,6 @@ FROM golang:1.21 as gobuilder
 ARG VERSION=development
 WORKDIR /go/src/app
 COPY . .
-RUN go test ./...
 RUN go build \
     -trimpath \
     -ldflags="-s -w" \

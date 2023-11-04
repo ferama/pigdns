@@ -1,4 +1,4 @@
-name: Build Docker
+name: Test & Build 
 
 on:
   push:
@@ -11,7 +11,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version: '^1.21.0'
+
+      - name: Run coverage
+        run: |
+          go test ./... -race
+
   docker:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
