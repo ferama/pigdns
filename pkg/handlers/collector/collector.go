@@ -33,6 +33,11 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	rcode := 0
 	if c.Value(pigdns.PigContextKey) != nil {
 		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+
+		if pc.Internal {
+			// do not log internal requests
+			return
+		}
 		isDOH = pc.IsDOH
 		cacheHit = pc.CacheHit
 		rcode = pc.Rcode

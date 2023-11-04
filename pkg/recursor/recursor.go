@@ -892,10 +892,10 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				newReq.SetQuestion(cname.Target, q.Qtype)
 
 				// run a new query here to solve the CNAME
-				// TODO: this one easily escape the blocklist.
-				// it should traverse all the chain
-				// resp, err := r.Query(context.TODO(), newReq, isIPV6)
-				resp, err := r.resolve(r.newContext(ctx), newReq, isIPV6)
+				// this must traverse all the chain otherwise
+				// it could easily escape the blocklist
+				resp, err := pigdns.QueryIntenal(ctx, newReq, isIPV6)
+
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
