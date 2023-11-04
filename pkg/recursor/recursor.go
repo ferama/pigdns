@@ -586,6 +586,9 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 		}
 	}
 
+	// severs.Zone could be different from zone if
+	// servers was set to rservers above. In that case
+	// we don't need to update cache
 	if err == nil && servers.Zone == zone {
 		r.nsCache.Set(servers)
 	}
