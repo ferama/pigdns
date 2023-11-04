@@ -3,7 +3,6 @@ package pigdns
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 
 	"github.com/miekg/dns"
@@ -65,7 +64,6 @@ func QueryIntenal(ctx context.Context, m *dns.Msg, isIPV6 bool) (*dns.Msg, error
 		rw.LAddr = &net.TCPAddr{IP: net.ParseIP("::1"), Port: 53}
 		rw.RAddr = &net.TCPAddr{IP: net.ParseIP("::1"), Port: 53}
 	}
-	log.Print(rw)
 
 	req := &Request{
 		ResponseWriter: rw,

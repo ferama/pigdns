@@ -10,10 +10,71 @@ import (
 	"github.com/miekg/dns"
 )
 
-func testCtx() context.Context {
-	metrics.Reset()
+var domainCases = []string{
+	"edge-114.defra2.icloud-content.com",
+	"authsvc.svcs.teams.office.com",
+	"incanto.ru",
+	"c0551612.cdn.cloudfiles.rackspacecloud.com",
+	"ib.adnxs.com",
+}
 
-	return context.WithValue(context.Background(), pigdns.PigContextKey, &pigdns.PigContext{})
+type testHandler struct {
+	Next     pigdns.Handler
+	recursor *Recursor
+}
+
+func (h *testHandler) ServeDNS(c context.Context, r *pigdns.Request) {
+	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
+	if err != nil {
+		h.Next.ServeDNS(c, r)
+	}
+	if len(m.Answer) != 0 || len(m.Ns) != 0 {
+		m.RecursionAvailable = true
+		m.Authoritative = false
+		utils.MsgSetupEdns(m)
+
+		// set the do flag
+		if r.IsDo() {
+			utils.MsgSetDo(m, true)
+		}
+
+		r.ReplyWithStatus(m, m.Rcode)
+		return
+	}
+	h.Next.ServeDNS(c, r)
+}
+
+func testCtx(r *Recursor) context.Context {
+	metrics.Reset()
+	handler := &testHandler{
+		recursor: r,
+	}
+
+	return context.WithValue(context.Background(), pigdns.PigContextKey, &pigdns.PigContext{
+		Chain: handler,
+	})
+}
+
+func TestDomainCases(t *testing.T) {
+	recursor := New(t.TempDir(), 1024*100)
+
+	for _, domain := range domainCases {
+		fqdn := dns.Fqdn(domain)
+		req := new(dns.Msg)
+		req.SetQuestion(fqdn, dns.TypeA)
+		ans, err := recursor.Query(testCtx(recursor), req, false)
+		if err != nil {
+			t.Fail()
+		}
+		if ans.Rcode != dns.RcodeSuccess {
+			t.Fail()
+		}
+
+		rr := utils.MsgExtractByType(ans, dns.TypeA, "")
+		if len(rr) == 0 {
+			t.Fail()
+		}
+	}
 }
 
 func TestQuery(t *testing.T) {
@@ -22,7 +83,7 @@ func TestQuery(t *testing.T) {
 	fqdn := dns.Fqdn("example.com")
 	req := new(dns.Msg)
 	req.SetQuestion(fqdn, dns.TypeA)
-	ans, err := recursor.Query(testCtx(), req, false)
+	ans, err := recursor.Query(testCtx(recursor), req, false)
 	if err != nil {
 		t.Fail()
 	}
@@ -37,16 +98,16 @@ func TestQuery(t *testing.T) {
 func TestBadDNSSEC(t *testing.T) {
 	recursor := New(t.TempDir(), 1024*100)
 
-	sites := []string{
+	domains := []string{
 		"dnssec-failed.org",
 		"rhybar.cz",
 	}
 
-	for _, site := range sites {
-		fqdn := dns.Fqdn(site)
+	for _, domain := range domains {
+		fqdn := dns.Fqdn(domain)
 		req := new(dns.Msg)
 		req.SetQuestion(fqdn, dns.TypeA)
-		ans, err := recursor.Query(testCtx(), req, false)
+		ans, err := recursor.Query(testCtx(recursor), req, false)
 		if err != nil {
 			t.Fail()
 		}
@@ -69,7 +130,7 @@ func TestGoodDNSSEC(t *testing.T) {
 		fqdn := dns.Fqdn(site)
 		req := new(dns.Msg)
 		req.SetQuestion(fqdn, dns.TypeA)
-		ans, err := recursor.Query(testCtx(), req, false)
+		ans, err := recursor.Query(testCtx(recursor), req, false)
 		if err != nil {
 			t.Fail()
 		}
