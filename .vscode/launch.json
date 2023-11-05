@@ -7,6 +7,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
+            "cwd": ".",
             "args": ["${workspaceRoot}/pigdns.yaml"]
         }
     ]
