@@ -4,10 +4,6 @@ services:
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
     # port mappings doesn't work with ipv6
-    logging:
-      driver: local
-      options:
-        max-size: "512m"
     ports:
       - "53:53/udp"
       - "53:53/tcp"

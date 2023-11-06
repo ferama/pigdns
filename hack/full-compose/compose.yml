@@ -4,7 +4,7 @@ services:
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
     logging:
-      driver: local
+      driver: json-file
       options:
         max-size: "512m"
     ports:
@@ -20,7 +20,7 @@ services:
     image: prom/node-exporter:latest
     container_name: node-exporter
     logging:
-      driver: local
+      driver: json-file
       options:
         max-size: "8m"
     volumes:
@@ -38,7 +38,7 @@ services:
     image: prom/prometheus
     container_name: prometheus
     logging:
-      driver: local
+      driver: json-file
       options:
         max-size: "8m"
     volumes:
@@ -49,7 +49,7 @@ services:
     image: ghcr.io/ferama/grafana:v10.2.0
     container_name: grafana
     logging:
-      driver: local
+      driver: json-file
       options:
         max-size: "8m"
     ports:

@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	MaxTTL = 60 * 60 * 24 // 86400
+	MsgMaxTTL = 60 * 60 * 24 // 86400
+	MsgMinTTL = 60
 
 	// https://www.netmeister.org/blog/dns-size.html
 	MaxMsgSize = 1232
@@ -69,7 +70,7 @@ func MsgExtractByType(msg *dns.Msg, typ uint16, name string) []dns.RR {
 
 func MsgGetMinTTL(m *dns.Msg) uint32 {
 	var minTTL uint32
-	minTTL = MaxTTL
+	minTTL = MsgMaxTTL
 	for _, a := range m.Answer {
 		ttl := a.Header().Ttl
 		if ttl == 0 {
@@ -85,7 +86,7 @@ func MsgGetMinTTL(m *dns.Msg) uint32 {
 		minTTL = min(minTTL, ttl)
 	}
 
-	return minTTL
+	return max(minTTL, MsgMinTTL)
 }
 
 func RemoveOPT(msg *dns.Msg) *dns.Msg {
