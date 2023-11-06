@@ -89,7 +89,7 @@ func MsgGetMinTTL(m *dns.Msg) uint32 {
 	return max(minTTL, MsgMinTTL)
 }
 
-func RemoveOPT(msg *dns.Msg) *dns.Msg {
+func MsgRemoveOPT(msg *dns.Msg) *dns.Msg {
 	extra := make([]dns.RR, len(msg.Extra))
 	copy(extra, msg.Extra)
 
@@ -126,7 +126,7 @@ func MsgGetDo(m *dns.Msg) bool {
 }
 
 func MsgSetupEdns(m *dns.Msg) {
-	RemoveOPT(m)
+	MsgRemoveOPT(m)
 
 	m.Compress = true
 

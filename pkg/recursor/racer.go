@@ -65,7 +65,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 	// 	return nil, errQnameEqNs
 	// }
 
-	utils.RemoveOPT(req)
+	utils.MsgRemoveOPT(req)
 	// I need the do flag set here, otherwise no RRSIG record will be returned
 	req.SetEdns0(utils.MaxMsgSize, true)
 
@@ -85,7 +85,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 
 		// if the server reply with FORMERR, retry with no edns
 		if ans.Rcode == dns.RcodeFormatError && !noEdnsTried {
-			utils.RemoveOPT(req)
+			utils.MsgRemoveOPT(req)
 			noEdnsTried = true
 			continue
 		}

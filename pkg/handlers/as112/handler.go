@@ -40,6 +40,9 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	msg.Authoritative = true
 	msg.RecursionAvailable = true
 
+	pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
+	pc.Rcode = dns.RcodeNameError
+
 	r.ReplyWithStatus(msg, dns.RcodeNameError)
 }
 

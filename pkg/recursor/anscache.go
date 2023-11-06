@@ -34,6 +34,7 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 		return errMsgIsNull
 	}
 	minTTL := utils.MsgGetMinTTL(m)
+	utils.MsgRemoveOPT(m)
 
 	packed, err := m.Pack()
 	if err != nil {
