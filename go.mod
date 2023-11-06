@@ -14,7 +14,7 @@ require (
 	github.com/miekg/dns v1.1.56
 	github.com/prometheus/client_golang v1.17.0
 	github.com/rs/zerolog v1.31.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
 )
 
