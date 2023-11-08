@@ -66,6 +66,7 @@ func TestDomainCases(t *testing.T) {
 		ans, err := recursor.Query(testCtx(recursor), req, false)
 		if err != nil {
 			t.Fail()
+			return
 		}
 		if ans.Rcode != dns.RcodeSuccess {
 			t.Fail()
