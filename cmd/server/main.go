@@ -99,7 +99,7 @@ var rootCmd = &cobra.Command{
 				zoneConf.ZoneFilePath,
 				zoneConf.Name,
 				zoneConf.RegexipEnabled,
-				false)
+				certmanEnable)
 			pigdns.HandleMux(dns.Fqdn(zoneConf.Name), h, dnsMux, false)
 			pigdns.HandleMux(dns.Fqdn(zoneConf.Name), h, dohMux, true)
 		}

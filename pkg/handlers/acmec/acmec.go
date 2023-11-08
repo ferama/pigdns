@@ -58,7 +58,7 @@ func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		h.parseQuery(m, r)
 	}
 
-	if len(m.Answer) != 0 {
+	if len(m.Answer) != 0 || r.QType() == dns.TypeCAA {
 		if c.Value(collector.CollectorContextKey) != nil {
 			cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 			cc.AnweredBy = handlerName
