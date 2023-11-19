@@ -15,7 +15,7 @@ var (
 )
 
 type ansCache struct {
-	cache *cache.FileCache
+	cache cache.Cache
 	name  string
 }
 

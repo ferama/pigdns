@@ -16,7 +16,7 @@ type nsCacheItem struct {
 }
 
 type nsCache struct {
-	cache *cache.FileCache
+	cache cache.Cache
 	name  string
 }
 

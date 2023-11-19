@@ -20,5 +20,5 @@ type Cache interface {
 	Get(key string) (*Item, error)
 
 	// Set item to cache
-	Set(key string, value *Item, ttl time.Duration) error
+	Set(key string, value *Item) error
 }
