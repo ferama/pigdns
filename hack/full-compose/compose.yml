@@ -3,10 +3,12 @@ services:
     restart: unless-stopped
     image: ghcr.io/ferama/pigdns:main
     container_name: pigdns
+    networks:
+      - pignet
     logging:
       driver: json-file
       options:
-        max-size: "512m"
+        max-size: "128m"
     ports:
       - "53:53/udp"
       - "53:53/tcp"
@@ -19,6 +21,8 @@ services:
     restart: unless-stopped
     image: prom/node-exporter:latest
     container_name: node-exporter
+    networks:
+      - pignet
     logging:
       driver: json-file
       options:
@@ -37,6 +41,8 @@ services:
     restart: unless-stopped
     image: prom/prometheus
     container_name: prometheus
+    networks:
+      - pignet
     logging:
       driver: json-file
       options:
@@ -48,6 +54,8 @@ services:
     restart: unless-stopped
     image: ghcr.io/ferama/grafana:v10.2.0
     container_name: grafana
+    networks:
+      - pignet
     logging:
       driver: json-file
       options:
@@ -63,3 +71,14 @@ services:
 volumes:
   grafana-storage:
   pigdns-storage:
+
+networks:
+  pignet:
+    # OPTIONAL: enable ipv6 net.
+    # Follow the instructions here before
+    # https://docs.docker.com/config/daemon/ipv6/
+
+    # enable_ipv6: true
+    # ipam:
+    #   config:
+    #     - subnet: 2001:0DB8::/112
