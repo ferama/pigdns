@@ -318,8 +318,8 @@ func (c *FileCache) Get(key string) (*Item, error) {
 		return nil, fmt.Errorf("no bucket exists for %s", key)
 	}
 
-	bucket.mu.RLock()
-	defer bucket.mu.RUnlock()
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
 
 	if val, ok := bucket.data[key]; ok {
 		return val, nil
