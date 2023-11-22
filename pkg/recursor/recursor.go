@@ -764,7 +764,13 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
+	maxNsDepth := 3
 	for len(ans.Answer) == 0 && len(ans.Ns) > 0 {
+		maxNsDepth--
+		// prevents death loop
+		if maxNsDepth == 0 {
+			break
+		}
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
 		nextServers, err := r.buildServers(ctx, ans, q.Name, nil, isIPV6)
