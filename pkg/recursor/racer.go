@@ -55,6 +55,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 			Str(".q", q.Name).
 			Str("zone", zone).
 			Str("ns-fqdn", ns.Fqdn).
+			Str("ns-addr", ns.Addr).
 			Str("t", l.Round(1*time.Millisecond).String()).
 			Str("type", dns.TypeToString[q.Qtype]).
 			Msg("[recursor]")
