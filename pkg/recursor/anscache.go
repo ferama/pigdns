@@ -34,6 +34,12 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 		return errMsgIsNull
 	}
 	minTTL := utils.MsgGetMinTTL(m)
+
+	// do not cache failures for long time
+	if m.Rcode != dns.RcodeSuccess {
+		minTTL = utils.MsgMinTTL
+	}
+
 	utils.MsgRemoveOPT(m)
 
 	packed, err := m.Pack()
