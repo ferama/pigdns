@@ -29,10 +29,11 @@ const (
 )
 
 type bucket struct {
+	sync.Mutex
+
 	data map[string]*Item
 
 	idx uint64
-	mu  sync.RWMutex
 }
 
 type FileCache struct {
@@ -97,9 +98,9 @@ func (c *FileCache) getCacheSize() int {
 	itemsCount := 0
 	for i = 0; i <= cacheNumBuckets; i++ {
 		bucket := c.buckets[i]
-		bucket.mu.RLock()
+		bucket.Lock()
 		itemsCount += len(bucket.data)
-		bucket.mu.RUnlock()
+		bucket.Unlock()
 	}
 
 	m := metrics.Instance().GetCacheItemsCountMetric(c.name)
@@ -197,14 +198,14 @@ func (c *FileCache) dumpJob(bucketIdx uint64) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	bucket.mu.RLock()
+	bucket.Lock()
 	err := enc.Encode(bucket.data)
 	if err != nil {
 		log.Printf("[%s cache] cannot dump cache %s", c.name, err)
-		bucket.mu.RUnlock()
+		bucket.Unlock()
 		return
 	}
-	bucket.mu.RUnlock()
+	bucket.Unlock()
 
 	dir := filepath.Join(c.datadir, cacheSubDir)
 	err = os.MkdirAll(dir, os.ModePerm)
@@ -249,14 +250,14 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 
 	bucket := c.buckets[bucketIdx]
 
-	bucket.mu.Lock()
+	bucket.Lock()
 	for k, v := range bucket.data {
 		s = append(s, struct {
 			key     string
 			expires time.Time
 		}{key: k, expires: v.Expires})
 	}
-	bucket.mu.Unlock()
+	bucket.Unlock()
 
 	maxBucketSize := c.maxItems / cacheNumBuckets
 	bucketSize := len(bucket.data)
@@ -282,8 +283,8 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 
 func (c *FileCache) expireJob(bucketIdx uint64) {
 	bucket := c.buckets[bucketIdx]
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
+	bucket.Lock()
+	defer bucket.Unlock()
 
 	for k, v := range bucket.data {
 		if time.Now().After(v.Expires) {
@@ -305,9 +306,9 @@ func (c *FileCache) Set(key string, value *Item) error {
 		return fmt.Errorf("no bucket exists for %s", key)
 	}
 
-	bucket.mu.Lock()
+	bucket.Lock()
 	bucket.data[key] = value
-	bucket.mu.Unlock()
+	bucket.Unlock()
 
 	return nil
 }
@@ -318,8 +319,8 @@ func (c *FileCache) Get(key string) (*Item, error) {
 		return nil, fmt.Errorf("no bucket exists for %s", key)
 	}
 
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
+	bucket.Lock()
+	defer bucket.Unlock()
 
 	if val, ok := bucket.data[key]; ok {
 		return val, nil
