@@ -40,8 +40,8 @@ const (
 	// timeout until error
 	dialTimeout = 2 * time.Second
 
-	// how deeply we will search for cnames
-	cnameChainMaxDeep = 16
+	// how deeply we will search for cnames and nameservers
+	chainMaxDeep = 16
 
 	// resolver will be called recursively. the recustion
 	// count cannot be greater than resolverMaxLevel
@@ -764,7 +764,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	maxNsDepth := 3
+	maxNsDepth := chainMaxDeep
 	for len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		maxNsDepth--
 		// prevents death loop
@@ -853,7 +853,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	if !haveAnswer {
 		ans.Ns = []dns.RR{}
 		ans.Extra = []dns.RR{}
-		maxLoop := cnameChainMaxDeep
+		maxLoop := chainMaxDeep
 		for {
 			ansCopy := ans.Copy()
 			var rr dns.RR
