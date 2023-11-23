@@ -257,10 +257,10 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 			expires time.Time
 		}{key: k, expires: v.Expires})
 	}
-	bucket.Unlock()
 
 	maxBucketSize := c.maxItems / cacheNumBuckets
 	bucketSize := len(bucket.data)
+	bucket.Unlock()
 
 	// if bucketSize is greater than maxBucketSize
 	// drop its size by half evicting the closest to expire items
@@ -276,7 +276,10 @@ func (c *FileCache) evictJob(bucketIdx uint64) {
 				Str("name", c.name).
 				Str("key", i.key).
 				Msg("[cache] evicted")
+
+			bucket.Lock()
 			delete(bucket.data, i.key)
+			bucket.Unlock()
 		}
 	}
 }
