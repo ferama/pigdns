@@ -450,7 +450,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := pigdns.QueryIntenal(ctx, ra, isIPV6)
+		rans, err := r.resolve(r.newContext(ctx), ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -472,7 +472,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 			raaaa := new(dns.Msg)
 			raaaa.SetQuestion(ns, dns.TypeAAAA)
-			raaaans, err := pigdns.QueryIntenal(ctx, raaaa, isIPV6)
+			raaaans, err := r.resolve(r.newContext(ctx), raaaa, isIPV6)
 			if err != nil {
 				return
 			}
