@@ -434,6 +434,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 
 func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone string, servers *authServers, isIPV6 bool) {
 	rc := ctx.Value(recursorContextKey).(*recursorContext)
+
 	// if we have NS not resolved in Extra section, resolve them
 	for _, ns := range toResolve {
 		// prevents loops. if this ns was already in context in a previous
@@ -449,7 +450,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := r.resolve(ctx, ra, isIPV6)
+		rans, err := pigdns.QueryIntenal(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -471,7 +472,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 			raaaa := new(dns.Msg)
 			raaaa.SetQuestion(ns, dns.TypeAAAA)
-			raaaans, err := r.resolve(ctx, raaaa, isIPV6)
+			raaaans, err := pigdns.QueryIntenal(ctx, raaaa, isIPV6)
 			if err != nil {
 				return
 			}
@@ -771,6 +772,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if maxNsDepth == 0 {
 			break
 		}
+
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
 		nextServers, err := r.buildServers(ctx, ans, q.Name, nil, isIPV6)
@@ -781,6 +783,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				return ans, nil
 			}
 		}
+
 		if nextServers == nil {
 			return ans, nil
 		}

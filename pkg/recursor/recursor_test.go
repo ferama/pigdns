@@ -18,6 +18,7 @@ var domainCases = []string{
 	"ib.adnxs.com",
 	"eu-auth2.samsungosp.com",
 	"iam.cloud.ibm.com",
+	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
 }
 
 type testHandler struct {
