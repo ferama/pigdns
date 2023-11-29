@@ -405,7 +405,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		Zone: zone,
 	}
 
-	r.resolveExtraNs(r.newContext(ctx), toResolve, zone, extraServers, isIPV6)
+	r.resolveExtraNs(ctx, toResolve, zone, extraServers, isIPV6)
 	extraServers.RLock()
 	if len(extraServers.List) > 0 {
 		servers.RLock()
