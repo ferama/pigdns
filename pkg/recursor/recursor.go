@@ -199,8 +199,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			// dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
-			dsans, err := pigdns.QueryIntenal(ctx, dsreq, isIPV6)
+			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
 			if err != nil {
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
@@ -234,8 +233,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
 		// this is not part of a previous recursion, I need to start a new context here
 		// to reset the recursorContext as a fresh query
-		// kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
-		kans, err := pigdns.QueryIntenal(ctx, kreq, isIPV6)
+		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
 		if err != nil {
 			return false
 		}
