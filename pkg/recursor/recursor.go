@@ -199,7 +199,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			// dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			dsans, err := pigdns.QueryIntenal(ctx, dsreq, isIPV6)
 			if err != nil {
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
@@ -233,7 +234,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
 		// this is not part of a previous recursion, I need to start a new context here
 		// to reset the recursorContext as a fresh query
-		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
+		// kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
+		kans, err := pigdns.QueryIntenal(ctx, kreq, isIPV6)
 		if err != nil {
 			return false
 		}
@@ -450,7 +452,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := r.resolve(r.newContext(ctx), ra, isIPV6)
+		rans, err := pigdns.QueryIntenal(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -472,7 +474,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 			raaaa := new(dns.Msg)
 			raaaa.SetQuestion(ns, dns.TypeAAAA)
-			raaaans, err := r.resolve(r.newContext(ctx), raaaa, isIPV6)
+			raaaans, err := pigdns.QueryIntenal(ctx, raaaa, isIPV6)
 			if err != nil {
 				return
 			}
