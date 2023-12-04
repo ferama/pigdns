@@ -124,15 +124,15 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 		ans, err := r.resolve(ctx, req, isIPV6)
 
 		if err == nil {
-			if ans.AuthenticatedData {
-				dsok := r.verifyDS(ctx, ans, q, isIPV6)
-				if !dsok {
-					ans.SetRcode(ans, dns.RcodeServerFailure)
-					ans.Answer = nil
-					ans.Extra = nil
-					ans.Ns = nil
-				}
+			// if ans.AuthenticatedData {
+			dsok := r.verifyDS(ctx, ans, q, isIPV6)
+			if !dsok {
+				ans.SetRcode(ans, dns.RcodeServerFailure)
+				ans.Answer = nil
+				ans.Extra = nil
+				ans.Ns = nil
 			}
+			// }
 		}
 
 		return &retvalue{
@@ -199,7 +199,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			// dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			dsans, err := r.resolve(ctx, dsreq, isIPV6)
 			if err != nil {
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
@@ -233,7 +234,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
 		// this is not part of a previous recursion, I need to start a new context here
 		// to reset the recursorContext as a fresh query
-		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
+		// kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
+		kans, err := r.resolve(ctx, kreq, isIPV6)
 		if err != nil {
 			return false
 		}

@@ -2,6 +2,7 @@ package recursor
 
 import (
 	"context"
+	"log"
 	"testing"
 
 	"github.com/ferama/pigdns/pkg/metrics"
@@ -30,7 +31,8 @@ type testHandler struct {
 func (h *testHandler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
 	if err != nil {
-		h.Next.ServeDNS(c, r)
+		// h.Next.ServeDNS(c, r)
+		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	}
 	if len(m.Answer) != 0 || len(m.Ns) != 0 {
 		m.RecursionAvailable = true
@@ -45,7 +47,8 @@ func (h *testHandler) ServeDNS(c context.Context, r *pigdns.Request) {
 		r.ReplyWithStatus(m, m.Rcode)
 		return
 	}
-	h.Next.ServeDNS(c, r)
+	// h.Next.ServeDNS(c, r)
+	r.ReplyWithStatus(m, dns.RcodeServerFailure)
 }
 
 func testCtx(r *Recursor) context.Context {
@@ -106,6 +109,7 @@ func TestBadDNSSEC(t *testing.T) {
 	domains := []string{
 		"dnssec-failed.org",
 		"rhybar.cz",
+		"brokendnssec.net",
 	}
 
 	for _, domain := range domains {
@@ -116,6 +120,7 @@ func TestBadDNSSEC(t *testing.T) {
 		if err != nil {
 			t.Fail()
 		}
+		log.Printf("\n==========> %s", ans)
 		if ans.Rcode != dns.RcodeServerFailure {
 			t.Fail()
 		}
