@@ -2,7 +2,6 @@ package recursor
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/ferama/pigdns/pkg/metrics"
@@ -19,8 +18,8 @@ var domainCases = []string{
 	"ib.adnxs.com",
 	"eu-auth2.samsungosp.com",
 	"iam.cloud.ibm.com",
-	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
 	"js.monitor.azure.com",
+	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
 }
 
 type testHandler struct {
@@ -31,8 +30,12 @@ type testHandler struct {
 func (h *testHandler) ServeDNS(c context.Context, r *pigdns.Request) {
 	m, err := h.recursor.Query(c, r.Msg, r.FamilyIsIPv6())
 	if err != nil {
-		// h.Next.ServeDNS(c, r)
-		r.ReplyWithStatus(m, dns.RcodeServerFailure)
+		// if m != nil {
+		// 	r.ReplyWithStatus(m, m.Rcode)
+		// 	return
+		// }
+		r.ReplyWithStatus(r.Msg, dns.RcodeServerFailure)
+		return
 	}
 	if len(m.Answer) != 0 || len(m.Ns) != 0 {
 		m.RecursionAvailable = true
@@ -75,12 +78,12 @@ func TestDomainCases(t *testing.T) {
 			return
 		}
 		if ans.Rcode != dns.RcodeSuccess {
-			t.Fail()
+			t.Fatalf("test failed: %s", domain)
 		}
 
 		rr := utils.MsgExtractByType(ans, dns.TypeA, "")
 		if len(rr) == 0 {
-			t.Fail()
+			t.Fatalf("test failed no records: %s", domain)
 		}
 	}
 }
@@ -120,7 +123,6 @@ func TestBadDNSSEC(t *testing.T) {
 		if err != nil {
 			t.Fail()
 		}
-		log.Printf("\n==========> %s", ans)
 		if ans.Rcode != dns.RcodeServerFailure {
 			t.Fail()
 		}

@@ -122,7 +122,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
-
 		if err == nil {
 			// if ans.AuthenticatedData {
 			dsok := r.verifyDS(ctx, ans, q, isIPV6)
@@ -199,8 +198,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			// dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
-			dsans, err := r.resolve(ctx, dsreq, isIPV6)
+			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			// dsans, err := r.resolve(ctx, dsreq, isIPV6)
 			if err != nil {
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
@@ -409,6 +408,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 	}
 
 	r.resolveExtraNs(ctx, toResolve, zone, extraServers, isIPV6)
+
 	extraServers.RLock()
 	if len(extraServers.List) > 0 {
 		servers.RLock()
@@ -432,6 +432,7 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 	if len(servers.List) == 0 {
 		return nil, errNoNSfound
 	}
+
 	return servers, nil
 }
 
@@ -443,17 +444,24 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// prevents loops. if this ns was already in context in a previous
 		// recursion, do not put it again in loop.
 		rc.Lock()
-		if slices.Contains(rc.ToResolveList, ns) {
-			rc.Unlock()
-			break
-		}
+		// if slices.Contains(rc.ToResolveList, ns) {
+		// 	rc.Unlock()
+		// 	break
+		// }
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 		rc.Unlock()
 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := pigdns.QueryInternal(ctx, ra, isIPV6)
+
+		// using pidns.QueryInternal -> go routine leak
+		// using resove with new context -> infinite loop
+		// rc := ctx.Value(recursorContextKey).(*recursorContext)
+		// rc.Lock()
+		// rc.ToResolveList = []string{}
+		// rc.Unlock()
+		rans, err := r.resolve(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -475,7 +483,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 			raaaa := new(dns.Msg)
 			raaaa.SetQuestion(ns, dns.TypeAAAA)
-			raaaans, err := pigdns.QueryInternal(ctx, raaaa, isIPV6)
+			raaaans, err := r.resolve(ctx, raaaa, isIPV6)
 			if err != nil {
 				return
 			}
