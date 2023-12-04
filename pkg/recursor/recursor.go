@@ -234,8 +234,9 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		kreq.SetQuestion(name, dns.TypeDNSKEY)
 		// this is not part of a previous recursion, I need to start a new context here
 		// to reset the recursorContext as a fresh query
-		// kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
-		kans, err := r.resolve(ctx, kreq, isIPV6)
+
+		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
+		// kans, err := r.resolve(ctx, kreq, isIPV6)
 		if err != nil {
 			return false
 		}
@@ -452,7 +453,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// get the A record
 		ra := new(dns.Msg)
 		ra.SetQuestion(ns, dns.TypeA)
-		rans, err := pigdns.QueryIntenal(ctx, ra, isIPV6)
+		rans, err := pigdns.QueryInternal(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
 				break
@@ -474,7 +475,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 			raaaa := new(dns.Msg)
 			raaaa.SetQuestion(ns, dns.TypeAAAA)
-			raaaans, err := pigdns.QueryIntenal(ctx, raaaa, isIPV6)
+			raaaans, err := pigdns.QueryInternal(ctx, raaaa, isIPV6)
 			if err != nil {
 				return
 			}
@@ -886,7 +887,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				// run a new query here to solve the CNAME
 				// this must traverse all the chain otherwise
 				// it could easily escape the blocklist
-				resp, err := pigdns.QueryIntenal(ctx, newReq, isIPV6)
+				resp, err := pigdns.QueryInternal(ctx, newReq, isIPV6)
 
 				if err == errRecursionMaxLevel {
 					return nil, err

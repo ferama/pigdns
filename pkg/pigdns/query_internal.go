@@ -41,7 +41,7 @@ func (w *InternalWriter) TsigTimersOnly(ok bool) {}
 
 func (w *InternalWriter) Hijack() {}
 
-func QueryIntenal(ctx context.Context, m *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+func QueryInternal(ctx context.Context, m *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	if ctx.Value(PigContextKey) == nil {
 		return nil, errors.New("no context")
 	}
