@@ -141,15 +141,15 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
 		if err == nil {
-			// if ans.AuthenticatedData {
-			dsok := r.verifyDS(ctx, ans, q, isIPV6)
-			if !dsok {
-				ans.SetRcode(ans, dns.RcodeServerFailure)
-				ans.Answer = nil
-				ans.Extra = nil
-				ans.Ns = nil
+			if ans.AuthenticatedData {
+				dsok := r.verifyDS(ctx, ans, q, isIPV6)
+				if !dsok {
+					ans.SetRcode(ans, dns.RcodeServerFailure)
+					ans.Answer = nil
+					ans.Extra = nil
+					ans.Ns = nil
+				}
 			}
-			// }
 		}
 
 		return &retvalue{
