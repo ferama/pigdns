@@ -141,15 +141,19 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
 		if err == nil {
-			if ans.AuthenticatedData {
-				dsok := r.verifyDS(ctx, ans, q, isIPV6)
-				if !dsok {
-					ans.SetRcode(ans, dns.RcodeServerFailure)
-					ans.Answer = nil
-					ans.Extra = nil
-					ans.Ns = nil
-				}
+			// if ans.AuthenticatedData {
+			dsok, broken := r.verifyDS(ctx, ans, q, isIPV6)
+
+			if (!dsok && ans.AuthenticatedData) || broken {
+				ans.SetRcode(ans, dns.RcodeServerFailure)
+				ans.Answer = nil
+				ans.Extra = nil
+				ans.Ns = nil
+
+				// update cache with failure
+				r.ansCache.Set(reqKey, ans)
 			}
+			// }
 		}
 
 		return &retvalue{
@@ -171,7 +175,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 }
 
 // https://www.cloudflare.com/it-it/dns/dnssec/how-dnssec-works/
-func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, isIPV6 bool) bool {
+func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, isIPV6 bool) (verified bool, broken bool) {
 	// return true
 
 	name := q.Name
@@ -179,7 +183,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 	// TODO: it make sense?
 	if utils.IsArpa(name) {
 		utils.MsgSetAuthenticated(ans, false)
-		return true
+		return true, false
 	}
 
 	end := false
@@ -205,13 +209,13 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 
 			resp, _, err := r.resolveNS(ctx, dsreq.Question[0], isIPV6, 0)
 			if err != nil {
-				return false
+				return false, false
 			}
 
 			if resp != nil && r.findSoa(resp) != nil {
 				name, end = next(name)
 				if end {
-					return true
+					return true, false
 				}
 				continue
 			}
@@ -221,7 +225,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			if dsErr != nil {
 				name, end = next(name)
 				if end {
-					return true
+					return true, false
 				}
 				continue
 			}
@@ -231,7 +235,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				secerr := nsecVerifyNODATA(dsans, nsec3Set)
 				if secerr != nil {
 					log.Error().Msg(secerr.Error())
-					return false
+					return false, false
 				}
 			}
 
@@ -241,7 +245,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				// No DS. Search into the upper zone
 				name, end = next(name)
 				if end {
-					return true
+					return true, false
 				}
 				continue
 			}
@@ -258,7 +262,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		kans, err := r.resolve(r.newContext(ctx), kreq, isIPV6)
 		// kans, err := r.resolve(ctx, kreq, isIPV6)
 		if err != nil {
-			return false
+			return false, false
 		}
 		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, name)
 
@@ -282,17 +286,19 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				Str("ds-name", ds.Header().Name).
 				Msg("[dnssec] DS verified")
 		} else {
+			hasDs := ds != nil
+			hasKeys := len(keys) > 0
 			log.Debug().
 				Str("q", name).
-				Bool("has-ds", ds != nil).
-				Bool("has-keys", len(keys) > 0).
+				Bool("has-ds", hasDs).
+				Bool("has-keys", hasKeys).
 				Msg("[dnssec] DS error: failed")
 
-			return false
+			return false, hasDs != hasKeys
 		}
 
 		if end {
-			return true
+			return true, false
 		}
 		name, end = next(name)
 	}
