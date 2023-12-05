@@ -216,14 +216,14 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			dsans, dsErr := r.resolve(r.newContext(ctx), dsreq, isIPV6)
 			// dsans, err := r.resolve(ctx, dsreq, isIPV6)
-			if err != nil {
-				if err == errRecursionMaxLevel {
-					return false
+			if dsErr != nil {
+				name, end = next(name)
+				if end {
+					return true
 				}
-				// if error is nameserversLoop, no DS record exists
-				return err == errNameserversLoop
+				continue
 			}
 
 			nsec3Set := utils.MsgExtractByType(dsans, dns.TypeNSEC3, "")
