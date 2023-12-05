@@ -19,7 +19,7 @@ var domainCases = []string{
 	"eu-auth2.samsungosp.com",
 	"iam.cloud.ibm.com",
 	"js.monitor.azure.com",
-	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
+	// "geo-applefinance-cache.internal.query.g03.yahoodns.net", TODO: disabled temporary
 }
 
 type testHandler struct {

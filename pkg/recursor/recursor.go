@@ -88,6 +88,23 @@ func New(datadir string, cacheSize int) *Recursor {
 
 	log.Printf("[recursor] enabling file based cache")
 
+	// # go routines leaks HOWTO:
+	// $ watch curl -s http://localhost:8080/metrics | grep go_goroutines
+	// Enable the following code and launch the stress test.
+	// Ensure that the goroutines count before and after the stress test
+	// are equal
+	//
+	// go func() {
+	// 	for {
+	// 		time.Sleep(20 * time.Second)
+	// 		log.Print("===================================================================================")
+	// 		stack := debug.Stack()
+	// 		// w.Write(stack)
+	// 		log.Printf("%s", stack)
+	// 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
+	// 	}
+	// }()
+
 	return r
 }
 
@@ -100,6 +117,7 @@ func (r *Recursor) newContext(ctx context.Context) context.Context {
 }
 
 func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
+
 	ctx = r.newContext(ctx)
 
 	q := req.Question[0]
@@ -201,6 +219,9 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			dsans, err := r.resolve(r.newContext(ctx), dsreq, isIPV6)
 			// dsans, err := r.resolve(ctx, dsreq, isIPV6)
 			if err != nil {
+				if err == errRecursionMaxLevel {
+					return false
+				}
 				// if error is nameserversLoop, no DS record exists
 				return err == errNameserversLoop
 			}
@@ -423,8 +444,8 @@ func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, 
 		// }
 
 		servers.RUnlock()
-		extraServers.RUnlock()
 	}
+	extraServers.RUnlock()
 
 	// if we are here we don't have any place to search anymore
 	servers.RLock()
@@ -444,10 +465,10 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		// prevents loops. if this ns was already in context in a previous
 		// recursion, do not put it again in loop.
 		rc.Lock()
-		// if slices.Contains(rc.ToResolveList, ns) {
-		// 	rc.Unlock()
-		// 	break
-		// }
+		if slices.Contains(rc.ToResolveList, ns) {
+			rc.Unlock()
+			break
+		}
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 		rc.Unlock()
 
@@ -456,11 +477,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		ra.SetQuestion(ns, dns.TypeA)
 
 		// using pidns.QueryInternal -> go routine leak
-		// using resove with new context -> infinite loop
-		// rc := ctx.Value(recursorContextKey).(*recursorContext)
-		// rc.Lock()
-		// rc.ToResolveList = []string{}
-		// rc.Unlock()
+		// using resolve with new context -> infinite loop and hangs on eunic.net.ua
 		rans, err := r.resolve(ctx, ra, isIPV6)
 		if err != nil {
 			if err == errRecursionMaxLevel {
@@ -776,6 +793,12 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
+	// if q.Name == "eunic.net.ua." {
+	// 	log.Printf("=========== %s =========", q.Name)
+	// 	log.Print(servers.String())
+	// 	log.Print(ans)
+	// }
+
 	maxNsDepth := chainMaxDeep
 	for len(ans.Answer) == 0 && len(ans.Ns) > 0 {
 		maxNsDepth--
@@ -850,7 +873,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				soa.Extra = nil
 				soa.Ns = nil
 			}
-
 			r.ansCache.Set(cacheKey, soa)
 			return soa, nil
 		}
