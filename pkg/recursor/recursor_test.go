@@ -19,7 +19,7 @@ var domainCases = []string{
 	"eu-auth2.samsungosp.com",
 	"iam.cloud.ibm.com",
 	"js.monitor.azure.com",
-	// "geo-applefinance-cache.internal.query.g03.yahoodns.net", TODO: disabled temporary
+	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
 }
 
 type testHandler struct {
@@ -121,33 +121,32 @@ func TestBadDNSSEC(t *testing.T) {
 		req.SetQuestion(fqdn, dns.TypeA)
 		ans, err := recursor.Query(testCtx(recursor), req, false)
 		if err != nil {
-			t.Fail()
+			t.Fatalf("bad dnssec check '%s' %s", domain, err)
 		}
 		if ans.Rcode != dns.RcodeServerFailure {
-			t.Fail()
+			t.Fatalf("bad dnssec check '%s' failure expected", domain)
 		}
 	}
 }
 
 func TestGoodDNSSEC(t *testing.T) {
-
 	recursor := New(t.TempDir(), 1024*100)
 
-	sites := []string{
+	domains := []string{
 		"internetsociety.org",
 		"dnssec-tools.org",
 	}
 
-	for _, site := range sites {
-		fqdn := dns.Fqdn(site)
+	for _, domain := range domains {
+		fqdn := dns.Fqdn(domain)
 		req := new(dns.Msg)
 		req.SetQuestion(fqdn, dns.TypeA)
 		ans, err := recursor.Query(testCtx(recursor), req, false)
 		if err != nil {
-			t.Fail()
+			t.Fatalf("good dnssec check '%s' %s", domain, err)
 		}
 		if ans.Rcode == dns.RcodeServerFailure {
-			t.Fail()
+			t.Fatalf("good dnssec check '%s' failure expected", domain)
 		}
 	}
 }

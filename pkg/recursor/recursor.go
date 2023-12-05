@@ -467,7 +467,7 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 		rc.Lock()
 		if slices.Contains(rc.ToResolveList, ns) {
 			rc.Unlock()
-			break
+			continue
 		}
 		rc.ToResolveList = append(rc.ToResolveList, ns)
 		rc.Unlock()
@@ -485,8 +485,22 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 			}
 			continue
 		}
+		haveIp := false
 		for _, e := range rans.Answer {
-			r.searchNSIp(e, ns, servers)
+			haveIp = r.searchNSIp(e, ns, servers)
+		}
+
+		if haveIp {
+			// update resolve list
+			rc.Lock()
+			newList := make([]string, 0)
+			for _, i := range rc.ToResolveList {
+				if i != ns {
+					newList = append(newList, ns)
+				}
+			}
+			rc.ToResolveList = newList
+			rc.Unlock()
 		}
 
 		// get the AAAA record
@@ -518,6 +532,17 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 			if haveNew {
 				// update cache including the discovered ipv6 addresses
 				r.nsCache.Set(servers)
+
+				// update resolve list
+				rc.Lock()
+				newList := make([]string, 0)
+				for _, i := range rc.ToResolveList {
+					if i != ns {
+						newList = append(newList, ns)
+					}
+				}
+				rc.ToResolveList = newList
+				rc.Unlock()
 			}
 		}(ctx, ns)
 	}
@@ -904,10 +929,11 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				rc := ctx.Value(recursorContextKey).(*recursorContext)
 				// prevents loops. if this ns was already in context in a previous
 				// recursion, do not put it again in loop.
+				rc.Lock()
 				if slices.Contains(rc.ToResolveList, cname.Target) {
+					rc.Unlock()
 					break
 				}
-				rc.Lock()
 				rc.ToResolveList = append(rc.ToResolveList, cname.Target)
 				rc.Unlock()
 
