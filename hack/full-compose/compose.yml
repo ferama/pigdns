@@ -52,7 +52,7 @@ services:
   
   grafana:
     restart: unless-stopped
-    image: ghcr.io/ferama/grafana:v10.2.0
+    image: ghcr.io/ferama/grafana:v10.3.1
     container_name: grafana
     networks:
       - pignet
