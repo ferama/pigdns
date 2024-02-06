@@ -910,6 +910,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	haveAnswer := false
+
 	for _, rr := range ans.Answer {
 		if strings.EqualFold(rr.Header().Name, q.Name) && rr.Header().Rrtype == q.Qtype {
 			haveAnswer = true
@@ -987,14 +988,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		}
 	}
 
-	dnssec := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
-	if !dnssec {
-		ans.SetRcode(ans, dns.RcodeServerFailure)
-		ans.Answer = nil
-		ans.Extra = nil
-		ans.Ns = nil
-	}
-
 	if nsResp != nil {
 		soa := r.findSoa(nsResp)
 		if soa == nil {
@@ -1008,6 +1001,19 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 					Msg("[dnssec] NSEC3 verified")
 			}
 		}
+	}
+
+	if len(utils.MsgExtractByType(ans, q.Qtype, "")) == 0 {
+		ans.SetRcode(ans, dns.RcodeServerFailure)
+		return ans, nil
+	}
+
+	dnssec := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
+	if !dnssec {
+		ans.SetRcode(ans, dns.RcodeServerFailure)
+		ans.Answer = nil
+		ans.Extra = nil
+		ans.Ns = nil
 	}
 
 	r.ansCache.Set(cacheKey, ans)

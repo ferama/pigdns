@@ -21,6 +21,7 @@ var domainCases = []string{
 	"js.monitor.azure.com",
 	"geo-applefinance-cache.internal.query.g03.yahoodns.net",
 	"proxy.safebrowsing.apple",
+	"docs.aws.amazon.com",
 }
 
 type testHandler struct {
