@@ -78,14 +78,15 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		ts = 0
 	}
 	ttl := uint32(ts)
+	minTTL := utils.MsgGetMinTTL(msg)
 	for _, a := range msg.Answer {
-		a.Header().Ttl = ttl
+		a.Header().Ttl -= max(minTTL-ttl, 0)
 	}
 	for _, a := range msg.Extra {
-		a.Header().Ttl = ttl
+		a.Header().Ttl -= max(minTTL-ttl, 0)
 	}
 	for _, a := range msg.Ns {
-		a.Header().Ttl = ttl
+		a.Header().Ttl -= max(minTTL-ttl, 0)
 	}
 
 	if do {
