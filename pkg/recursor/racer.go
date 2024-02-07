@@ -70,6 +70,10 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 	// I need the do flag set here, otherwise no RRSIG record will be returned
 	req.SetEdns0(utils.MaxMsgSize, true)
 
+	// we do not want and to not expect recursive responses
+	// If we do not specify the value here, some servers will block us
+	req.RecursionDesired = false
+
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
 	noEdnsTried := false
