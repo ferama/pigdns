@@ -1,0 +1,10 @@
+groups:
+- name: example
+  rules:
+  - alert: sample
+    expr: pigdns_cached_items_count > 415
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: Sample alert
