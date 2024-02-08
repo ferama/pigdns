@@ -955,27 +955,29 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				//		 due to the oneinflight
 				// resp, err := pigdns.QueryInternal(ctx, newReq, isIPV6)
 				resp, err := r.resolve(r.newContext(ctx), newReq, isIPV6)
-
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
 
 				if err == nil {
+
 					soa := r.findSoa(resp)
 					if soa != nil {
 						r.ansCache.Set(cacheKey, soa)
 						return soa, nil
 					}
 
+					ans.Answer = []dns.RR{rr}
+					ans.Answer = append(ans.Answer, resp.Answer...)
+
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
 						}
 					}
-					if !haveAnswer {
-						ans.Answer = []dns.RR{rr}
-						ans.Answer = append(ans.Answer, resp.Answer...)
-					}
+					// if !haveAnswer {
+
+					// }
 				}
 			}
 			if haveAnswer {
