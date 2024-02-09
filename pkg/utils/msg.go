@@ -10,7 +10,7 @@ const (
 	MsgMaxTTL = 60 * 60 * 24 // 86400
 
 	// used for failures
-	MsgMinTTL = 60
+	MsgMinTTL = 30
 
 	// https://www.netmeister.org/blog/dns-size.html
 	MaxMsgSize = 1232
