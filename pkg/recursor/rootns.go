@@ -1,6 +1,9 @@
 package recursor
 
-import "github.com/ferama/pigdns/pkg/pigdns"
+import (
+	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
+)
 
 var (
 	// a.root-servers.net.
@@ -89,7 +92,7 @@ func getRootServers() *authServers {
 		Zone: ".",
 	}
 	for _, s := range rootNS {
-		as := &nsServer{
+		as := racer.NS{
 			Addr:    s.IPV4,
 			Fqdn:    s.Fqdn,
 			Version: pigdns.FamilyIPv4,
@@ -98,7 +101,7 @@ func getRootServers() *authServers {
 	}
 
 	for _, s := range rootNS {
-		as := &nsServer{
+		as := racer.NS{
 			Addr:    s.IPV6,
 			Fqdn:    s.Fqdn,
 			Version: pigdns.FamilyIPv6,

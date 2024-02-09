@@ -8,11 +8,12 @@ import (
 
 	"github.com/ferama/pigdns/pkg/cache"
 	"github.com/ferama/pigdns/pkg/metrics"
+	"github.com/ferama/pigdns/pkg/racer"
 )
 
 type nsCacheItem struct {
 	Zone string
-	List []*nsServer
+	List []racer.NS
 }
 
 type nsCache struct {
@@ -41,7 +42,7 @@ func (c *nsCache) Set(as *authServers) error {
 	}
 
 	key := as.Zone
-	ttl := as.List[0].TTL
+	ttl := as.TTL
 
 	var packed bytes.Buffer
 	enc := gob.NewEncoder(&packed)

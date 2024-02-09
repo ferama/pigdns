@@ -1,4 +1,4 @@
-package recursor
+package proxy
 
 import (
 	"errors"

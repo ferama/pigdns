@@ -93,6 +93,18 @@ var rootCmd = &cobra.Command{
 			pigdns.HandleMux(".", h, dohMux, true)
 		}
 
+		if conf.Proxy.Enabled {
+			h := server.BuildProxyChain(
+				conf.DataDir,
+				conf.Proxy.CacheSize,
+				conf.Proxy.Upstream,
+				conf.Proxy.BlockLists,
+				conf.Proxy.WhiteLists,
+			)
+			pigdns.HandleMux(".", h, dnsMux, false)
+			pigdns.HandleMux(".", h, dohMux, true)
+		}
+
 		zoneConf := conf.Zone
 		if zoneConf.Enabled {
 			h := server.BuildZoneHandler(
