@@ -975,9 +975,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 							haveAnswer = true
 						}
 					}
-					// if !haveAnswer {
-
-					// }
 				}
 			}
 			if haveAnswer {
