@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/oneinflight"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
@@ -37,9 +37,6 @@ type recursorContext struct {
 }
 
 const (
-	// timeout until error
-	dialTimeout = 2 * time.Second
-
 	// how deeply we will search for cnames and nameservers
 	chainMaxDeep = 16
 
@@ -89,7 +86,7 @@ func New(datadir string, cacheSize int) *Recursor {
 	log.Printf("[recursor] enabling file based cache")
 
 	// # go routines leaks HOWTO:
-	// $ watch curl -s http://localhost:8080/metrics | grep go_goroutines
+	// $ watch "curl -s http://localhost:8080/metrics | grep go_goroutines"
 	// Enable the following code and launch the stress test.
 	// Ensure that the goroutines count before and after the stress test
 	// are equal
@@ -358,26 +355,31 @@ func (r *Recursor) searchNSIp(e dns.RR, ns string, servers *authServers) bool {
 	case dns.TypeA:
 		ret = true
 		a := e.(*dns.A)
-		servers.List = append(servers.List, &nsServer{
+		servers.List = append(servers.List, racer.NS{
 			Addr:    a.A.String(),
 			Fqdn:    ns,
 			Version: pigdns.FamilyIPv4,
-			TTL:     a.Hdr.Ttl,
 		})
+		servers.SetTTL(a.Hdr.Ttl)
 	case dns.TypeAAAA:
 		ret = true
 		aaaa := e.(*dns.AAAA)
-		servers.List = append(servers.List, &nsServer{
+		servers.List = append(servers.List, racer.NS{
 			Addr:    aaaa.AAAA.String(),
 			Fqdn:    ns,
 			Version: pigdns.FamilyIPv6,
-			TTL:     aaaa.Hdr.Ttl,
 		})
+		servers.SetTTL(aaaa.Hdr.Ttl)
 	}
 	return ret
 }
 
-func (r *Recursor) buildServers(ctx context.Context, ans *dns.Msg, zone string, currServers *authServers, isIPV6 bool) (*authServers, error) {
+func (r *Recursor) buildServers(
+	ctx context.Context,
+	ans *dns.Msg,
+	zone string,
+	currServers *authServers, isIPV6 bool) (*authServers, error) {
+
 	servers := &authServers{
 		Zone: zone,
 	}
@@ -559,7 +561,12 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 // *dns.Msg the latest response from a queried NS server if any
 // *authServers the authServers object
 // error
-func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, offset int) (*dns.Msg, *authServers, error) {
+func (r *Recursor) resolveNS(
+	ctx context.Context,
+	q dns.Question,
+	isIPV6 bool,
+	offset int) (*dns.Msg, *authServers, error) {
+
 	end := false
 	var i int
 
@@ -598,11 +605,14 @@ func (r *Recursor) resolveNS(ctx context.Context, q dns.Question, isIPV6 bool, o
 	resp, err = r.ansCache.Get(cacheKey)
 
 	if err != nil {
-		qr := newQueryRacer(rservers, nsReq, isIPV6)
-		resp, err = qr.run()
+		rservers.RLock()
+		qr := racer.NewQueryRacer(rservers.List, nsReq, isIPV6)
+		resp, err = qr.Run()
 		if err != nil {
+			rservers.RUnlock()
 			return resp, nil, err
 		}
+		rservers.RUnlock()
 
 		// take advantage of the extra secion and store some ips into cache
 		// if any
@@ -700,12 +710,15 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 	if err != nil {
 		return keys
 	}
-	qr := newQueryRacer(rservers, req, isIPV6)
-	resp, err := qr.run()
+	rservers.RLock()
+	qr := racer.NewQueryRacer(rservers.List, req, isIPV6)
+	resp, err := qr.Run()
 	if err != nil {
+		rservers.RUnlock()
 		r.ansCache.Set(cacheKey, resp)
 		return keys
 	}
+	rservers.RUnlock()
 
 	keys = utils.MsgExtractByType(resp, dns.TypeDNSKEY, "")
 	if len(keys) > 0 {
@@ -818,11 +831,14 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return nil, err
 	}
 
-	qr := newQueryRacer(servers, req, isIPV6)
-	ans, err := qr.run()
+	servers.RLock()
+	qr := racer.NewQueryRacer(servers.List, req, isIPV6)
+	ans, err := qr.Run()
 	if err != nil {
+		servers.RUnlock()
 		return nil, err
 	}
+	servers.RUnlock()
 
 	// if q.Name == "eunic.net.ua." {
 	// 	log.Printf("=========== %s =========", q.Name)
@@ -889,11 +905,14 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		nextServers.RUnlock()
 		servers.Unlock()
 
-		qr := newQueryRacer(servers, req, isIPV6)
-		ans, err = qr.run()
+		servers.RLock()
+		qr := racer.NewQueryRacer(servers.List, req, isIPV6)
+		ans, err = qr.Run()
 		if err != nil {
+			servers.RUnlock()
 			return nil, err
 		}
+		servers.RUnlock()
 
 		soa := r.findSoa(ans)
 		if soa != nil {
@@ -955,26 +974,25 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				//		 due to the oneinflight
 				// resp, err := pigdns.QueryInternal(ctx, newReq, isIPV6)
 				resp, err := r.resolve(r.newContext(ctx), newReq, isIPV6)
-
 				if err == errRecursionMaxLevel {
 					return nil, err
 				}
 
 				if err == nil {
+
 					soa := r.findSoa(resp)
 					if soa != nil {
 						r.ansCache.Set(cacheKey, soa)
 						return soa, nil
 					}
 
+					ans.Answer = []dns.RR{rr}
+					ans.Answer = append(ans.Answer, resp.Answer...)
+
 					for _, rr := range ans.Answer {
 						if rr.Header().Rrtype == q.Qtype {
 							haveAnswer = true
 						}
-					}
-					if !haveAnswer {
-						ans.Answer = []dns.RR{rr}
-						ans.Answer = append(ans.Answer, resp.Answer...)
 					}
 				}
 			}

@@ -4,43 +4,24 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
 )
-
-type nsServer struct {
-	Addr    string
-	Fqdn    string
-	Version pigdns.RequestFamily
-	TTL     uint32
-}
-
-func (n *nsServer) Copy() *nsServer {
-	c := &nsServer{
-		Addr:    n.Addr,
-		Fqdn:    n.Fqdn,
-		Version: n.Version,
-		TTL:     n.TTL,
-	}
-	return c
-}
-
-func (n *nsServer) String() string {
-	return n.Addr
-}
-
-func (n *nsServer) withPort() string {
-	if n.Version == pigdns.FamilyIPv4 {
-		return fmt.Sprintf("%s:53", n.Addr)
-	}
-	return fmt.Sprintf("[%s]:53", n.Addr)
-}
 
 type authServers struct {
 	sync.RWMutex
 
 	Zone string
 
-	List []*nsServer
+	List []racer.NS
+	TTL  uint32
+}
+
+func (a *authServers) SetTTL(ttl uint32) {
+	if a.TTL == 0 {
+		a.TTL = ttl
+	} else {
+		a.TTL = min(a.TTL, ttl)
+	}
 }
 
 func (a *authServers) String() string {

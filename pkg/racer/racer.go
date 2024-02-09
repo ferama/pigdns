@@ -1,4 +1,4 @@
-package recursor
+package racer
 
 import (
 	"context"
@@ -14,10 +14,12 @@ import (
 
 var (
 	errQueryRacerTimeout = errors.New("query timeout")
-	// errQnameEqNs         = errors.New("query name is equal to ns fqdn")
 )
 
 const (
+	// timeout until error
+	dialTimeout = 2 * time.Second
+
 	queryRacerTimeout = 2 * time.Second
 	nextNSTimeout     = 100 * time.Millisecond
 )
@@ -29,42 +31,40 @@ const (
 // the next nameserver. If one of the nameservers returns an answer, the run ends.
 // If all of the nameserers give errors, the run ends
 type queryRacer struct {
-	servers *authServers
+	servers []NS
 	req     *dns.Msg
 	isIPV6  bool
+
+	RecursionDesired bool
 }
 
-func newQueryRacer(servers *authServers, req *dns.Msg, isIPV6 bool) *queryRacer {
+func NewQueryRacer(servers []NS, req *dns.Msg, isIPV6 bool) *queryRacer {
 	q := &queryRacer{
-		servers: servers,
-		req:     req,
-		isIPV6:  isIPV6,
+		servers:          servers,
+		req:              req,
+		isIPV6:           isIPV6,
+		RecursionDesired: false,
 	}
 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, zone string) (*dns.Msg, error) {
+func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	st := time.Now()
 	defer func() {
 		l := time.Since(st)
 		log.Debug().
-			// Str("ns-ip", ns.Addr).
 			Str(".q", q.Name).
-			Str("zone", zone).
+			// Str("zone", zone).
 			Str("ns-fqdn", ns.Fqdn).
 			Str("ns-addr", ns.Addr).
 			Str("t", l.Round(1*time.Millisecond).String()).
 			Str("type", dns.TypeToString[q.Qtype]).
-			Msg("[recursor]")
+			Msg("[racer]")
 
 	}()
-
-	// if q.Name == ns.Fqdn {
-	// 	return nil, errQnameEqNs
-	// }
 
 	utils.MsgRemoveOPT(req)
 	// I need the do flag set here, otherwise no RRSIG record will be returned
@@ -72,7 +72,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 
 	// we do not want and to not expect recursive responses
 	// If we do not specify the value here, some servers will block us
-	req.RecursionDesired = false
+	req.RecursionDesired = qr.RecursionDesired
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
@@ -101,18 +101,18 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns *nsServer, z
 		if network == "tcp" {
 			return nil, errors.New("cannot get a non truncated answer")
 		}
-		log.Printf("[recuror] resp truncated. trying tcp...")
+		log.Printf("[racer] resp truncated. trying tcp...")
 		network = "tcp"
 	}
 }
 
-func (qr *queryRacer) run() (*dns.Msg, error) {
+func (qr *queryRacer) Run() (*dns.Msg, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 
-	qr.servers.RLock()
-	ansCH := make(chan *dns.Msg, len(qr.servers.List))
-	errCH := make(chan error, len(qr.servers.List))
-	qr.servers.RUnlock()
+	// qr.servers.RLock()
+	ansCH := make(chan *dns.Msg, len(qr.servers))
+	errCH := make(chan error, len(qr.servers))
+	// qr.servers.RUnlock()
 
 	var wg sync.WaitGroup
 
@@ -126,11 +126,11 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		}()
 	}()
 
-	worker := func(ns *nsServer, wg *sync.WaitGroup) {
+	worker := func(ns NS, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		// Copy is needed here, to prevent race conditions
-		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy(), qr.servers.Zone)
+		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
 
 		if err == nil {
 			ansCH <- ans
@@ -155,17 +155,15 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 	nextNSTimer := time.NewTimer(nextNSTimeout)
 	defer nextNSTimer.Stop()
 
-	ipV6S := []*nsServer{}
-	ipV4S := []*nsServer{}
-	qr.servers.RLock()
-	for _, s := range qr.servers.List {
+	ipV6S := []NS{}
+	ipV4S := []NS{}
+	for _, s := range qr.servers {
 		if s.Version == pigdns.FamilyIPv4 {
 			ipV4S = append(ipV4S, s)
 		} else {
 			ipV6S = append(ipV6S, s)
 		}
 	}
-	qr.servers.RUnlock()
 
 	servers := ipV4S
 
@@ -191,13 +189,10 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 
 		case err = <-errCH:
 			countErrors++
-			qr.servers.RLock()
 			// no more nameservers to query
-			if countErrors == len(qr.servers.List) {
-				qr.servers.RUnlock()
+			if countErrors == len(qr.servers) {
 				return nil, err
 			}
-			qr.servers.RUnlock()
 		}
 	}
 
@@ -216,13 +211,9 @@ func (qr *queryRacer) run() (*dns.Msg, error) {
 		case err = <-errCH:
 			// return nil, err
 			countErrors++
-			qr.servers.RLock()
-			if countErrors == len(qr.servers.List) {
-				qr.servers.RUnlock()
-				// log.Print(qr.servers)
+			if countErrors == len(qr.servers) {
 				return nil, err
 			}
-			qr.servers.RUnlock()
 		}
 	}
 }

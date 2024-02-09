@@ -38,6 +38,14 @@ type netListener struct {
 	Address string `koanf:"address"`
 }
 
+type proxyConf struct {
+	Enabled    bool     `koanf:"enabled"`
+	Upstream   []string `koanf:"upstream"`
+	BlockLists []string `koanf:"blockLists"`
+	WhiteLists []string `koanf:"whiteLists"`
+	CacheSize  int      `koanf:"cacheSize"`
+}
+
 type recursorConf struct {
 	Enabled     bool     `koanf:"enabled"`
 	AllowedNets []string `koanf:"allowedNets"`
@@ -53,6 +61,7 @@ type conf struct {
 	NetListener netListener `koanf:"netListener"`
 	DOHEnabled  bool        `koanf:"dohEnabled"`
 
+	Proxy    proxyConf    `koanf:"proxy"`
 	Recursor recursorConf `koanf:"recursor"`
 
 	Zone    zone  `koanf:"zone"`
@@ -80,6 +89,9 @@ func loadConf(path string) *conf {
 			Address: ":53",
 		},
 		DOHEnabled: false,
+		Proxy: proxyConf{
+			Enabled: false,
+		},
 		Recursor: recursorConf{
 			ServeOnUDP: false,
 			AllowedNets: []string{
@@ -111,6 +123,11 @@ func loadConf(path string) *conf {
 
 	var c conf
 	k.Unmarshal("", &c)
+
+	if c.Proxy.Enabled && c.Recursor.Enabled {
+		fmt.Println("cannot enable both Proxy and Recursor")
+		os.Exit(1)
+	}
 
 	return &c
 }

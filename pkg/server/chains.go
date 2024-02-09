@@ -10,6 +10,7 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/blocklist"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
+	"github.com/ferama/pigdns/pkg/handlers/proxy"
 	"github.com/ferama/pigdns/pkg/handlers/recursor"
 	"github.com/ferama/pigdns/pkg/handlers/regexip"
 	"github.com/ferama/pigdns/pkg/handlers/root"
@@ -55,6 +56,28 @@ func BuildRecursorHandler(
 	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}
 	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
 	chain = &as112.Handler{Next: chain}
+	chain = &collector.Handler{Next: chain}
+
+	return chain
+}
+
+func BuildProxyChain(
+	datadir string, cacheSize int,
+	upstream, blocklists, whitelists []string) pigdns.Handler {
+
+	var chain pigdns.Handler
+
+	chain = pigdns.HandlerFunc(func(ctx context.Context, r *pigdns.Request) {
+		m := new(dns.Msg)
+		m.Authoritative = false
+		if ctx.Value(collector.CollectorContextKey) != nil {
+			cc := ctx.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+			cc.AnweredBy = "failure"
+		}
+		r.ReplyWithStatus(m, dns.RcodeServerFailure)
+	})
+	chain = proxy.NewProxyHandler(chain, upstream, cacheSize, datadir)
+	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
 	chain = &collector.Handler{Next: chain}
 
 	return chain
