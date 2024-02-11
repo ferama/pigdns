@@ -69,7 +69,7 @@ func testCtx(r *Recursor) context.Context {
 }
 
 func TestDomainCases(t *testing.T) {
-	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	qr := racer.NewCachedQueryRacer(t.TempDir(), 1024*100)
 	recursor := New(t.TempDir(), 1024*100, qr)
 
 	for _, domain := range domainCases {
@@ -93,7 +93,7 @@ func TestDomainCases(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	qr := racer.NewCachedQueryRacer(t.TempDir(), 1024*100)
 	recursor := New(t.TempDir(), 1024*100, qr)
 
 	fqdn := dns.Fqdn("example.com")
@@ -112,7 +112,7 @@ func TestQuery(t *testing.T) {
 
 // https://www.internetsociety.org/resources/deploy360/2013/dnssec-test-sites/
 func TestBadDNSSEC(t *testing.T) {
-	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	qr := racer.NewCachedQueryRacer(t.TempDir(), 1024*100)
 	recursor := New(t.TempDir(), 1024*100, qr)
 
 	domains := []string{
@@ -136,7 +136,7 @@ func TestBadDNSSEC(t *testing.T) {
 }
 
 func TestGoodDNSSEC(t *testing.T) {
-	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	qr := racer.NewCachedQueryRacer(t.TempDir(), 1024*100)
 	recursor := New(t.TempDir(), 1024*100, qr)
 
 	domains := []string{

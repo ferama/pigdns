@@ -39,7 +39,7 @@ type QueryRacer struct {
 	ansCache *ansCache
 }
 
-func NewQueryRacer(datadir string, cacheSize int) *QueryRacer {
+func NewCachedQueryRacer(datadir string, cacheSize int) *QueryRacer {
 	q := &QueryRacer{
 		ansCache: newAnsCache(filepath.Join(datadir, "cache", cacheName), cacheName, cacheSize),
 	}
@@ -50,13 +50,21 @@ func NewQueryRacer(datadir string, cacheSize int) *QueryRacer {
 	return q
 }
 
+func NewQueryRacer() *QueryRacer {
+	q := &QueryRacer{}
+
+	return q
+}
+
 func (qr *QueryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Msg, error) {
 	q := req.Question[0]
 
 	cacheKey := fmt.Sprintf("%s_%d_%d_%s", q.Name, q.Qtype, q.Qclass, ns.Addr)
-	resp, err := qr.ansCache.Get(cacheKey)
-	if err == nil {
-		return resp, nil
+	if qr.ansCache != nil {
+		resp, err := qr.ansCache.Get(cacheKey)
+		if err == nil {
+			return resp, nil
+		}
 	}
 
 	st := time.Now()
@@ -99,7 +107,9 @@ func (qr *QueryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Ms
 		}
 
 		if !ans.Truncated {
-			qr.ansCache.Set(cacheKey, ans)
+			if qr.ansCache != nil {
+				qr.ansCache.Set(cacheKey, ans)
+			}
 			return ans, nil
 		}
 		if network == "tcp" {

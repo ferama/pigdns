@@ -53,7 +53,7 @@ func BuildRecursorHandler(
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
 	racerCacheSize := cacheSize * 50 / 100
-	racer := racer.NewQueryRacer(datadir, racerCacheSize)
+	racer := racer.NewCachedQueryRacer(datadir, racerCacheSize)
 
 	nsCacheSize := cacheSize * 25 / 100
 	chain = recursor.NewRecursorHandler(chain, datadir, nsCacheSize, racer)
@@ -86,13 +86,10 @@ func BuildProxyChain(
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
 
-	racerCacheSize := cacheSize * 70 / 100
-	racer := racer.NewQueryRacer(datadir, racerCacheSize)
+	racer := racer.NewQueryRacer()
 
 	chain = proxy.NewProxyHandler(chain, upstream, racer)
-
-	ansCacheSize := cacheSize * 30 / 100
-	chain = cache.NewCacheHandler(chain, "proxy", ansCacheSize, datadir)
+	chain = cache.NewCacheHandler(chain, "proxy", cacheSize, datadir)
 	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
 	chain = &collector.Handler{Next: chain}
 
