@@ -53,6 +53,7 @@ func NewProxyHandler(next pigdns.Handler, upstream []string, cacheSize int, data
 	}
 
 	metrics.Instance().RegisterCache(ansCacheName)
+	metrics.Instance().GetCacheCapacityMetric(ansCacheName).Set(float64(cacheSize))
 
 	return h
 }
