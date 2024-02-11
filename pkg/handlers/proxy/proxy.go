@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ferama/pigdns/pkg/handlers/collector"
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/racer"
 	"github.com/ferama/pigdns/pkg/utils"
@@ -50,6 +51,9 @@ func NewProxyHandler(next pigdns.Handler, upstream []string, cacheSize int, data
 		ansCache: newAnsCache(filepath.Join(datadir, "cache", "proxy"), ansCacheName, cacheSize),
 		servers:  servers,
 	}
+
+	metrics.Instance().RegisterCache(ansCacheName)
+
 	return h
 }
 
