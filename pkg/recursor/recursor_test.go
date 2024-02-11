@@ -6,6 +6,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
 )
@@ -68,7 +69,8 @@ func testCtx(r *Recursor) context.Context {
 }
 
 func TestDomainCases(t *testing.T) {
-	recursor := New(t.TempDir(), 1024*100)
+	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	recursor := New(t.TempDir(), 1024*100, qr)
 
 	for _, domain := range domainCases {
 		fqdn := dns.Fqdn(domain)
@@ -91,7 +93,8 @@ func TestDomainCases(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	recursor := New(t.TempDir(), 1024*100)
+	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	recursor := New(t.TempDir(), 1024*100, qr)
 
 	fqdn := dns.Fqdn("example.com")
 	req := new(dns.Msg)
@@ -109,7 +112,8 @@ func TestQuery(t *testing.T) {
 
 // https://www.internetsociety.org/resources/deploy360/2013/dnssec-test-sites/
 func TestBadDNSSEC(t *testing.T) {
-	recursor := New(t.TempDir(), 1024*100)
+	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	recursor := New(t.TempDir(), 1024*100, qr)
 
 	domains := []string{
 		"dnssec-failed.org",
@@ -132,7 +136,8 @@ func TestBadDNSSEC(t *testing.T) {
 }
 
 func TestGoodDNSSEC(t *testing.T) {
-	recursor := New(t.TempDir(), 1024*100)
+	qr := racer.NewQueryRacer(t.TempDir(), 1024*100)
+	recursor := New(t.TempDir(), 1024*100, qr)
 
 	domains := []string{
 		"internetsociety.org",

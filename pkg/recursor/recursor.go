@@ -45,34 +45,29 @@ const (
 	resolverMaxLevel = 24
 	// resolverMaxLevel = 16
 
-	ansCacheName = "anscache"
-	nsCacheName  = "nscache"
+	nsCacheName = "nscache"
 )
 
 type Recursor struct {
-	ansCache *ansCache
-	nsCache  *nsCache
+	nsCache *nsCache
 
 	rootkeys []dns.RR
+
+	racer *racer.QueryRacer
 
 	oneInFlight *oneinflight.OneInFlight
 }
 
-func New(datadir string, cacheSize int) *Recursor {
-	ansCacheSize := cacheSize * 75 / 100
-	nsCacheSize := cacheSize * 25 / 100
-
+func New(datadir string, cacheSize int, qr *racer.QueryRacer) *Recursor {
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		ansCache:    newAnsCache(filepath.Join(datadir, "cache", "addr"), ansCacheName, ansCacheSize),
-		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, nsCacheSize),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, cacheSize),
+
+		racer: qr,
 	}
 
-	metrics.Instance().RegisterCache(ansCacheName)
 	metrics.Instance().RegisterCache(nsCacheName)
-
-	metrics.Instance().GetCacheCapacityMetric(ansCacheName).Set(float64(ansCacheSize))
-	metrics.Instance().GetCacheCapacityMetric(nsCacheName).Set(float64(nsCacheSize))
+	metrics.Instance().GetCacheCapacityMetric(nsCacheName).Set(float64(cacheSize))
 
 	r.rootkeys = []dns.RR{}
 	for _, k := range rootKeys {
@@ -120,15 +115,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	q := req.Question[0]
 	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 
-	cached, cacheErr := r.ansCache.Get(reqKey)
-	if cacheErr == nil {
-		ans := r.cleanMsg(cached, req)
-
-		pc := ctx.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-		pc.CacheHit = true
-		return ans, nil
-	}
-
 	// run the query (only once concurrently
 	// against the upstream nameservers)
 	type retvalue struct {
@@ -138,7 +124,6 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
 		if err == nil {
-			// if ans.AuthenticatedData {
 			dsok, broken := r.verifyDS(ctx, ans, q, isIPV6)
 
 			if (!dsok && ans.AuthenticatedData) || broken {
@@ -146,11 +131,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 				ans.Answer = nil
 				ans.Extra = nil
 				ans.Ns = nil
-
-				// update cache with failure
-				r.ansCache.Set(reqKey, ans)
 			}
-			// }
 		}
 
 		return &retvalue{
@@ -578,15 +559,7 @@ func (r *Recursor) resolveNS(
 
 	cached, err := r.nsCache.Get(zone)
 	if err == nil {
-		nsReq := new(dns.Msg)
-		nsReq.SetQuestion(zone, dns.TypeNS)
-		nsq := nsReq.Question[0]
-		cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
-		resp, _ := r.ansCache.Get(cacheKey)
-		if err != nil {
-			return nil, cached, nil
-		}
-		return resp, cached, nil
+		return new(dns.Msg), cached, nil
 	}
 
 	// run recursively here. the recursion will end when we will
@@ -597,41 +570,30 @@ func (r *Recursor) resolveNS(
 	}
 
 	nsReq := new(dns.Msg)
+	nsReq.RecursionDesired = false
 	nsReq.SetQuestion(zone, dns.TypeNS)
 
-	nsq := nsReq.Question[0]
-
-	cacheKey := fmt.Sprintf("%s_%d_%d", nsq.Name, nsq.Qtype, nsq.Qclass)
-	resp, err = r.ansCache.Get(cacheKey)
-
+	rservers.RLock()
+	resp, err = r.racer.Run(rservers.List, nsReq, isIPV6)
 	if err != nil {
-		rservers.RLock()
-		qr := racer.NewQueryRacer(rservers.List, nsReq, isIPV6)
-		resp, err = qr.Run()
-		if err != nil {
-			rservers.RUnlock()
-			return resp, nil, err
-		}
 		rservers.RUnlock()
+		return resp, nil, err
+	}
+	rservers.RUnlock()
 
-		// take advantage of the extra secion and store some ips into cache
-		// if any
-		types := []uint16{
-			dns.TypeA,
-			dns.TypeAAAA,
+	// take advantage of the extra secion and store some ips into cache
+	// if any
+	types := []uint16{
+		dns.TypeA,
+		dns.TypeAAAA,
+	}
+
+	for _, t := range types {
+		arr := utils.MsgExtractByType(resp, t, "")
+		for _, rr := range arr {
+			m := new(dns.Msg)
+			m.Answer = append(m.Answer, rr)
 		}
-
-		for _, t := range types {
-			arr := utils.MsgExtractByType(resp, t, "")
-			for _, rr := range arr {
-				ck := fmt.Sprintf("%s_%d_%d", rr.Header().Name, t, rr.Header().Class)
-				m := new(dns.Msg)
-				m.Answer = append(m.Answer, rr)
-				r.ansCache.Set(ck, m)
-			}
-		}
-
-		r.ansCache.Set(cacheKey, resp)
 	}
 
 	servers, err := r.buildServers(ctx, resp, zone, rservers, isIPV6)
@@ -693,16 +655,10 @@ func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 
 func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dns.RR {
 	req := new(dns.Msg)
+	req.RecursionDesired = false
 	req.SetQuestion(zone, dns.TypeDNSKEY)
 
 	q := req.Question[0]
-	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
-
-	// try to get the answer from cache if we have it
-	cached, cacheErr := r.ansCache.Get(cacheKey)
-	if cacheErr == nil {
-		return utils.MsgExtractByType(cached, dns.TypeDNSKEY, "")
-	}
 
 	keys := []dns.RR{}
 
@@ -711,19 +667,14 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 		return keys
 	}
 	rservers.RLock()
-	qr := racer.NewQueryRacer(rservers.List, req, isIPV6)
-	resp, err := qr.Run()
+	resp, err := r.racer.Run(rservers.List, req, isIPV6)
 	if err != nil {
 		rservers.RUnlock()
-		r.ansCache.Set(cacheKey, resp)
 		return keys
 	}
 	rservers.RUnlock()
 
 	keys = utils.MsgExtractByType(resp, dns.TypeDNSKEY, "")
-	if len(keys) > 0 {
-		r.ansCache.Set(cacheKey, resp)
-	}
 	return keys
 }
 
@@ -806,12 +757,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	q := req.Question[0]
 
-	cacheKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
-	cached, cacheErr := r.ansCache.Get(cacheKey)
-	if cacheErr == nil {
-		return cached, nil
-	}
-
 	nsResp, servers, err := r.resolveNS(ctx, q, isIPV6, 0)
 	if err != nil {
 		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
@@ -824,7 +769,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 					soa.Extra = nil
 					soa.Ns = nil
 				}
-				r.ansCache.Set(cacheKey, soa)
 				return soa, nil
 			}
 		}
@@ -832,8 +776,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	}
 
 	servers.RLock()
-	qr := racer.NewQueryRacer(servers.List, req, isIPV6)
-	ans, err := qr.Run()
+	req.RecursionDesired = false
+	ans, err := r.racer.Run(servers.List, req, isIPV6)
 	if err != nil {
 		servers.RUnlock()
 		return nil, err
@@ -860,7 +804,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if err != nil {
 			if err != errNoNSfound {
 				// soa answer
-				r.ansCache.Set(cacheKey, ans)
 				return ans, nil
 			}
 		}
@@ -906,8 +849,8 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		servers.Unlock()
 
 		servers.RLock()
-		qr := racer.NewQueryRacer(servers.List, req, isIPV6)
-		ans, err = qr.Run()
+		req.RecursionDesired = false
+		ans, err = r.racer.Run(servers.List, req, isIPV6)
 		if err != nil {
 			servers.RUnlock()
 			return nil, err
@@ -923,7 +866,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 				soa.Extra = nil
 				soa.Ns = nil
 			}
-			r.ansCache.Set(cacheKey, soa)
 			return soa, nil
 		}
 	}
@@ -982,7 +924,6 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 					soa := r.findSoa(resp)
 					if soa != nil {
-						r.ansCache.Set(cacheKey, soa)
 						return soa, nil
 					}
 
@@ -1034,6 +975,5 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		ans.Ns = nil
 	}
 
-	r.ansCache.Set(cacheKey, ans)
 	return ans, nil
 }

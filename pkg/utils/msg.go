@@ -9,8 +9,8 @@ import (
 const (
 	MsgMaxTTL = 60 * 60 * 24 // 86400
 
-	// used for failures
-	MsgMinTTL = 30
+	// min ttl for cached msgs
+	MsgMinTTL = 15
 
 	// https://www.netmeister.org/blog/dns-size.html
 	MaxMsgSize = 1232

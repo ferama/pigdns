@@ -5,6 +5,7 @@ import (
 
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
 	"github.com/ferama/pigdns/pkg/recursor"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
@@ -22,10 +23,10 @@ type handler struct {
 	recursor *recursor.Recursor
 }
 
-func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int) *handler {
+func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int, qr *racer.QueryRacer) *handler {
 	h := &handler{
 		Next:     next,
-		recursor: recursor.New(datadir, cacheSize),
+		recursor: recursor.New(datadir, cacheSize, qr),
 	}
 	return h
 }

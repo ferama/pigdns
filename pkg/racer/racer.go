@@ -3,9 +3,12 @@ package racer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
 	"github.com/miekg/dns"
@@ -22,6 +25,8 @@ const (
 
 	queryRacerTimeout = 2 * time.Second
 	nextNSTimeout     = 100 * time.Millisecond
+
+	cacheName = "racer"
 )
 
 // the query racer, given a list of authoritative nameservers
@@ -30,27 +35,29 @@ const (
 // starts a timer also. If the timer expires, it starts a new exchange using
 // the next nameserver. If one of the nameservers returns an answer, the run ends.
 // If all of the nameserers give errors, the run ends
-type queryRacer struct {
-	servers []NS
-	req     *dns.Msg
-	isIPV6  bool
-
-	RecursionDesired bool
+type QueryRacer struct {
+	ansCache *ansCache
 }
 
-func NewQueryRacer(servers []NS, req *dns.Msg, isIPV6 bool) *queryRacer {
-	q := &queryRacer{
-		servers:          servers,
-		req:              req,
-		isIPV6:           isIPV6,
-		RecursionDesired: false,
+func NewQueryRacer(datadir string, cacheSize int) *QueryRacer {
+	q := &QueryRacer{
+		ansCache: newAnsCache(filepath.Join(datadir, "cache", cacheName), cacheName, cacheSize),
 	}
+
+	metrics.Instance().RegisterCache(cacheName)
+	metrics.Instance().GetCacheCapacityMetric(cacheName).Set(float64(cacheSize))
 
 	return q
 }
 
-func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Msg, error) {
+func (qr *QueryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Msg, error) {
 	q := req.Question[0]
+
+	cacheKey := fmt.Sprintf("%s_%d_%d_%s", q.Name, q.Qtype, q.Qclass, ns.Addr)
+	resp, err := qr.ansCache.Get(cacheKey)
+	if err == nil {
+		return resp, nil
+	}
 
 	st := time.Now()
 	defer func() {
@@ -69,10 +76,6 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Ms
 	utils.MsgRemoveOPT(req)
 	// I need the do flag set here, otherwise no RRSIG record will be returned
 	req.SetEdns0(utils.MaxMsgSize, true)
-
-	// we do not want and to not expect recursive responses
-	// If we do not specify the value here, some servers will block us
-	req.RecursionDesired = qr.RecursionDesired
 
 	// If we are here, there is no cached answer. Do query upstream
 	network := "udp"
@@ -96,6 +99,7 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Ms
 		}
 
 		if !ans.Truncated {
+			qr.ansCache.Set(cacheKey, ans)
 			return ans, nil
 		}
 		if network == "tcp" {
@@ -106,13 +110,11 @@ func (qr *queryRacer) queryNS(ctx context.Context, req *dns.Msg, ns NS) (*dns.Ms
 	}
 }
 
-func (qr *queryRacer) Run() (*dns.Msg, error) {
+func (qr *QueryRacer) Run(servers []NS, req *dns.Msg, isIPV6 bool) (*dns.Msg, error) {
 	ctx, cancel := context.WithCancel(context.TODO())
 
-	// qr.servers.RLock()
-	ansCH := make(chan *dns.Msg, len(qr.servers))
-	errCH := make(chan error, len(qr.servers))
-	// qr.servers.RUnlock()
+	ansCH := make(chan *dns.Msg, len(servers))
+	errCH := make(chan error, len(servers))
 
 	var wg sync.WaitGroup
 
@@ -130,7 +132,7 @@ func (qr *queryRacer) Run() (*dns.Msg, error) {
 		defer wg.Done()
 
 		// Copy is needed here, to prevent race conditions
-		ans, err := qr.queryNS(ctx, qr.req.Copy(), ns.Copy())
+		ans, err := qr.queryNS(ctx, req.Copy(), ns.Copy())
 
 		if err == nil {
 			ansCH <- ans
@@ -157,7 +159,7 @@ func (qr *queryRacer) Run() (*dns.Msg, error) {
 
 	ipV6S := []NS{}
 	ipV4S := []NS{}
-	for _, s := range qr.servers {
+	for _, s := range servers {
 		if s.Version == pigdns.FamilyIPv4 {
 			ipV4S = append(ipV4S, s)
 		} else {
@@ -165,12 +167,12 @@ func (qr *queryRacer) Run() (*dns.Msg, error) {
 		}
 	}
 
-	servers := ipV4S
+	qservers := ipV4S
 
-	if qr.isIPV6 {
+	if isIPV6 {
 		// we can query the ipv6 nameservers too
 		// put them into the head of the list
-		servers = append(ipV6S, servers...)
+		servers = append(ipV6S, qservers...)
 	}
 
 	for _, s := range servers {
@@ -190,7 +192,7 @@ func (qr *queryRacer) Run() (*dns.Msg, error) {
 		case err = <-errCH:
 			countErrors++
 			// no more nameservers to query
-			if countErrors == len(qr.servers) {
+			if countErrors == len(qservers) {
 				return nil, err
 			}
 		}
@@ -211,7 +213,7 @@ func (qr *queryRacer) Run() (*dns.Msg, error) {
 		case err = <-errCH:
 			// return nil, err
 			countErrors++
-			if countErrors == len(qr.servers) {
+			if countErrors == len(qservers) {
 				return nil, err
 			}
 		}

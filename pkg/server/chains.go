@@ -8,6 +8,7 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/any"
 	"github.com/ferama/pigdns/pkg/handlers/as112"
 	"github.com/ferama/pigdns/pkg/handlers/blocklist"
+	"github.com/ferama/pigdns/pkg/handlers/cache"
 	"github.com/ferama/pigdns/pkg/handlers/collector"
 	"github.com/ferama/pigdns/pkg/handlers/dohproxy"
 	"github.com/ferama/pigdns/pkg/handlers/proxy"
@@ -16,6 +17,7 @@ import (
 	"github.com/ferama/pigdns/pkg/handlers/root"
 	"github.com/ferama/pigdns/pkg/handlers/zone"
 	"github.com/ferama/pigdns/pkg/pigdns"
+	"github.com/ferama/pigdns/pkg/racer"
 	"github.com/miekg/dns"
 )
 
@@ -50,7 +52,14 @@ func BuildRecursorHandler(
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = recursor.NewRecursorHandler(chain, datadir, cacheSize)
+	racerCacheSize := cacheSize * 50 / 100
+	racer := racer.NewQueryRacer(datadir, racerCacheSize)
+
+	nsCacheSize := cacheSize * 25 / 100
+	chain = recursor.NewRecursorHandler(chain, datadir, nsCacheSize, racer)
+
+	ansCacheSize := cacheSize * 25 / 100
+	chain = cache.NewCacheHandler(chain, "recursor", ansCacheSize, datadir)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
 	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}
@@ -76,7 +85,14 @@ func BuildProxyChain(
 		}
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
-	chain = proxy.NewProxyHandler(chain, upstream, cacheSize, datadir)
+
+	racerCacheSize := cacheSize * 70 / 100
+	racer := racer.NewQueryRacer(datadir, racerCacheSize)
+
+	chain = proxy.NewProxyHandler(chain, upstream, racer)
+
+	ansCacheSize := cacheSize * 30 / 100
+	chain = cache.NewCacheHandler(chain, "proxy", ansCacheSize, datadir)
 	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
 	chain = &collector.Handler{Next: chain}
 

@@ -9,7 +9,7 @@ import (
 )
 
 type InternalWriter struct {
-	msg *dns.Msg
+	Msg *dns.Msg
 
 	LAddr net.Addr
 	RAddr net.Addr
@@ -20,13 +20,13 @@ func (w *InternalWriter) LocalAddr() net.Addr { return w.LAddr }
 func (w *InternalWriter) RemoteAddr() net.Addr { return w.RAddr }
 
 func (w *InternalWriter) WriteMsg(msg *dns.Msg) error {
-	w.msg = msg
+	w.Msg = msg
 	return nil
 }
 
 func (w *InternalWriter) Write(b []byte) (int, error) {
-	w.msg = new(dns.Msg)
-	err := w.msg.Unpack(b)
+	w.Msg = new(dns.Msg)
+	err := w.Msg.Unpack(b)
 	if err != nil {
 		return 0, err
 	}
@@ -71,5 +71,5 @@ func QueryInternal(ctx context.Context, m *dns.Msg, isIPV6 bool) (*dns.Msg, erro
 	}
 	chain.ServeDNS(c, req)
 
-	return rw.msg, nil
+	return rw.Msg, nil
 }
