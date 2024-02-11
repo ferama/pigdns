@@ -79,14 +79,28 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 	}
 	ttl := uint32(ts)
 	minTTL := utils.MsgGetMinTTL(msg)
+
+	setTTL := func(rr dns.RR, minTTL, ttl uint32) {
+		var diff uint32
+		diff = 0
+		if minTTL > ttl {
+			diff = minTTL - ttl
+		}
+		if rr.Header().Ttl > diff {
+			rr.Header().Ttl -= diff
+		} else {
+			rr.Header().Ttl = 0
+		}
+	}
+
 	for _, a := range msg.Answer {
-		a.Header().Ttl -= max(minTTL-ttl, 0)
+		setTTL(a, minTTL, ttl)
 	}
 	for _, a := range msg.Extra {
-		a.Header().Ttl -= max(minTTL-ttl, 0)
+		setTTL(a, minTTL, ttl)
 	}
 	for _, a := range msg.Ns {
-		a.Header().Ttl -= max(minTTL-ttl, 0)
+		setTTL(a, minTTL, ttl)
 	}
 
 	if do {
