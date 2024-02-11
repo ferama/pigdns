@@ -49,7 +49,6 @@ func QueryInternal(ctx context.Context, m *dns.Msg, isIPV6 bool) (*dns.Msg, erro
 
 	c := context.WithValue(context.Background(), PigContextKey, &PigContext{
 		IsDOH:    false,
-		CacheHit: false,
 		Chain:    pc.Chain,
 		Internal: true,
 	})

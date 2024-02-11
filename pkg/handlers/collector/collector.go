@@ -29,7 +29,6 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 	totalLatency := time.Since(cc.StartTime)
 
 	isDOH := false
-	cacheHit := false
 	rcode := 0
 	if c.Value(pigdns.PigContextKey) != nil {
 		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
@@ -39,7 +38,6 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			return
 		}
 		isDOH = pc.IsDOH
-		cacheHit = pc.CacheHit
 		rcode = pc.Rcode
 	}
 
@@ -61,7 +59,6 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 			Str("latencyHuman", totalLatency.Round(1*time.Millisecond).String()).
 			Str("protocol", r.Proto()).
 			Bool("isDOH", isDOH).
-			Bool("cached", cacheHit).
 			Str("handler", cc.AnweredBy).
 			Str("rcode", dns.RcodeToString[rcode]).
 			Str("client", r.IP())
@@ -71,12 +68,6 @@ func (h *Handler) emitLogs(c context.Context, r *pigdns.Request) {
 
 	metrics.Instance().QueryLatency.Observe(totalLatency.Seconds())
 	metrics.Instance().CounterByRcode[rcode].Inc()
-
-	if cacheHit {
-		metrics.Instance().QueryCacheHit()
-	} else {
-		metrics.Instance().QueryCacheMiss()
-	}
 }
 
 func (h *Handler) ServeDNS(c context.Context, r *pigdns.Request) {

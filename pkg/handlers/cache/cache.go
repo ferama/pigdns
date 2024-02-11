@@ -44,9 +44,6 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	m, cacheErr := h.ansCache.Get(reqKey)
 	if cacheErr == nil {
-		pc := c.Value(pigdns.PigContextKey).(*pigdns.PigContext)
-		pc.CacheHit = true
-
 		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
 		cc.AnweredBy = handlerName
 		m.Authoritative = false

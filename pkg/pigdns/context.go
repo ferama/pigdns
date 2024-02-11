@@ -12,7 +12,6 @@ const PigContextKey contextKey = "pig-context"
 
 type PigContext struct {
 	IsDOH    bool
-	CacheHit bool
 	Rcode    int
 	Chain    Handler
 	Internal bool
@@ -21,7 +20,6 @@ type PigContext struct {
 func newContext(w dns.ResponseWriter, m *dns.Msg, isDOH bool, chain Handler) context.Context {
 	ctx := context.WithValue(context.Background(), PigContextKey, &PigContext{
 		IsDOH:    isDOH,
-		CacheHit: false,
 		Chain:    chain,
 		Internal: false,
 	})

@@ -51,9 +51,8 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 		Data: packed,
 	}
 	i.SetTTL(time.Duration(minTTL) * time.Second)
-	// log.Printf("[%s set] %s, ttl:%fs, minTTL: %d", c.name, key, time.Until(i.Expires).Seconds(), minTTL)
 
-	metrics.Instance().ExchangeCacheMiss()
+	metrics.Instance().QueryCacheMiss()
 	return c.cache.Set(key, i)
 }
 
@@ -107,7 +106,6 @@ func (c *ansCache) Get(key string) (*dns.Msg, error) {
 		utils.MsgSetAuthenticated(msg, true)
 	}
 
-	metrics.Instance().ExchangeCacheHit()
-	// log.Printf("[%s get] key=%s", c.name, key)
+	metrics.Instance().QueryCacheHit()
 	return msg, nil
 }
