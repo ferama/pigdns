@@ -45,7 +45,7 @@ const (
 	resolverMaxLevel = 24
 	// resolverMaxLevel = 16
 
-	nsCacheName = "nscache"
+	nsCacheName = "ns"
 )
 
 type Recursor struct {
