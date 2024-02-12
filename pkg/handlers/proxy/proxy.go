@@ -74,6 +74,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			Str("type", r.Type()).
 			Str("rcode", dns.RcodeToString[m.Rcode]).
 			Msg("query error")
+
 		r.ReplyWithStatus(m, m.Rcode)
 		return
 	}
@@ -89,6 +90,7 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			utils.MsgSetDo(m, true)
 		}
 
+		m = utils.MsgCleanup(m, r.Msg)
 		r.ReplyWithStatus(m, m.Rcode)
 		return
 	}

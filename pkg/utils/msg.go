@@ -154,3 +154,49 @@ func AnsIsError(ans *dns.Msg) bool {
 		return false
 	}
 }
+
+// MsgCleanup prepares the answer to be returned to the client
+// exluding not requested records
+func MsgCleanup(ans *dns.Msg, req *dns.Msg) *dns.Msg {
+	q := req.Question[0]
+
+	cleaned := ans.Copy()
+	cleaned.Answer = []dns.RR{}
+	cleaned.Ns = []dns.RR{}
+
+	opt := req.IsEdns0()
+
+	for _, rr := range ans.Answer {
+		if opt != nil && opt.Do() {
+			if rr.Header().Rrtype == dns.TypeRRSIG {
+				cleaned.Answer = append(cleaned.Answer, rr)
+				continue
+			}
+		}
+		// exclude not requested answers (except if they contains CNAMEs)
+		if rr.Header().Rrtype != dns.TypeCNAME && rr.Header().Rrtype != q.Qtype {
+			continue
+		}
+		// exclude TypeNone from the final answer
+		if rr.Header().Rrtype == dns.TypeNone {
+			continue
+		}
+
+		cleaned.Answer = append(cleaned.Answer, rr)
+	}
+	for _, rr := range ans.Ns {
+		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {
+			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
+		}
+		if rr.Header().Rrtype == dns.TypeSOA {
+			cleaned.Ns = append(cleaned.Ns, rr)
+			continue
+		}
+		if opt != nil && opt.Do() {
+			cleaned.Ns = append(cleaned.Ns, rr)
+		}
+
+	}
+	return cleaned
+}
