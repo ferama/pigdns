@@ -10,6 +10,7 @@ import (
 	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/pigdns"
 	"github.com/ferama/pigdns/pkg/utils"
+	"github.com/miekg/dns"
 )
 
 const (
@@ -74,7 +75,11 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 		h.Next.ServeDNS(c, req)
 
 		m = rw.Msg
-		h.ansCache.Set(reqKey, m)
+
+		// cache successfully responses only
+		if m.Rcode == dns.RcodeSuccess {
+			h.ansCache.Set(reqKey, m)
+		}
 
 		r.ReplyWithStatus(m, m.Rcode)
 	}
