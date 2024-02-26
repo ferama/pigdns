@@ -39,7 +39,6 @@ func NewCacheHandler(next pigdns.Handler, name string, cacheSize int, datadir st
 }
 
 func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
-
 	q := r.Msg.Question[0]
 	reqKey := fmt.Sprintf("%s_%d_%d", q.Name, q.Qtype, q.Qclass)
 

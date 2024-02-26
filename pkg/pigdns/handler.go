@@ -32,6 +32,9 @@ func Handle(pattern string, handler Handler) {
 // HandleMux registers an handler using a custom Mux
 func HandleMux(pattern string, handler Handler, mux *dns.ServeMux, isDOH bool) {
 	mux.HandleFunc(pattern, func(w dns.ResponseWriter, m *dns.Msg) {
+		// disabled by default. Let the handlers override when needed
+		m.RecursionDesired = false
+
 		ctx := newContext(w, m, isDOH, handler)
 		req := &Request{
 			ResponseWriter: w,
