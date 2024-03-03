@@ -313,8 +313,7 @@ func (r *Recursor) searchNSIp(e dns.RR, ns string, servers *authServers) bool {
 func (r *Recursor) buildServers(
 	ctx context.Context,
 	ans *dns.Msg,
-	zone string,
-	currServers *authServers, isIPV6 bool) (*authServers, error) {
+	zone string, isIPV6 bool) (*authServers, error) {
 
 	servers := &authServers{
 		Zone: zone,
@@ -378,15 +377,6 @@ func (r *Recursor) buildServers(
 	if len(extraServers.List) > 0 {
 		servers.RLock()
 		servers.List = append(servers.List, extraServers.List...)
-
-		// TODO: disabled for now. Add a test if it is needed
-		//
-		// if currServers != nil {
-		// 	currServers.Lock()
-		// 	servers.List = append(servers.List, currServers.List...)
-		// 	currServers.Unlock()
-		// }
-
 		servers.RUnlock()
 	}
 	extraServers.RUnlock()
@@ -551,7 +541,7 @@ func (r *Recursor) resolveNS(
 		}
 	}
 
-	servers, err := r.buildServers(ctx, resp, zone, rservers, isIPV6)
+	servers, err := r.buildServers(ctx, resp, zone, isIPV6)
 	if err != nil {
 		if err == errRecursionMaxLevel {
 			return resp, servers, err
@@ -633,7 +623,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 	return keys
 }
 
-func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, servers *authServers, isIPV6 bool) bool {
+func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, isIPV6 bool) bool {
 	// return true
 	if utils.IsArpa(q.Name) {
 		// TODO: it make sense?
@@ -717,7 +707,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
 			soa := r.findSoa(nsResp)
 			if soa != nil {
-				dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+				dnssec := r.verifyRRSIG(ctx, soa, q, isIPV6)
 				if !dnssec {
 					soa.SetRcode(soa, dns.RcodeServerFailure)
 					soa.Answer = nil
@@ -755,7 +745,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 		// no asnwer from the previous query but we got nameservers instead
 		// Get nameservers ips and try to query them
-		nextServers, err := r.buildServers(ctx, ans, q.Name, nil, isIPV6)
+		nextServers, err := r.buildServers(ctx, ans, q.Name, isIPV6)
 		if err != nil {
 			if err != errNoNSfound {
 				// soa answer
@@ -814,7 +804,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 		soa := r.findSoa(ans)
 		if soa != nil {
-			dnssec := r.verifyRRSIG(ctx, soa, q, servers, isIPV6)
+			dnssec := r.verifyRRSIG(ctx, soa, q, isIPV6)
 			if !dnssec {
 				soa.SetRcode(soa, dns.RcodeServerFailure)
 				soa.Answer = nil
@@ -922,7 +912,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 		return ans, nil
 	}
 
-	dnssec := r.verifyRRSIG(ctx, ans, q, servers, isIPV6)
+	dnssec := r.verifyRRSIG(ctx, ans, q, isIPV6)
 	if !dnssec {
 		ans.SetRcode(ans, dns.RcodeServerFailure)
 		ans.Answer = nil
