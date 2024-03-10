@@ -20,7 +20,7 @@ func (f HandlerFunc) ServeDNS(c context.Context, r *Request) {
 // Handle registers and handler using the dns.DefaultMux
 func Handle(pattern string, handler Handler) {
 	dns.HandleFunc(pattern, func(w dns.ResponseWriter, m *dns.Msg) {
-		ctx := newContext(w, m, false, nil)
+		ctx := newContext(false, nil)
 		req := &Request{
 			ResponseWriter: w,
 			Msg:            m,
@@ -35,7 +35,7 @@ func HandleMux(pattern string, handler Handler, mux *dns.ServeMux, isDOH bool) {
 		// disabled by default. Let the handlers override when needed
 		m.RecursionDesired = false
 
-		ctx := newContext(w, m, isDOH, handler)
+		ctx := newContext(isDOH, handler)
 		req := &Request{
 			ResponseWriter: w,
 			Msg:            m,

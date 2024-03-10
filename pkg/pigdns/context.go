@@ -2,8 +2,6 @@ package pigdns
 
 import (
 	"context"
-
-	"github.com/miekg/dns"
 )
 
 type contextKey string
@@ -17,7 +15,7 @@ type PigContext struct {
 	Internal bool
 }
 
-func newContext(w dns.ResponseWriter, m *dns.Msg, isDOH bool, chain Handler) context.Context {
+func newContext(isDOH bool, chain Handler) context.Context {
 	ctx := context.WithValue(context.Background(), PigContextKey, &PigContext{
 		IsDOH:    isDOH,
 		Chain:    chain,

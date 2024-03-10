@@ -80,6 +80,13 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 			h.ansCache.Set(reqKey, m)
 		}
 
+		utils.MsgSetupEdns(m)
+
+		// set the do flag
+		if r.IsDo() {
+			utils.MsgSetDo(m, true)
+		}
+
 		r.ReplyWithStatus(m, m.Rcode)
 	}
 }
