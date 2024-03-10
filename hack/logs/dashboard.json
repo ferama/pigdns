@@ -1,0 +1,209 @@
+{
+    "__inputs": [
+      {
+        "name": "DS_GRAFANACLOUD-FERAMA-LOGS",
+        "label": "grafanacloud-ferama-logs",
+        "description": "",
+        "type": "datasource",
+        "pluginId": "loki",
+        "pluginName": "Loki"
+      }
+    ],
+    "__elements": {},
+    "__requires": [
+      {
+        "type": "grafana",
+        "id": "grafana",
+        "name": "Grafana",
+        "version": "10.3.3"
+      },
+      {
+        "type": "panel",
+        "id": "logs",
+        "name": "Logs",
+        "version": ""
+      },
+      {
+        "type": "datasource",
+        "id": "loki",
+        "name": "Loki",
+        "version": "1.0.0"
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+      {
+        "datasource": {
+          "type": "loki",
+          "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+        },
+        "gridPos": {
+          "h": 16,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "dedupStrategy": "none",
+          "enableLogDetails": true,
+          "prettifyLogMessage": false,
+          "showCommonLabels": false,
+          "showLabels": false,
+          "showTime": false,
+          "sortOrder": "Descending",
+          "wrapLogMessage": false
+        },
+        "pluginVersion": "10.3.1",
+        "targets": [
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+            },
+            "editorMode": "code",
+            "expr": "{container=\"pigdns\"}  | json | client =~ \"$client\" | rcode =~ \"$rcode\" | level =~ \"$level\" |handler =~ \"$handler\" | line_format \"{{.time}} | {{.query}}\"",
+            "legendFormat": "",
+            "queryType": "range",
+            "refId": "A"
+          }
+        ],
+        "title": "Queries",
+        "type": "logs"
+      }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 39,
+    "tags": [],
+    "templating": {
+      "list": [
+        {
+          "current": {},
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "multi": false,
+          "name": "client",
+          "options": [],
+          "query": {
+            "label": "client",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {},
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "multi": false,
+          "name": "rcode",
+          "options": [],
+          "query": {
+            "label": "rcode",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {},
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "multi": false,
+          "name": "level",
+          "options": [],
+          "query": {
+            "label": "level",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {},
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_GRAFANACLOUD-FERAMA-LOGS}"
+          },
+          "definition": "",
+          "hide": 0,
+          "includeAll": true,
+          "multi": false,
+          "name": "handler",
+          "options": [],
+          "query": {
+            "label": "handler",
+            "refId": "LokiVariableQueryEditor-VariableQuery",
+            "stream": "",
+            "type": 1
+          },
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "Logs",
+    "uid": "c320ccb3-581d-4bc3-a1bb-38a2892c8322",
+    "version": 7,
+    "weekStart": ""
+  }
