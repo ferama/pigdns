@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	errQueryRacerTimeout = errors.New("query timeout")
+	ErrQueryRacerTimeout = errors.New("query timeout")
 )
 
 const (
@@ -213,7 +213,7 @@ func (qr *QueryRacer) Run(servers []NS, req *dns.Msg, isIPV6 bool) (*dns.Msg, er
 	for {
 		select {
 		case <-time.After(queryRacerTimeout):
-			return nil, errQueryRacerTimeout
+			return nil, ErrQueryRacerTimeout
 		case ans = <-ansCH:
 			if !utils.AnsIsError(ans) {
 				return ans, nil

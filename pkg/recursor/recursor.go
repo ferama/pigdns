@@ -123,6 +123,7 @@ func (r *Recursor) Query(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns.M
 	}
 	tmp := r.oneInFlight.Run(reqKey, func(params ...any) any {
 		ans, err := r.resolve(ctx, req, isIPV6)
+
 		if err == nil {
 			dsok, broken := r.verifyDS(ctx, ans, q, isIPV6)
 
@@ -185,7 +186,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			dsreq := new(dns.Msg)
 			dsreq.SetQuestion(name, dns.TypeDS)
 
-			resp, _, err := r.resolveNS(ctx, dsreq.Question[0], isIPV6, 0)
+			resp, _, err := r.resolveNS(ctx, dsreq.Question[0], isIPV6, 0, false)
 			if err != nil {
 				return false, false
 			}
@@ -491,7 +492,8 @@ func (r *Recursor) resolveNS(
 	ctx context.Context,
 	q dns.Question,
 	isIPV6 bool,
-	offset int) (*dns.Msg, *authServers, error) {
+	offset int,
+	ignoreCache bool) (*dns.Msg, *authServers, error) {
 
 	end := false
 	var i int
@@ -502,14 +504,16 @@ func (r *Recursor) resolveNS(
 	}
 	zone := dns.Fqdn(q.Name[i:])
 
-	cached, err := r.nsCache.Get(zone)
-	if err == nil {
-		return new(dns.Msg), cached, nil
+	if !ignoreCache {
+		cached, err := r.nsCache.Get(zone)
+		if err == nil {
+			return new(dns.Msg), cached, nil
+		}
 	}
 
 	// run recursively here. the recursion will end when we will
 	// encounter the root zone
-	resp, rservers, err := r.resolveNS(ctx, q, isIPV6, i)
+	resp, rservers, err := r.resolveNS(ctx, q, isIPV6, i, false)
 	if err != nil {
 		return resp, nil, err
 	}
@@ -526,7 +530,7 @@ func (r *Recursor) resolveNS(
 	}
 	rservers.RUnlock()
 
-	// take advantage of the extra secion and store some ips into cache
+	// take advantage of the extra section and store some ips into cache
 	// if any
 	types := []uint16{
 		dns.TypeA,
@@ -607,7 +611,7 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 
 	keys := []dns.RR{}
 
-	_, rservers, err := r.resolveNS(ctx, q, isIPV6, 0)
+	_, rservers, err := r.resolveNS(ctx, q, isIPV6, 0, false)
 	if err != nil {
 		return keys
 	}
@@ -702,7 +706,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 	q := req.Question[0]
 
-	nsResp, servers, err := r.resolveNS(ctx, q, isIPV6, 0)
+	nsResp, servers, err := r.resolveNS(ctx, q, isIPV6, 0, false)
 	if err != nil {
 		if err == errNoNSfound && nsResp != nil && len(nsResp.Ns) > 0 {
 			soa := r.findSoa(nsResp)
@@ -724,16 +728,21 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 	req.RecursionDesired = false
 	ans, err := r.racer.Run(servers.List, req, isIPV6)
 	if err != nil {
-		servers.RUnlock()
-		return nil, err
+		// try without the cache. this handles some edge cases
+		var nerr error
+		_, rservers, rerr := r.resolveNS(ctx, q, isIPV6, 0, true)
+		if rerr == nil {
+			ans, nerr = r.racer.Run(rservers.List, req, isIPV6)
+		}
+		if nerr != nil {
+			servers.RUnlock()
+			return nil, nerr
+		}
+
+		// servers.RUnlock()
+		// return nil, err
 	}
 	servers.RUnlock()
-
-	// if q.Name == "eunic.net.ua." {
-	// 	log.Printf("=========== %s =========", q.Name)
-	// 	log.Print(servers.String())
-	// 	log.Print(ans)
-	// }
 
 	maxNsDepth := chainMaxDeep
 	for len(ans.Answer) == 0 && len(ans.Ns) > 0 {
