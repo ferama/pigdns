@@ -878,6 +878,7 @@ func (r *Recursor) resolve(ctx context.Context, req *dns.Msg, isIPV6 bool) (*dns
 
 					soa := r.findSoa(resp)
 					if soa != nil {
+						soa.Answer = []dns.RR{cname}
 						return soa, nil
 					}
 
