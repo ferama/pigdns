@@ -163,6 +163,7 @@ func MsgCleanup(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 	cleaned := ans.Copy()
 	cleaned.Answer = []dns.RR{}
 	cleaned.Ns = []dns.RR{}
+	cleaned.Extra = []dns.RR{}
 
 	opt := req.IsEdns0()
 
@@ -196,7 +197,19 @@ func MsgCleanup(ans *dns.Msg, req *dns.Msg) *dns.Msg {
 		if opt != nil && opt.Do() {
 			cleaned.Ns = append(cleaned.Ns, rr)
 		}
-
+	}
+	for _, rr := range ans.Extra {
+		if rr.Header().Rrtype == q.Qtype && rr.Header().Class == q.Qclass {
+			cleaned.Extra = append(cleaned.Extra, rr)
+			continue
+		}
+		if rr.Header().Rrtype == dns.TypeSOA {
+			cleaned.Extra = append(cleaned.Extra, rr)
+			continue
+		}
+		if opt != nil && opt.Do() {
+			cleaned.Extra = append(cleaned.Extra, rr)
+		}
 	}
 	return cleaned
 }
