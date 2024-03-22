@@ -256,9 +256,6 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			utils.MsgSetAuthenticated(ans, true)
 			return false
 		}
-		if !r.verifyRRSIG(ctx, kans, kreq.Question[0], isIPV6) {
-			return false
-		}
 
 		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, name)
 		// verify keys against DS
