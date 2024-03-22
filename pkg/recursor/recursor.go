@@ -199,7 +199,8 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
-			dsans, dsErr := r.resolve(r.newContext(ctx), dsreq, isIPV6)
+			ctx := r.newContext(ctx)
+			dsans, dsErr := r.resolve(ctx, dsreq, isIPV6)
 			// dsans, err := r.resolve(ctx, dsreq, isIPV6)
 			if dsErr != nil {
 				name, end = next(name)
@@ -229,6 +230,14 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				continue
 			}
 
+			if len(utils.MsgExtractByType(dsans, dns.TypeRRSIG, "")) == 0 {
+				utils.MsgSetAuthenticated(ans, true)
+				return false
+			}
+			if !r.verifyRRSIG(ctx, dsans, dsreq.Question[0], isIPV6) {
+				return false
+			}
+
 			ds = dss[0].(*dns.DS)
 		}
 
@@ -243,6 +252,14 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		if err != nil {
 			return false
 		}
+		if len(utils.MsgExtractByType(kans, dns.TypeRRSIG, "")) == 0 {
+			utils.MsgSetAuthenticated(ans, true)
+			return false
+		}
+		if !r.verifyRRSIG(ctx, kans, kreq.Question[0], isIPV6) {
+			return false
+		}
+
 		keys := utils.MsgExtractByType(kans, dns.TypeDNSKEY, name)
 		// verify keys against DS
 		verified := false
@@ -275,7 +292,6 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 					Msg("[dnssec] DS error: failed")
 				return false
 			}
-
 			return true
 		}
 

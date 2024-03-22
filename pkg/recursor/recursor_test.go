@@ -118,7 +118,7 @@ func TestBadDNSSEC(t *testing.T) {
 	domains := []string{
 		"dnssec-failed.org",
 		"rhybar.cz",
-		// "brokendnssec.net", # fixme
+		"brokendnssec.net",
 	}
 
 	for _, domain := range domains {
