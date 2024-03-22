@@ -234,9 +234,9 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				utils.MsgSetAuthenticated(ans, true)
 				return false
 			}
-			// if !r.verifyRRSIG(ctx, dsans, dsreq.Question[0], isIPV6) {
-			// 	return false
-			// }
+			if !r.verifyRRSIG(ctx, dsans, dsreq.Question[0], isIPV6) {
+				return false
+			}
 
 			ds = dss[0].(*dns.DS)
 		}
