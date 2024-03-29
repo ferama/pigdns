@@ -176,11 +176,12 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 
 	for {
 		var ds *dns.DS
+		var dss []dns.RR
 		if name == "." {
 			// DS is root DS
 			k, _ := dns.NewRR(rootKeys[0])
 			key := k.(*dns.DNSKEY)
-			ds = key.ToDS(dns.DH)
+			dss = append(dss, key.ToDS(dns.DH))
 		} else {
 			// resolve for DS
 			dsreq := new(dns.Msg)
@@ -219,7 +220,7 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				}
 			}
 
-			dss := utils.MsgExtractByType(dsans, dns.TypeDS, name)
+			dss = utils.MsgExtractByType(dsans, dns.TypeDS, name)
 
 			if len(dss) == 0 {
 				// No DS. Search into the upper zone
@@ -237,8 +238,6 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			if !r.verifyRRSIG(ctx, dsans, dsreq.Question[0], isIPV6) {
 				return false
 			}
-
-			ds = dss[0].(*dns.DS)
 		}
 
 		// get keys
@@ -263,13 +262,19 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 		for _, krr := range keys {
 			key := krr.(*dns.DNSKEY)
 
-			if ds != nil && ds.KeyTag == key.KeyTag() {
-				pds := key.ToDS(ds.DigestType)
-				if pds.Digest == ds.Digest {
-					verified = true
-					break
+			for _, i := range dss {
+				dsrr := i.(*dns.DS)
+				if dsrr.KeyTag == key.KeyTag() {
+					pds := key.ToDS(dsrr.DigestType)
+					if pds.Digest == dsrr.Digest {
+						verified = true
+						ds = dsrr
+						break
+					}
 				}
+				// break
 			}
+
 		}
 
 		if verified {
@@ -278,17 +283,20 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 				Str("ds-name", ds.Header().Name).
 				Msg("[dnssec] DS verified")
 		} else {
-			hasDs := ds != nil
+			hasDs := len(dss) > 0
 			hasKeys := len(keys) > 0
 
-			if hasDs == hasKeys {
-				log.Debug().
-					Str("q", name).
-					Bool("has-ds", hasDs).
-					Bool("has-keys", hasKeys).
-					Msg("[dnssec] DS error: failed")
-				return false
+			if hasDs {
+				if hasDs == hasKeys {
+					log.Debug().
+						Str("q", name).
+						Bool("has-ds", hasDs).
+						Bool("has-keys", hasKeys).
+						Msg("[dnssec] DS error: failed")
+					return false
+				}
 			}
+
 			return true
 		}
 
