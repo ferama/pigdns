@@ -48,13 +48,14 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 	pc.Rcode = m.Rcode
 
 	if m.Rcode != dns.RcodeSuccess {
+		cc := c.Value(collector.CollectorContextKey).(*collector.CollectorContext)
+		cc.AnweredBy = handlerName
 		log.Error().
 			Str("query", r.Name()).
 			Str("type", r.Type()).
 			Str("rcode", dns.RcodeToString[m.Rcode]).
 			Msg("query error")
 		r.ReplyWithStatus(m, m.Rcode)
-		h.Next.ServeDNS(c, r)
 		return
 	}
 
