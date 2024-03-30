@@ -59,11 +59,13 @@ func (c *ansCache) Set(key string, m *dns.Msg) error {
 func (c *ansCache) Get(key string) (*dns.Msg, error) {
 	item, err := c.cache.Get(key)
 	if err != nil {
+		metrics.Instance().QueryCacheMiss()
 		return nil, err
 	}
 	msg := new(dns.Msg)
 	err = msg.Unpack(item.Data)
 	if err != nil {
+		metrics.Instance().QueryCacheMiss()
 		return nil, err
 	}
 
