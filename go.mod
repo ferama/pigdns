@@ -3,7 +3,7 @@ module github.com/ferama/pigdns
 go 1.21
 
 require (
-	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/env v0.1.0
