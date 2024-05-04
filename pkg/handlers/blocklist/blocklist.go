@@ -25,19 +25,24 @@ const (
 var (
 	commentsRE = regexp.MustCompile(`^\s*#`)
 	isHTTPRE   = regexp.MustCompile(`^http(s)?:\/\/`)
+	isREGEXP   = regexp.MustCompile(`(^\s*regex\s*:\s*)`)
 )
 
 type handler struct {
 	Next pigdns.Handler
 
-	list map[string]bool
+	blacklist map[string]bool
+	whitelist map[string]bool
+	regexes   []*regexp.Regexp
 }
 
 func NewBlocklistHandler(blocklists []string, whitelists []string, next pigdns.Handler) *handler {
 	h := &handler{
 		Next: next,
 
-		list: map[string]bool{},
+		blacklist: map[string]bool{},
+		whitelist: map[string]bool{},
+		regexes:   make([]*regexp.Regexp, 0),
 	}
 
 	for _, u := range blocklists {
@@ -50,13 +55,26 @@ func NewBlocklistHandler(blocklists []string, whitelists []string, next pigdns.H
 	}
 
 	for _, u := range whitelists {
-		h.removeFile(u)
+		h.buildWhiteList(u)
 	}
 
 	return h
 }
 
-func (h *handler) removeFile(path string) {
+func (h *handler) processLine(line string) {
+	if !commentsRE.Match([]byte(line)) {
+		if !isREGEXP.Match([]byte(line)) {
+			key := strings.ToLower(line)
+			h.blacklist[dns.Fqdn(key)] = true
+		} else {
+			exp := isREGEXP.ReplaceAllString(line, "")
+			h.regexes = append(h.regexes, regexp.MustCompile(exp))
+			log.Printf("regexp: %s", exp)
+		}
+	}
+}
+
+func (h *handler) buildWhiteList(path string) {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Warn().Msgf("[blocklist] '%s'", err)
@@ -65,10 +83,13 @@ func (h *handler) removeFile(path string) {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	// optionally, resize scanner's capacity for lines over 64K, see next example
 	for scanner.Scan() {
 		line := scanner.Text()
-		delete(h.list, dns.Fqdn(line))
+		// delete(h.blacklist, dns.Fqdn(line))
+		if !commentsRE.Match([]byte(line)) {
+			key := strings.ToLower(line)
+			h.whitelist[dns.Fqdn(key)] = true
+		}
 	}
 	log.Info().Msgf("[blocklist] '%s' loaded as whitelist", path)
 }
@@ -86,10 +107,7 @@ func (h *handler) addFile(path string) {
 	// optionally, resize scanner's capacity for lines over 64K, see next example
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !commentsRE.Match([]byte(line)) {
-			key := strings.ToLower(line)
-			h.list[dns.Fqdn(key)] = true
-		}
+		h.processLine(line)
 	}
 	log.Info().Msgf("[blocklist] '%s' loaded as blacklist", path)
 }
@@ -109,10 +127,7 @@ func (h *handler) addHTTP(uri string) {
 	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 
 	for _, l := range lines {
-		if !commentsRE.Match([]byte(l)) {
-			key := strings.ToLower(l)
-			h.list[dns.Fqdn(key)] = true
-		}
+		h.processLine(l)
 	}
 	log.Info().Msgf("[blocklist] '%s' loaded", uri)
 }
@@ -122,8 +137,19 @@ func (h *handler) ServeDNS(c context.Context, r *pigdns.Request) {
 
 	key := strings.ToLower(r.Name())
 
-	if _, ok := h.list[key]; ok {
+	if _, ok := h.blacklist[key]; ok {
 		allowed = false
+	}
+
+	for _, exp := range h.regexes {
+		if exp.MatchString(key) {
+			allowed = false
+			break
+		}
+	}
+
+	if _, ok := h.whitelist[key]; ok {
+		allowed = true
 	}
 
 	if !allowed {

@@ -25,7 +25,9 @@ recursor:
     # - 0.0.0.0/0 # allows all nets (very dangerous)
     - 127.0.0.1/32
     - 192.168.10.0/24
+  # blocklist
   blockLists:
+    - ./block.list
     - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt
   whiteLists: []
 

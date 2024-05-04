@@ -9,6 +9,7 @@
 * Full recursive mode resolver (with in memory cache)
 * Automagic Let's Encrypt certificate management for the handled domain and DOH (using the DNS01 challenge)
 * Special cases handling using a standard zone file
+* regexp blocklist
 
 ## Getting started
 
