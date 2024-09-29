@@ -24,11 +24,11 @@ type handler struct {
 	ansCache *ansCache
 }
 
-func NewCacheHandler(next pigdns.Handler, name string, cacheSize int, datadir string) *handler {
+func NewCacheHandler(next pigdns.Handler, name string, cacheSize int, cachePersistence bool, datadir string) *handler {
 
 	h := &handler{
 		Next:     next,
-		ansCache: newAnsCache(filepath.Join(datadir, "cache", name), name, cacheSize),
+		ansCache: newAnsCache(filepath.Join(datadir, "cache", name), name, cacheSize, cachePersistence),
 	}
 
 	metrics.Instance().RegisterCache(name)

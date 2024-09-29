@@ -39,20 +39,22 @@ type netListener struct {
 }
 
 type proxyConf struct {
-	Enabled    bool     `koanf:"enabled"`
-	Upstream   []string `koanf:"upstream"`
-	BlockLists []string `koanf:"blockLists"`
-	WhiteLists []string `koanf:"whiteLists"`
-	CacheSize  int      `koanf:"cacheSize"`
+	Enabled          bool     `koanf:"enabled"`
+	Upstream         []string `koanf:"upstream"`
+	BlockLists       []string `koanf:"blockLists"`
+	WhiteLists       []string `koanf:"whiteLists"`
+	CacheSize        int      `koanf:"cacheSize"`
+	CachePersistence bool     `koanf:"cachePersistence"`
 }
 
 type recursorConf struct {
-	Enabled     bool     `koanf:"enabled"`
-	AllowedNets []string `koanf:"allowedNets"`
-	ServeOnUDP  bool     `koanf:"serveOnUDP"`
-	BlockLists  []string `koanf:"blockLists"`
-	WhiteLists  []string `koanf:"whiteLists"`
-	CacheSize   int      `koanf:"cacheSize"`
+	Enabled          bool     `koanf:"enabled"`
+	AllowedNets      []string `koanf:"allowedNets"`
+	ServeOnUDP       bool     `koanf:"serveOnUDP"`
+	BlockLists       []string `koanf:"blockLists"`
+	WhiteLists       []string `koanf:"whiteLists"`
+	CacheSize        int      `koanf:"cacheSize"`
+	CachePersistence bool     `koanf:"cachePersistence"`
 }
 type conf struct {
 	LogLevel string `koanf:"logLevel"`
@@ -90,7 +92,8 @@ func loadConf(path string) *conf {
 		},
 		DOHEnabled: false,
 		Proxy: proxyConf{
-			Enabled: false,
+			Enabled:          false,
+			CachePersistence: false,
 		},
 		Recursor: recursorConf{
 			ServeOnUDP: false,
@@ -98,7 +101,8 @@ func loadConf(path string) *conf {
 				"127.0.0.1/32",
 				"::1",
 			},
-			CacheSize: 100000,
+			CacheSize:        100000,
+			CachePersistence: false,
 		},
 
 		Certman: certm{

@@ -23,10 +23,10 @@ type handler struct {
 	recursor *recursor.Recursor
 }
 
-func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int, qr *racer.QueryRacer) *handler {
+func NewRecursorHandler(next pigdns.Handler, datadir string, cacheSize int, cachePersistence bool, qr *racer.QueryRacer) *handler {
 	h := &handler{
 		Next:     next,
-		recursor: recursor.New(datadir, cacheSize, qr),
+		recursor: recursor.New(datadir, cacheSize, cachePersistence, qr),
 	}
 	return h
 }

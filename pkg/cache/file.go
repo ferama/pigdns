@@ -47,9 +47,11 @@ type FileCache struct {
 	expireWorkerPool *worker.Pool
 	evictWorkerPool  *worker.Pool
 	dumpWorkerPool   *worker.Pool
+
+	persistence bool
 }
 
-func NewFileCache(datadir string, name string, size int) *FileCache {
+func NewFileCache(datadir string, name string, size int, cachePersistence bool) *FileCache {
 
 	// allow a minimum
 	maxItems := max(size, 1000)
@@ -61,6 +63,7 @@ func NewFileCache(datadir string, name string, size int) *FileCache {
 
 	cache := &FileCache{
 		buckets:          make(map[uint64]*bucket),
+		persistence:      cachePersistence,
 		datadir:          datadir,
 		name:             name,
 		maxItems:         maxItems,
@@ -76,7 +79,9 @@ func NewFileCache(datadir string, name string, size int) *FileCache {
 			data: make(map[string]*Item),
 			idx:  i,
 		}
-		loaded = cache.load(i)
+		if cachePersistence {
+			loaded = cache.load(i)
+		}
 	}
 	if !loaded {
 		log.Warn().Msg("no cache loaded from disk")
@@ -163,27 +168,29 @@ func (c *FileCache) setupJobs() {
 		}
 	}()
 
-	// Dump JOB
-	go func() {
-		for {
-			time.Sleep(cacheDumpInterval)
+	if c.persistence {
+		// Dump JOB
+		go func() {
+			for {
+				time.Sleep(cacheDumpInterval)
 
-			// t := time.Now()
-			// log.Printf("[%s cache] dump job started", c.name)
-			var i uint64
-			for i = 0; i <= cacheNumBuckets; i++ {
-				// this is needed to be sure that the value of i doesn't change
-				// while is read from the checkExpired function
-				n := i
-				// dump cache to disk
-				c.dumpWorkerPool.Enqueue(func() {
-					c.dumpJob(n)
-				})
+				// t := time.Now()
+				// log.Printf("[%s cache] dump job started", c.name)
+				var i uint64
+				for i = 0; i <= cacheNumBuckets; i++ {
+					// this is needed to be sure that the value of i doesn't change
+					// while is read from the checkExpired function
+					n := i
+					// dump cache to disk
+					c.dumpWorkerPool.Enqueue(func() {
+						c.dumpJob(n)
+					})
+				}
+				c.dumpWorkerPool.Wait()
+				// log.Printf("[%s cache] dump job ended. took %s", c.name, time.Since(t))
 			}
-			c.dumpWorkerPool.Wait()
-			// log.Printf("[%s cache] dump job ended. took %s", c.name, time.Since(t))
-		}
-	}()
+		}()
+	}
 }
 
 func (c *FileCache) dumpJob(bucketIdx uint64) {

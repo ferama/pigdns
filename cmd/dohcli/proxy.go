@@ -38,8 +38,8 @@ var proxyCmd = &cobra.Command{
 		}
 
 		if dohServerAddr == "" {
-			qr := racer.NewCachedQueryRacer(os.TempDir(), 1024*100)
-			r := recursor.New("", 0, qr)
+			qr := racer.NewCachedQueryRacer(os.TempDir(), 1024*100, false)
+			r := recursor.New("", 0, false, qr)
 			m := new(dns.Msg)
 			m.SetQuestion(dns.Fqdn(dohServerName), dns.TypeA)
 

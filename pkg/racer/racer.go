@@ -39,9 +39,9 @@ type QueryRacer struct {
 	ansCache *ansCache
 }
 
-func NewCachedQueryRacer(datadir string, cacheSize int) *QueryRacer {
+func NewCachedQueryRacer(datadir string, cacheSize int, cachePersistence bool) *QueryRacer {
 	q := &QueryRacer{
-		ansCache: newAnsCache(filepath.Join(datadir, "cache", cacheName), cacheName, cacheSize),
+		ansCache: newAnsCache(filepath.Join(datadir, "cache", cacheName), cacheName, cacheSize, cachePersistence),
 	}
 
 	metrics.Instance().RegisterCache(cacheName)

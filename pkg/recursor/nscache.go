@@ -21,9 +21,9 @@ type nsCache struct {
 	name  string
 }
 
-func newNSCache(datadir string, name string, size int) *nsCache {
+func newNSCache(datadir string, name string, size int, cachePersistence bool) *nsCache {
 	c := &nsCache{
-		cache: cache.NewFileCache(datadir, name, size),
+		cache: cache.NewFileCache(datadir, name, size, cachePersistence),
 		name:  name,
 	}
 

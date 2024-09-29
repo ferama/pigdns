@@ -58,10 +58,10 @@ type Recursor struct {
 	oneInFlight *oneinflight.OneInFlight
 }
 
-func New(datadir string, cacheSize int, qr *racer.QueryRacer) *Recursor {
+func New(datadir string, cacheSize int, cachePersistence bool, qr *racer.QueryRacer) *Recursor {
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
-		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, cacheSize),
+		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, cacheSize, cachePersistence),
 
 		racer: qr,
 	}

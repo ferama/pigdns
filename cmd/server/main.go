@@ -85,6 +85,7 @@ var rootCmd = &cobra.Command{
 				conf.Recursor.BlockLists,
 				conf.Recursor.WhiteLists,
 				conf.Recursor.CacheSize,
+				conf.Recursor.CachePersistence,
 			)
 
 			if conf.Recursor.ServeOnUDP {
@@ -97,6 +98,7 @@ var rootCmd = &cobra.Command{
 			h := server.BuildProxyChain(
 				conf.DataDir,
 				conf.Proxy.CacheSize,
+				conf.Recursor.CachePersistence,
 				conf.Proxy.Upstream,
 				conf.Proxy.BlockLists,
 				conf.Proxy.WhiteLists,

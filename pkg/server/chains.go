@@ -34,7 +34,7 @@ func BuildDOHProxyHandler(serverURI string, serverAddr string) pigdns.Handler {
 // starting from root NS
 func BuildRecursorHandler(
 	datadir string, allowedNets []string,
-	blocklists []string, whitelists []string, cacheSize int) pigdns.Handler {
+	blocklists []string, whitelists []string, cacheSize int, cachePersistence bool) pigdns.Handler {
 
 	var chain pigdns.Handler
 
@@ -53,13 +53,13 @@ func BuildRecursorHandler(
 		r.ReplyWithStatus(m, dns.RcodeServerFailure)
 	})
 	racerCacheSize := cacheSize * 50 / 100
-	racer := racer.NewCachedQueryRacer(datadir, racerCacheSize)
+	racer := racer.NewCachedQueryRacer(datadir, racerCacheSize, cachePersistence)
 
 	nsCacheSize := cacheSize * 25 / 100
-	chain = recursor.NewRecursorHandler(chain, datadir, nsCacheSize, racer)
+	chain = recursor.NewRecursorHandler(chain, datadir, nsCacheSize, cachePersistence, racer)
 
 	ansCacheSize := cacheSize * 25 / 100
-	chain = cache.NewCacheHandler(chain, "recursor", ansCacheSize, datadir)
+	chain = cache.NewCacheHandler(chain, "recursor", ansCacheSize, cachePersistence, datadir)
 	// blocks TypeANY requests
 	chain = &any.Handler{Next: chain}
 	chain = &acl.Handler{Next: chain, AllowedNets: allowedNets}
@@ -71,7 +71,7 @@ func BuildRecursorHandler(
 }
 
 func BuildProxyChain(
-	datadir string, cacheSize int,
+	datadir string, cacheSize int, cachePersistence bool,
 	upstream, blocklists, whitelists []string) pigdns.Handler {
 
 	var chain pigdns.Handler
@@ -89,7 +89,7 @@ func BuildProxyChain(
 	racer := racer.NewQueryRacer()
 
 	chain = proxy.NewProxyHandler(chain, upstream, racer)
-	chain = cache.NewCacheHandler(chain, "proxy", cacheSize, datadir)
+	chain = cache.NewCacheHandler(chain, "proxy", cacheSize, cachePersistence, datadir)
 	chain = blocklist.NewBlocklistHandler(blocklists, whitelists, chain)
 	chain = &collector.Handler{Next: chain}
 
