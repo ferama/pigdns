@@ -12,7 +12,7 @@ require (
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/mholt/acmez v1.2.0
 	github.com/miekg/dns v1.1.63
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
