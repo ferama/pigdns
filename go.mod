@@ -1,7 +1,7 @@
 module github.com/ferama/pigdns
 
 go 1.21
-toolchain go1.23.7
+toolchain go1.24.1
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
@@ -14,7 +14,7 @@ require (
 	github.com/mholt/acmez v1.2.0
 	github.com/miekg/dns v1.1.63
 	github.com/prometheus/client_golang v1.21.1
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
 )
