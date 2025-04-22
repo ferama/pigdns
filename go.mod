@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/env v1.0.0
-	github.com/knadh/koanf/providers/file v1.1.2
+	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.2.0
 	github.com/mholt/acmez v1.2.0
@@ -25,7 +25,7 @@ require (
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -60,7 +60,7 @@ require (
 	golang.org/x/mod v0.23.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
