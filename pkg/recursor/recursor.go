@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ferama/pigdns/pkg/metrics"
 	"github.com/ferama/pigdns/pkg/oneinflight"
@@ -49,7 +50,8 @@ const (
 )
 
 type Recursor struct {
-	nsCache *nsCache
+	nsCache  *nsCache
+	keyCache *keyCache
 
 	rootkeys []dns.RR
 
@@ -58,16 +60,23 @@ type Recursor struct {
 	oneInFlight *oneinflight.OneInFlight
 }
 
+const (
+	keyCacheName = "key"
+)
+
 func New(datadir string, cacheSize int, cachePersistence bool, qr *racer.QueryRacer) *Recursor {
 	r := &Recursor{
 		oneInFlight: oneinflight.New(),
 		nsCache:     newNSCache(filepath.Join(datadir, "cache", "ns"), nsCacheName, cacheSize, cachePersistence),
+		keyCache:    newKeyCache(filepath.Join(datadir, "cache", "key"), keyCacheName, 10000, true),
 
 		racer: qr,
 	}
 
 	metrics.Instance().RegisterCache(nsCacheName)
+	metrics.Instance().RegisterCache(keyCacheName)
 	metrics.Instance().GetCacheCapacityMetric(nsCacheName).Set(float64(cacheSize))
+	metrics.Instance().GetCacheCapacityMetric(keyCacheName).Set(float64(10000))
 
 	r.rootkeys = []dns.RR{}
 	for _, k := range rootKeys {
@@ -159,7 +168,6 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 
 	name := q.Name
 
-	// TODO: it make sense?
 	if utils.IsArpa(name) {
 		utils.MsgSetAuthenticated(ans, false)
 		return true
@@ -215,6 +223,13 @@ func (r *Recursor) verifyDS(ctx context.Context, ans *dns.Msg, q dns.Question, i
 			if len(nsec3Set) > 0 {
 				secerr := nsecVerifyNODATA(dsans, nsec3Set)
 				if secerr != nil {
+					if secerr == errNSECMissingCoverage {
+						name, end = next(name)
+						if end {
+							return true
+						}
+						continue
+					}
 					log.Error().Msg(secerr.Error())
 					return false
 				}
@@ -464,6 +479,8 @@ func (r *Recursor) resolveExtraNs(ctx context.Context, toResolve []string, zone 
 
 		// get the AAAA record
 		go func(ctx context.Context, ns string) {
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
 			// reset the recursion count, we are starting a new journey here
 			rc := ctx.Value(recursorContextKey).(*recursorContext)
 			rc.Lock()
@@ -627,6 +644,11 @@ func (r *Recursor) findSoa(resp *dns.Msg) *dns.Msg {
 }
 
 func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dns.RR {
+	cached, err := r.keyCache.Get(zone)
+	if err == nil {
+		return cached
+	}
+
 	req := new(dns.Msg)
 	req.RecursionDesired = false
 	req.SetQuestion(zone, dns.TypeDNSKEY)
@@ -648,14 +670,15 @@ func (r *Recursor) getDNSKEY(ctx context.Context, zone string, isIPV6 bool) []dn
 	rservers.RUnlock()
 
 	keys = utils.MsgExtractByType(resp, dns.TypeDNSKEY, "")
+	if len(keys) > 0 {
+		r.keyCache.Set(zone, keys)
+	}
 	return keys
 }
 
 func (r *Recursor) verifyRRSIG(ctx context.Context, ans *dns.Msg, q dns.Question, isIPV6 bool) bool {
 	// return true
 	if utils.IsArpa(q.Name) {
-		// TODO: it make sense?
-
 		utils.MsgSetAuthenticated(ans, false)
 		return true
 	}

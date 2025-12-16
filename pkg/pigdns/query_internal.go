@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 
 	"github.com/miekg/dns"
 )
@@ -13,6 +14,8 @@ type InternalWriter struct {
 
 	LAddr net.Addr
 	RAddr net.Addr
+
+	mu sync.Mutex
 }
 
 func (w *InternalWriter) LocalAddr() net.Addr { return w.LAddr }
@@ -20,11 +23,15 @@ func (w *InternalWriter) LocalAddr() net.Addr { return w.LAddr }
 func (w *InternalWriter) RemoteAddr() net.Addr { return w.RAddr }
 
 func (w *InternalWriter) WriteMsg(msg *dns.Msg) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.Msg = msg
 	return nil
 }
 
 func (w *InternalWriter) Write(b []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.Msg = new(dns.Msg)
 	err := w.Msg.Unpack(b)
 	if err != nil {
